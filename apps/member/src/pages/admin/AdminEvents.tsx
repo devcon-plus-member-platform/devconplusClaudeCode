@@ -25,17 +25,22 @@ interface EventWithChapter extends Event {
   chapters?: { name: string } | null
 }
 
-//CSV Stuff
-type AttendanceFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'checked_in' | 'not_checked_in'
+type ExportKind = 'events' | 'attendance'
+type ExportScope = 'all' | 'event' | 'chapter'
+
+interface ExportDialogState {
+  kind: ExportKind
+  scope: ExportScope
+  eventId: string
+  chapterId: string
+}
 
 interface AttendanceExportRow extends Record<string, string | number | boolean | null | undefined> {
   registration_id: string
   status: string
   checked_in: boolean
   registered_at: string
-  event_id: string
   event_title: string
-  event_date: string
   chapter_name: string
   member_name: string
   member_email: string
@@ -136,8 +141,6 @@ const downloadCsv = (filename: string, csv: string) => {
   URL.revokeObjectURL(url)
 }
 
-const normalizeDateStart = (value: string) => `${value}T00:00:00.000Z`
-const normalizeDateEnd = (value: string) => `${value}T23:59:59.999Z`
 
 // ── SlideOver form props ───────────────────────────────────────────────────────
 
@@ -741,10 +744,7 @@ export default function AdminEvents() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<{ mode: 'create' | 'edit'; event?: EventWithChapter } | null>(null)
   const [chapters, setChapters] = useState<{ id: string; name: string }[]>([])
-  const [exportEventId, setExportEventId] = useState<string>('all')
-  const [exportStartDate, setExportStartDate] = useState<string>('')
-  const [exportEndDate, setExportEndDate] = useState<string>('')
-  const [exportAttendanceStatus, setExportAttendanceStatus] = useState<AttendanceFilter>('all')
+  const [exportDialog, setExportDialog] = useState<ExportDialogState | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
 
@@ -778,45 +778,47 @@ export default function AdminEvents() {
     void load()
   }, [])
 
-  const resolveEventIdsForRange = async () => {
-    if (!exportStartDate && !exportEndDate) return null
-    let query = supabase.from('events').select('id')
-    if (exportStartDate) query = query.gte('event_date', normalizeDateStart(exportStartDate))
-    if (exportEndDate) query = query.lte('event_date', normalizeDateEnd(exportEndDate))
-    const { data, error: rangeError } = await query
-    if (rangeError) throw new Error(rangeError.message)
+  const resolveEventIdsForChapter = async (chapterId: string) => {
+    const { data, error: chapterError } = await supabase
+      .from('events')
+      .select('id')
+      .eq('chapter_id', chapterId)
+    if (chapterError) throw new Error(chapterError.message)
     return (data ?? []).map((row) => row.id)
   }
 
-  function applyAttendanceStatusFilter<T>(query: T) {
-    const filterable = query as unknown as { eq: (column: string, value: string | boolean) => T }
-    if (exportAttendanceStatus === 'checked_in') return filterable.eq('checked_in', true)
-    if (exportAttendanceStatus === 'not_checked_in') return filterable.eq('checked_in', false)
-    if (exportAttendanceStatus !== 'all') return filterable.eq('status', exportAttendanceStatus)
-    return query
+  const openExportDialog = (kind: ExportKind) => {
+    setExportError(null)
+    setExportDialog({
+      kind,
+      scope: 'all',
+      eventId: '',
+      chapterId: '',
+    })
   }
 
-  const handleExportEvents = async () => {
+  const closeExportDialog = () => {
+    setExportDialog(null)
+  }
+
+  const handleExportEvents = async (scope: ExportScope, eventId?: string, chapterId?: string) => {
     setExportError(null)
     setExportLoading(true)
     try {
       let query = supabase
         .from('events')
-        .select('id, title, event_date, end_date, location, category, visibility, status, is_free, ticket_price_php, capacity, points_value, requires_approval, created_at, chapters(name)')
+        .select('title, end_date, location, category, visibility, status, is_free, ticket_price_php, capacity, points_value, requires_approval, created_at, chapters(name)')
         .order('event_date', { ascending: false })
 
-      if (exportEventId !== 'all') query = query.eq('id', exportEventId)
-      if (exportStartDate) query = query.gte('event_date', normalizeDateStart(exportStartDate))
-      if (exportEndDate) query = query.lte('event_date', normalizeDateEnd(exportEndDate))
+      if (scope === 'event' && eventId) query = query.eq('id', eventId)
+      if (scope === 'chapter' && chapterId) query = query.eq('chapter_id', chapterId)
 
       const { data, error: exportErr } = await query
       if (exportErr) throw new Error(exportErr.message)
 
       const rows = (data ?? []).map((event) => ({
-        id: event.id,
         title: event.title,
         chapter: (event.chapters as { name?: string } | null)?.name ?? '',
-        event_date: event.event_date ?? '',
         end_date: event.end_date ?? '',
         location: event.location ?? '',
         category: event.category ?? '',
@@ -831,10 +833,8 @@ export default function AdminEvents() {
       }))
 
       const headers = [
-        'id',
         'title',
         'chapter',
-        'event_date',
         'end_date',
         'location',
         'category',
@@ -858,20 +858,17 @@ export default function AdminEvents() {
     }
   }
 
-  const handleExportAttendance = async () => {
+  const handleExportAttendance = async (scope: ExportScope, eventId?: string, chapterId?: string) => {
     setExportError(null)
     setExportLoading(true)
     try {
       let eventIds: string[] | null = null
-      if (exportEventId !== 'all') {
-        eventIds = [exportEventId]
-      } else {
-        eventIds = await resolveEventIdsForRange()
-      }
+      if (scope === 'event' && eventId) eventIds = [eventId]
+      if (scope === 'chapter' && chapterId) eventIds = await resolveEventIdsForChapter(chapterId)
 
       let query = supabase
         .from('event_registrations')
-        .select('id, status, checked_in, registered_at, event_id, events(title, event_date, chapters(name)), profiles(full_name, email, school_or_company)')
+        .select('id, status, checked_in, registered_at, event_id, events(title, chapters(name)), profiles(full_name, email, school_or_company)')
         .neq('status', 'cancelled')
 
       if (eventIds && eventIds.length === 0) {
@@ -880,9 +877,7 @@ export default function AdminEvents() {
           'status',
           'checked_in',
           'registered_at',
-          'event_id',
           'event_title',
-          'event_date',
           'chapter_name',
           'member_name',
           'member_email',
@@ -893,7 +888,6 @@ export default function AdminEvents() {
       }
 
       if (eventIds) query = query.in('event_id', eventIds)
-      query = applyAttendanceStatusFilter(query)
 
       const { data, error: exportErr } = await query
       if (exportErr) throw new Error(exportErr.message)
@@ -906,9 +900,7 @@ export default function AdminEvents() {
           status: row.status ?? '',
           checked_in: row.checked_in ?? false,
           registered_at: row.registered_at ?? '',
-          event_id: row.event_id ?? '',
           event_title: eventData?.title ?? '',
-          event_date: eventData?.event_date ?? '',
           chapter_name: (eventData?.chapters as { name?: string } | null)?.name ?? '',
           member_name: profile?.full_name ?? '',
           member_email: profile?.email ?? '',
@@ -921,9 +913,7 @@ export default function AdminEvents() {
         'status',
         'checked_in',
         'registered_at',
-        'event_id',
         'event_title',
-        'event_date',
         'chapter_name',
         'member_name',
         'member_email',
@@ -982,7 +972,7 @@ export default function AdminEvents() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => void handleExportEvents()}
+              onClick={() => openExportDialog('events')}
               disabled={exportLoading}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-md3-label-md font-bold hover:bg-slate-800 transition-colors disabled:opacity-60"
             >
@@ -990,62 +980,13 @@ export default function AdminEvents() {
               Export Events CSV
             </button>
             <button
-              onClick={() => void handleExportAttendance()}
+              onClick={() => openExportDialog('attendance')}
               disabled={exportLoading}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue text-white text-md3-label-md font-bold hover:bg-blue-dark transition-colors disabled:opacity-60"
             >
               <DownloadOutline className="w-4 h-4" color="white" />
               Export Attendance CSV
             </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">Event</label>
-            <select
-              value={exportEventId}
-              onChange={(event) => setExportEventId(event.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
-            >
-              <option value="all">All events</option>
-              {eventOptions.map((event) => (
-                <option key={event.id} value={event.id}>{event.title}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">Start Date</label>
-            <input
-              type="date"
-              value={exportStartDate}
-              onChange={(event) => setExportStartDate(event.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
-            />
-          </div>
-          <div>
-            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">End Date</label>
-            <input
-              type="date"
-              value={exportEndDate}
-              onChange={(event) => setExportEndDate(event.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
-            />
-          </div>
-          <div>
-            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">Attendance Status</label>
-            <select
-              value={exportAttendanceStatus}
-              onChange={(event) => setExportAttendanceStatus(event.target.value as AttendanceFilter)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
-            >
-              <option value="all">All</option>
-              <option value="approved">Approved</option>
-              <option value="pending">Pending</option>
-              <option value="rejected">Rejected</option>
-              <option value="checked_in">Checked in</option>
-              <option value="not_checked_in">Not checked in</option>
-            </select>
           </div>
         </div>
 
@@ -1146,6 +1087,120 @@ export default function AdminEvents() {
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {exportDialog && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeExportDialog}
+              className="fixed inset-0 bg-black/30 z-40"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              className="fixed left-1/2 top-1/2 w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50"
+            >
+              <div className="p-5 border-b border-slate-100">
+                <h3 className="text-md3-title-md font-bold text-slate-900">
+                  Export {exportDialog.kind === 'events' ? 'Events' : 'Attendance'} CSV
+                </h3>
+                <p className="text-md3-label-md text-slate-400 mt-1">
+                  Choose a scope for this export.
+                </p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div>
+                  <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-2">Scope</p>
+                  <div className="flex flex-col gap-2">
+                    {(['all', 'event', 'chapter'] as ExportScope[]).map((scope) => (
+                      <label key={scope} className="flex items-center gap-2 text-md3-body-md text-slate-700">
+                        <input
+                          type="radio"
+                          name="export-scope"
+                          value={scope}
+                          checked={exportDialog.scope === scope}
+                          onChange={() => setExportDialog((prev) => prev ? { ...prev, scope } : prev)}
+                          className="w-4 h-4 accent-blue"
+                        />
+                        {scope === 'all' && 'All data'}
+                        {scope === 'event' && 'Specific event'}
+                        {scope === 'chapter' && 'Specific chapter'}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {exportDialog.scope === 'event' && (
+                  <div>
+                    <label className={labelClass}>Event</label>
+                    <select
+                      value={exportDialog.eventId}
+                      onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
+                      className={inputClass}
+                    >
+                      <option value="">Select event…</option>
+                      {eventOptions.map((event) => (
+                        <option key={event.id} value={event.id}>{event.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {exportDialog.scope === 'chapter' && (
+                  <div>
+                    <label className={labelClass}>Chapter</label>
+                    <select
+                      value={exportDialog.chapterId}
+                      onChange={(event) => setExportDialog((prev) => prev ? { ...prev, chapterId: event.target.value } : prev)}
+                      className={inputClass}
+                    >
+                      <option value="">Select chapter…</option>
+                      {chapters.map((chapter) => (
+                        <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-5 pb-5">
+                <button
+                  type="button"
+                  onClick={closeExportDialog}
+                  className="px-4 py-2 rounded-xl text-md3-label-md font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    exportLoading ||
+                    (exportDialog.scope === 'event' && !exportDialog.eventId) ||
+                    (exportDialog.scope === 'chapter' && !exportDialog.chapterId)
+                  }
+                  onClick={async () => {
+                    if (exportDialog.kind === 'events') {
+                      await handleExportEvents(exportDialog.scope, exportDialog.eventId, exportDialog.chapterId)
+                    } else {
+                      await handleExportAttendance(exportDialog.scope, exportDialog.eventId, exportDialog.chapterId)
+                    }
+                    closeExportDialog()
+                  }}
+                  className="px-4 py-2 rounded-xl text-md3-label-md font-bold text-white bg-blue hover:bg-blue-dark transition-colors disabled:opacity-60"
+                >
+                  Export CSV
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Slide-over panel */}
       <AnimatePresence>
