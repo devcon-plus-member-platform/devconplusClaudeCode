@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone } from 'solar-icon-set'
+import { useEffect, useMemo, useState } from 'react'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -23,6 +23,22 @@ interface CustomFormField {
 
 interface EventWithChapter extends Event {
   chapters?: { name: string } | null
+}
+
+type AttendanceFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'checked_in' | 'not_checked_in'
+
+interface AttendanceExportRow extends Record<string, string | number | boolean | null | undefined> {
+  registration_id: string
+  status: string
+  checked_in: boolean
+  registered_at: string
+  event_id: string
+  event_title: string
+  event_date: string
+  chapter_name: string
+  member_name: string
+  member_email: string
+  school_or_company: string
 }
 
 // ── Zod schema ─────────────────────────────────────────────────────────────────
@@ -90,6 +106,37 @@ const VISIBILITY_OPTIONS: { value: EventFormData['visibility']; label: string }[
   { value: 'unlisted', label: 'Unlisted' },
   { value: 'draft',    label: 'Draft'    },
 ]
+
+// ── CSV helpers ─────────────────────────────────────────────────────────────
+
+const CSV_SEPARATOR = ','
+
+const escapeCsvValue = (value: string | number | boolean | null | undefined) => {
+  const raw = value === null || value === undefined ? '' : String(value)
+  const escaped = raw.replace(/"/g, '""')
+  return /[",\n]/.test(escaped) ? `"${escaped}"` : escaped
+}
+
+const buildCsv = (headers: string[], rows: Array<Record<string, string | number | boolean | null | undefined>>) => {
+  const headerLine = headers.join(CSV_SEPARATOR)
+  const lines = rows.map((row) => headers.map((key) => escapeCsvValue(row[key])).join(CSV_SEPARATOR))
+  return [headerLine, ...lines].join('\n')
+}
+
+const downloadCsv = (filename: string, csv: string) => {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const normalizeDateStart = (value: string) => `${value}T00:00:00.000Z`
+const normalizeDateEnd = (value: string) => `${value}T23:59:59.999Z`
 
 // ── SlideOver form props ───────────────────────────────────────────────────────
 
@@ -693,6 +740,17 @@ export default function AdminEvents() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<{ mode: 'create' | 'edit'; event?: EventWithChapter } | null>(null)
   const [chapters, setChapters] = useState<{ id: string; name: string }[]>([])
+  const [exportEventId, setExportEventId] = useState<string>('all')
+  const [exportStartDate, setExportStartDate] = useState<string>('')
+  const [exportEndDate, setExportEndDate] = useState<string>('')
+  const [exportAttendanceStatus, setExportAttendanceStatus] = useState<AttendanceFilter>('all')
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [exportLoading, setExportLoading] = useState(false)
+
+  const eventOptions = useMemo(() => {
+    const sorted = [...events].sort((a, b) => (a.event_date ?? '').localeCompare(b.event_date ?? ''))
+    return sorted
+  }, [events])
 
   useEffect(() => {
     const load = async () => {
@@ -718,6 +776,168 @@ export default function AdminEvents() {
     }
     void load()
   }, [])
+
+  const resolveEventIdsForRange = async () => {
+    if (!exportStartDate && !exportEndDate) return null
+    let query = supabase.from('events').select('id')
+    if (exportStartDate) query = query.gte('event_date', normalizeDateStart(exportStartDate))
+    if (exportEndDate) query = query.lte('event_date', normalizeDateEnd(exportEndDate))
+    const { data, error: rangeError } = await query
+    if (rangeError) throw new Error(rangeError.message)
+    return (data ?? []).map((row) => row.id)
+  }
+
+  function applyAttendanceStatusFilter<T>(query: T) {
+    const filterable = query as unknown as { eq: (column: string, value: string | boolean) => T }
+    if (exportAttendanceStatus === 'checked_in') return filterable.eq('checked_in', true)
+    if (exportAttendanceStatus === 'not_checked_in') return filterable.eq('checked_in', false)
+    if (exportAttendanceStatus !== 'all') return filterable.eq('status', exportAttendanceStatus)
+    return query
+  }
+
+  const handleExportEvents = async () => {
+    setExportError(null)
+    setExportLoading(true)
+    try {
+      let query = supabase
+        .from('events')
+        .select('id, title, event_date, end_date, location, category, visibility, status, is_free, ticket_price_php, capacity, points_value, requires_approval, created_at, chapters(name)')
+        .order('event_date', { ascending: false })
+
+      if (exportEventId !== 'all') query = query.eq('id', exportEventId)
+      if (exportStartDate) query = query.gte('event_date', normalizeDateStart(exportStartDate))
+      if (exportEndDate) query = query.lte('event_date', normalizeDateEnd(exportEndDate))
+
+      const { data, error: exportErr } = await query
+      if (exportErr) throw new Error(exportErr.message)
+
+      const rows = (data ?? []).map((event) => ({
+        id: event.id,
+        title: event.title,
+        chapter: (event.chapters as { name?: string } | null)?.name ?? '',
+        event_date: event.event_date ?? '',
+        end_date: event.end_date ?? '',
+        location: event.location ?? '',
+        category: event.category ?? '',
+        visibility: event.visibility ?? '',
+        status: event.status ?? '',
+        is_free: event.is_free ?? true,
+        ticket_price_php: event.ticket_price_php ?? 0,
+        capacity: event.capacity ?? '',
+        points_value: event.points_value ?? '',
+        requires_approval: event.requires_approval ?? false,
+        created_at: event.created_at ?? '',
+      }))
+
+      const headers = [
+        'id',
+        'title',
+        'chapter',
+        'event_date',
+        'end_date',
+        'location',
+        'category',
+        'visibility',
+        'status',
+        'is_free',
+        'ticket_price_php',
+        'capacity',
+        'points_value',
+        'requires_approval',
+        'created_at',
+      ]
+
+      const csv = buildCsv(headers, rows)
+      const filename = `events-export-${new Date().toISOString().slice(0, 10)}.csv`
+      downloadCsv(filename, csv)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Unable to export events.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleExportAttendance = async () => {
+    setExportError(null)
+    setExportLoading(true)
+    try {
+      let eventIds: string[] | null = null
+      if (exportEventId !== 'all') {
+        eventIds = [exportEventId]
+      } else {
+        eventIds = await resolveEventIdsForRange()
+      }
+
+      let query = supabase
+        .from('event_registrations')
+        .select('id, status, checked_in, registered_at, event_id, events(title, event_date, chapters(name)), profiles(full_name, email, school_or_company)')
+        .neq('status', 'cancelled')
+
+      if (eventIds && eventIds.length === 0) {
+        downloadCsv(`attendance-export-${new Date().toISOString().slice(0, 10)}.csv`, buildCsv([
+          'registration_id',
+          'status',
+          'checked_in',
+          'registered_at',
+          'event_id',
+          'event_title',
+          'event_date',
+          'chapter_name',
+          'member_name',
+          'member_email',
+          'school_or_company',
+        ], []))
+        setExportLoading(false)
+        return
+      }
+
+      if (eventIds) query = query.in('event_id', eventIds)
+      query = applyAttendanceStatusFilter(query)
+
+      const { data, error: exportErr } = await query
+      if (exportErr) throw new Error(exportErr.message)
+
+      const rows: AttendanceExportRow[] = (data ?? []).map((row) => {
+        const eventData = Array.isArray(row.events) ? row.events[0] : row.events
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+        return {
+          registration_id: row.id,
+          status: row.status ?? '',
+          checked_in: row.checked_in ?? false,
+          registered_at: row.registered_at ?? '',
+          event_id: row.event_id ?? '',
+          event_title: eventData?.title ?? '',
+          event_date: eventData?.event_date ?? '',
+          chapter_name: (eventData?.chapters as { name?: string } | null)?.name ?? '',
+          member_name: profile?.full_name ?? '',
+          member_email: profile?.email ?? '',
+          school_or_company: profile?.school_or_company ?? '',
+        }
+      })
+
+      const headers = [
+        'registration_id',
+        'status',
+        'checked_in',
+        'registered_at',
+        'event_id',
+        'event_title',
+        'event_date',
+        'chapter_name',
+        'member_name',
+        'member_email',
+        'school_or_company',
+      ]
+
+      const csv = buildCsv(headers, rows)
+      const filename = `attendance-export-${new Date().toISOString().slice(0, 10)}.csv`
+      downloadCsv(filename, csv)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Unable to export attendance.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
@@ -752,6 +972,86 @@ export default function AdminEvents() {
       {error && (
         <p className="text-red text-md3-label-md bg-red/5 border border-red/20 rounded-lg px-3 py-2 mb-4">{error}</p>
       )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-5 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-md3-title-md font-bold text-slate-900">Exports</h2>
+            <p className="text-md3-label-md text-slate-400">Download event and attendance data as CSV</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void handleExportEvents()}
+              disabled={exportLoading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-md3-label-md font-bold hover:bg-slate-800 transition-colors disabled:opacity-60"
+            >
+              <DownloadOutline className="w-4 h-4" color="white" />
+              Export Events CSV
+            </button>
+            <button
+              onClick={() => void handleExportAttendance()}
+              disabled={exportLoading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue text-white text-md3-label-md font-bold hover:bg-blue-dark transition-colors disabled:opacity-60"
+            >
+              <DownloadOutline className="w-4 h-4" color="white" />
+              Export Attendance CSV
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">Event</label>
+            <select
+              value={exportEventId}
+              onChange={(event) => setExportEventId(event.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
+            >
+              <option value="all">All events</option>
+              {eventOptions.map((event) => (
+                <option key={event.id} value={event.id}>{event.title}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">Start Date</label>
+            <input
+              type="date"
+              value={exportStartDate}
+              onChange={(event) => setExportStartDate(event.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
+            />
+          </div>
+          <div>
+            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">End Date</label>
+            <input
+              type="date"
+              value={exportEndDate}
+              onChange={(event) => setExportEndDate(event.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
+            />
+          </div>
+          <div>
+            <label className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5 block">Attendance Status</label>
+            <select
+              value={exportAttendanceStatus}
+              onChange={(event) => setExportAttendanceStatus(event.target.value as AttendanceFilter)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900"
+            >
+              <option value="all">All</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+              <option value="checked_in">Checked in</option>
+              <option value="not_checked_in">Not checked in</option>
+            </select>
+          </div>
+        </div>
+
+        {exportError && (
+          <p className="text-red text-md3-label-md bg-red/5 border border-red/20 rounded-lg px-3 py-2 mt-4">{exportError}</p>
+        )}
+      </div>
 
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading events…</p>
