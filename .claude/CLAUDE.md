@@ -1,7 +1,7 @@
 # DEVCON+ — Claude Code Master Context File
-> Last Updated: April 21, 2026
+> Last Updated: May 4, 2026
 > Version: MVP 1.6
-> Team: 2 interns + Claude Code
+> Team: 3 interns + Claude Code
 > Hard Deadline: April 30, 2026 (Cohort 3 Graduation)
 > Live App: https://devconplusbeta-v1.vercel.app
 > Lovable Prototype (UX Reference ONLY): https://devconplusrndprototype.lovable.app/onboarding
@@ -980,6 +980,7 @@ npm run typecheck                     # tsc --noEmit across all packages
 - [x] NewsDetail
 - [x] Organizer: Dashboard, EventManagement, EventCreate, EventDetail, EventEdit, EventRegistrants, EventSummary, QRScanner (lazy), RewardsManagement, RewardCreate, RewardEdit, Profile, ProfileEdit
 - [x] Admin panel: Dashboard, Users, OrgCodes, Events, Chapters, CMS/Upgrades, Kiosk (super_admin only)
+- [x] Admin attendance CSV export with event/chapter/date/status filters (AdminEvents)
 - [x] All core components (see Section 9) including KonamiCodeWrapper + KonamiModal (Easter egg)
 - [x] framer-motion animations across all list/card sections
 - [x] Supabase project provisioned + real client wired (`apps/member/src/lib/supabase.ts`)
