@@ -25,6 +25,7 @@ interface EventWithChapter extends Event {
   chapters?: { name: string } | null
 }
 
+//CSV Stuff
 type AttendanceFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'checked_in' | 'not_checked_in'
 
 interface AttendanceExportRow extends Record<string, string | number | boolean | null | undefined> {
