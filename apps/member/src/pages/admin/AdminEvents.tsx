@@ -27,12 +27,16 @@ interface EventWithChapter extends Event {
 
 type ExportKind = 'events' | 'attendance'
 type ExportScope = 'all' | 'event' | 'chapter'
+type AttendanceFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'checked_in' | 'not_checked_in'
 
 interface ExportDialogState {
   kind: ExportKind
   scope: ExportScope
   eventId: string
   chapterId: string
+  startDate: string
+  endDate: string
+  attendanceStatus: AttendanceFilter
 }
 
 interface AttendanceExportRow extends Record<string, string | number | boolean | null | undefined> {
@@ -139,6 +143,14 @@ const downloadCsv = (filename: string, csv: string) => {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+const buildExportFilename = (prefix: string) => {
+  const dateStamp = new Date().toISOString().slice(0, 10)
+  return `${prefix}-${dateStamp}.csv`
+}
+
+const normalizeDateStart = (value: string) => `${value}T00:00:00.000Z`
+const normalizeDateEnd = (value: string) => `${value}T23:59:59.999Z`
 
 
 // ── SlideOver form props ───────────────────────────────────────────────────────
@@ -800,6 +812,23 @@ export default function AdminEvents() {
     return (data ?? []).map((row) => row.id)
   }
 
+  const resolveEventIdsForRange = async (startDate: string, endDate: string) => {
+    let query = supabase.from('events').select('id')
+    if (startDate) query = query.gte('event_date', normalizeDateStart(startDate))
+    if (endDate) query = query.lte('event_date', normalizeDateEnd(endDate))
+    const { data, error: rangeError } = await query
+    if (rangeError) throw new Error(rangeError.message)
+    return (data ?? []).map((row) => row.id)
+  }
+
+  const applyAttendanceStatusFilter = (query: any, status: AttendanceFilter) => {
+    const filterable = query as { eq: (column: string, value: string | boolean) => any }
+    if (status === 'checked_in') return filterable.eq('checked_in', true)
+    if (status === 'not_checked_in') return filterable.eq('checked_in', false)
+    if (status !== 'all') return filterable.eq('status', status)
+    return query
+  }
+
   const openExportDialog = (kind: ExportKind) => {
     setExportError(null)
     setEventSearch('')
@@ -809,6 +838,9 @@ export default function AdminEvents() {
       scope: 'all',
       eventId: '',
       chapterId: '',
+      startDate: '',
+      endDate: '',
+      attendanceStatus: 'all',
     })
   }
 
@@ -818,7 +850,13 @@ export default function AdminEvents() {
     setExportDialog(null)
   }
 
-  const handleExportEvents = async (scope: ExportScope, eventId?: string, chapterId?: string) => {
+  const handleExportEvents = async (
+    scope: ExportScope,
+    eventId?: string,
+    chapterId?: string,
+    startDate?: string,
+    endDate?: string,
+  ) => {
     setExportError(null)
     setExportLoading(true)
     try {
@@ -829,6 +867,8 @@ export default function AdminEvents() {
 
       if (scope === 'event' && eventId) query = query.eq('id', eventId)
       if (scope === 'chapter' && chapterId) query = query.eq('chapter_id', chapterId)
+      if (startDate) query = query.gte('event_date', normalizeDateStart(startDate))
+      if (endDate) query = query.lte('event_date', normalizeDateEnd(endDate))
 
       const { data, error: exportErr } = await query
       if (exportErr) throw new Error(exportErr.message)
@@ -864,7 +904,7 @@ export default function AdminEvents() {
       ]
 
       const csv = buildCsv(headers, rows)
-      const filename = `events-export-${new Date().toISOString().slice(0, 10)}.csv`
+      const filename = buildExportFilename('events')
       downloadCsv(filename, csv)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Unable to export events.')
@@ -873,7 +913,14 @@ export default function AdminEvents() {
     }
   }
 
-  const handleExportAttendance = async (scope: ExportScope, eventId?: string, chapterId?: string) => {
+  const handleExportAttendance = async (
+    scope: ExportScope,
+    eventId?: string,
+    chapterId?: string,
+    startDate?: string,
+    endDate?: string,
+    attendanceStatus?: AttendanceFilter,
+  ) => {
     setExportError(null)
     setExportLoading(true)
     try {
@@ -881,13 +928,23 @@ export default function AdminEvents() {
       if (scope === 'event' && eventId) eventIds = [eventId]
       if (scope === 'chapter' && chapterId) eventIds = await resolveEventIdsForChapter(chapterId)
 
-      let query = supabase
+      if (startDate || endDate) {
+        const rangeIds = await resolveEventIdsForRange(startDate ?? '', endDate ?? '')
+        if (eventIds) {
+          eventIds = eventIds.filter((id) => rangeIds.includes(id))
+        } else {
+          eventIds = rangeIds
+        }
+      }
+
+      let query: any = supabase
         .from('event_registrations')
         .select('id, status, checked_in, registered_at, event_id, events(title, chapters(name)), profiles(full_name, email, school_or_company)')
         .neq('status', 'cancelled')
 
       if (eventIds && eventIds.length === 0) {
-        downloadCsv(`attendance-export-${new Date().toISOString().slice(0, 10)}.csv`, buildCsv([
+        const emptyFilename = buildExportFilename('attendance')
+        downloadCsv(emptyFilename, buildCsv([
           'registration_id',
           'status',
           'checked_in',
@@ -902,11 +959,19 @@ export default function AdminEvents() {
       }
 
       if (eventIds) query = query.in('event_id', eventIds)
+      query = applyAttendanceStatusFilter(query, attendanceStatus ?? 'all') as any
 
       const { data, error: exportErr } = await query
       if (exportErr) throw new Error(exportErr.message)
 
-      const rows: AttendanceExportRow[] = (data ?? []).map((row) => {
+      const rows: AttendanceExportRow[] = (data ?? []).map((row: {
+        id?: string
+        status?: string | null
+        checked_in?: boolean | null
+        registered_at?: string | null
+        events?: unknown
+        profiles?: unknown
+      }) => {
         const eventData = Array.isArray(row.events) ? row.events[0] : row.events
         const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
         return {
@@ -933,7 +998,7 @@ export default function AdminEvents() {
       ]
 
       const csv = buildCsv(headers, rows)
-      const filename = `attendance-export-${new Date().toISOString().slice(0, 10)}.csv`
+      const filename = buildExportFilename('attendance')
       downloadCsv(filename, csv)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Unable to export attendance.')
@@ -983,14 +1048,6 @@ export default function AdminEvents() {
             <p className="text-md3-label-md text-slate-400">Download event and attendance data as CSV</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => openExportDialog('events')}
-              disabled={exportLoading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-md3-label-md font-bold hover:bg-slate-800 transition-colors disabled:opacity-60"
-            >
-              <DownloadOutline className="w-4 h-4" color="white" />
-              Export Events CSV
-            </button>
             <button
               onClick={() => openExportDialog('attendance')}
               disabled={exportLoading}
@@ -1200,6 +1257,51 @@ export default function AdminEvents() {
                       </select>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Start Date</label>
+                      <input
+                        type="date"
+                        value={exportDialog.startDate}
+                        onChange={(event) =>
+                          setExportDialog((prev) => prev ? { ...prev, startDate: event.target.value } : prev)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>End Date</label>
+                      <input
+                        type="date"
+                        value={exportDialog.endDate}
+                        onChange={(event) =>
+                          setExportDialog((prev) => prev ? { ...prev, endDate: event.target.value } : prev)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  {exportDialog.kind === 'attendance' && (
+                    <div>
+                      <label className={labelClass}>Attendance Status</label>
+                      <select
+                        value={exportDialog.attendanceStatus}
+                        onChange={(event) =>
+                          setExportDialog((prev) => prev ? { ...prev, attendanceStatus: event.target.value as AttendanceFilter } : prev)
+                        }
+                        className={inputClass}
+                      >
+                        <option value="all">All</option>
+                        <option value="approved">Approved</option>
+                        <option value="pending">Pending</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="checked_in">Checked in</option>
+                        <option value="not_checked_in">Not checked in</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-end gap-2 px-5 pb-5">
@@ -1219,9 +1321,22 @@ export default function AdminEvents() {
                     }
                     onClick={async () => {
                       if (exportDialog.kind === 'events') {
-                        await handleExportEvents(exportDialog.scope, exportDialog.eventId, exportDialog.chapterId)
+                        await handleExportEvents(
+                          exportDialog.scope,
+                          exportDialog.eventId,
+                          exportDialog.chapterId,
+                          exportDialog.startDate,
+                          exportDialog.endDate,
+                        )
                       } else {
-                        await handleExportAttendance(exportDialog.scope, exportDialog.eventId, exportDialog.chapterId)
+                        await handleExportAttendance(
+                          exportDialog.scope,
+                          exportDialog.eventId,
+                          exportDialog.chapterId,
+                          exportDialog.startDate,
+                          exportDialog.endDate,
+                          exportDialog.attendanceStatus,
+                        )
                       }
                       closeExportDialog()
                     }}
