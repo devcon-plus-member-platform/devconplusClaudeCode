@@ -1203,7 +1203,7 @@ export default function AdminEvents() {
                 </div>
 
                   {exportDialog.scope === 'event' && (
-                    <>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div>
                           <label className={labelClass}>Chapter</label>
@@ -1218,7 +1218,7 @@ export default function AdminEvents() {
                             }
                             className={inputClass}
                           >
-                            <option value="">Select chapter…</option>
+                            <option value="">All chapters</option>
                             {chapters.map((chapter) => (
                               <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
                             ))}
@@ -1253,8 +1253,7 @@ export default function AdminEvents() {
                           value={exportDialog.eventId}
                           onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
                           className={inputClass}
-                          size={Math.min(6, Math.max(3, filteredEventOptions.length || 3))}
-                          disabled={!exportDialog.chapterId || !exportDialog.eventDate}
+                          disabled={!exportDialog.eventDate}
                         >
                           {filteredEventOptions.length === 0 && (
                             <option value="">No matching events</option>
@@ -1264,7 +1263,7 @@ export default function AdminEvents() {
                           ))}
                         </select>
                       </div>
-                    </>
+                    </div>
                   )}
 
                   {exportDialog.kind === 'attendance' && (
@@ -1301,7 +1300,7 @@ export default function AdminEvents() {
                     disabled={
                       exportLoading ||
                       (exportDialog.scope === 'event' &&
-                        (!exportDialog.chapterId || !exportDialog.eventDate || !exportDialog.eventId))
+                        (!exportDialog.eventDate || !exportDialog.eventId))
                     }
                     onClick={async () => {
                       if (exportDialog.kind === 'events') {
