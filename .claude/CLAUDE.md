@@ -1003,7 +1003,7 @@ npm run typecheck                     # tsc --noEmit across all packages
 - [x] QR token kinds: `'r'` (registration), `'u'` (user identity), `'p'` (pending door-approval)
 - [x] Rate limiting: login (5/5min), signup (1/hr), username_check (10/min), org_upgrade (1/25hr), qr_generate (10/min), qr_scan (60/min)
 - [x] Shared edge function logger (`_shared/logger.ts`)
-- [x] NotFound (404) catch-all route
+- [x] NotFound (404) — creative branded page. Also rendered inline by EventDetail, JobDetail, NewsDetail, EventVolunteer, EventEdit, RewardEdit when a resource is not found.
 - [x] CSP headers enforced (promoted from Report-Only)
 - [x] Deployed to Vercel → https://devconplusbeta-v1.vercel.app
 - [x] Proxima Nova font migrated (self-hosted woff2, 6 weights — replaces Geist)
