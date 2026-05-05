@@ -766,11 +766,6 @@ export default function AdminEvents() {
     return sorted
   }, [events])
 
-  const formatEventDate = (value?: string | null) =>
-    value
-      ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : 'TBA'
-
   const getEventOptionLabel = (event: EventWithChapter) => event.title
 
   const getEventSearchText = (event: EventWithChapter) => event.title.toLowerCase()
