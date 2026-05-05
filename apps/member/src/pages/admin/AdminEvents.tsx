@@ -766,10 +766,20 @@ export default function AdminEvents() {
     return sorted
   }, [events])
 
+  const formatEventDate = (value?: string | null) =>
+    value
+      ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'TBA'
+
+  const getEventOptionLabel = (event: EventWithChapter) => `${formatEventDate(event.event_date)} — ${event.title}`
+
+  const getEventSearchText = (event: EventWithChapter) =>
+    `${formatEventDate(event.event_date)} ${event.title}`.toLowerCase()
+
   const filteredEventOptions = useMemo(() => {
     const query = eventSearch.trim().toLowerCase()
     if (!query) return eventOptions
-    return eventOptions.filter((event) => event.title.toLowerCase().includes(query))
+    return eventOptions.filter((event) => getEventSearchText(event).includes(query))
   }, [eventOptions, eventSearch])
 
   const filteredChapterOptions = useMemo(() => {
@@ -1226,7 +1236,7 @@ export default function AdminEvents() {
                           <option value="">No matching events</option>
                         )}
                         {filteredEventOptions.map((event) => (
-                          <option key={event.id} value={event.id}>{event.title}</option>
+                          <option key={event.id} value={event.id}>{getEventOptionLabel(event)}</option>
                         ))}
                       </select>
                     </div>
