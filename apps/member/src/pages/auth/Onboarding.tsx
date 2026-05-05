@@ -14,7 +14,7 @@ const slides = [
     subtitle: 'Join chapters across the country and make an impact locally and nationally.',
   },
   {
-    image:    '/photos/devcon-kids-iloilo.jpg',
+    image:    '/photos/devconxsui-iloilo.jpg',
     title:    'Volunteer. Earn Points.\nUnlock Rewards.',
     subtitle: 'Participate in events, contribute to projects, and earn points for exclusive rewards.',
   },
