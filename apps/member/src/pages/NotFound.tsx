@@ -106,19 +106,6 @@ export default function NotFound() {
       {/* Main content */}
       <div className="relative z-10 flex flex-col items-center max-w-sm w-full gap-0">
 
-        {/* Status pill */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
-        >
-          <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/25 text-white text-md3-label-md font-semibold px-3 py-1 rounded-full backdrop-blur-sm tracking-wide uppercase">
-            <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse" />
-            Registration Status
-          </span>
-        </motion.div>
-
         {/* Broken event card — the creative centrepiece */}
         <motion.div
           initial={{ opacity: 0, y: 24, rotate: -1 }}
@@ -189,28 +176,12 @@ export default function NotFound() {
           className="mb-8"
         >
           <h1 className="text-md3-headline-sm font-bold text-white mb-3 leading-snug">
-            This page is still pending.
+            Looks like you took a wrong turn.
           </h1>
           <p className="text-white/70 text-md3-body-md leading-relaxed">
-            The URL you're looking for isn't in our events calendar,
-            jobs board, or any of our 11 chapters — from Manila to
-            General Santos.
+            The link might be broken or the page no longer exists.
+            Head back and pick up where you left off.
           </p>
-        </motion.div>
-
-        {/* XP penalty badge — the cheeky bit */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.7 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 18, delay: 0.75 }}
-          className="flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-full px-4 py-1.5 mb-8"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="#F8C630">
-            <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-          </svg>
-          <span className="text-white/80 text-md3-label-md font-semibold">
-            +0 XP for finding this
-          </span>
         </motion.div>
 
         {/* Actions */}
