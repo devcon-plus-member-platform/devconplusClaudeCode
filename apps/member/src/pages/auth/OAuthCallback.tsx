@@ -9,6 +9,10 @@ import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 const ORGANIZER_ROLES = ['chapter_officer', 'hq_admin', 'super_admin']
 const TIMEOUT_MS = 10_000
 
+function isSafeReturnTo(url: string | null): url is string {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
+}
+
 function friendlyOAuthError(code: string | null): string {
   if (!code) return 'Google sign-in failed. Please try again.'
   if (code === 'access_denied') return 'You cancelled Google sign-in. You can try again below.'
@@ -65,10 +69,13 @@ export default function OAuthCallback() {
       }
 
       // Branch 3: fully set up user
+      const savedReturnTo = sessionStorage.getItem('devcon_returnTo')
+      if (savedReturnTo) sessionStorage.removeItem('devcon_returnTo')
+
       if (ORGANIZER_ROLES.includes(profile.role ?? '')) {
         navigate('/organizer', { replace: true })
       } else {
-        navigate('/home', { replace: true })
+        navigate(isSafeReturnTo(savedReturnTo) ? savedReturnTo : '/home', { replace: true })
       }
     }
 
