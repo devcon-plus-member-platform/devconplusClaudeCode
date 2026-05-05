@@ -144,8 +144,26 @@ const downloadCsv = (filename: string, csv: string) => {
   URL.revokeObjectURL(url)
 }
 
-const buildExportFilename = (prefix: string) => {
-  const dateStamp = new Date().toISOString().slice(0, 10)
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+const getPhilippineDateStamp = () =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
+const buildExportFilename = (prefix: string, label?: string) => {
+  const dateStamp = getPhilippineDateStamp()
+  if (label) {
+    return `${prefix}-${dateStamp}-${slugify(label)}.csv`
+  }
   return `${prefix}-${dateStamp}.csv`
 }
 
@@ -908,7 +926,10 @@ export default function AdminEvents() {
       ]
 
       const csv = buildCsv(headers, rows)
-      const filename = buildExportFilename('events')
+      const eventLabel = scope === 'event'
+        ? events.find((event) => event.id === eventId)?.title
+        : undefined
+      const filename = buildExportFilename('events', eventLabel)
       downloadCsv(filename, csv)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Unable to export events.')
@@ -947,7 +968,10 @@ export default function AdminEvents() {
         .neq('status', 'cancelled')
 
       if (eventIds && eventIds.length === 0) {
-        const emptyFilename = buildExportFilename('attendance')
+        const eventLabel = scope === 'event'
+          ? events.find((event) => event.id === eventId)?.title
+          : undefined
+        const emptyFilename = buildExportFilename('attendance', eventLabel)
         downloadCsv(emptyFilename, buildCsv([
           'registration_id',
           'status',
@@ -1002,7 +1026,10 @@ export default function AdminEvents() {
       ]
 
       const csv = buildCsv(headers, rows)
-      const filename = buildExportFilename('attendance')
+      const eventLabel = scope === 'event'
+        ? events.find((event) => event.id === eventId)?.title
+        : undefined
+      const filename = buildExportFilename('attendance', eventLabel)
       downloadCsv(filename, csv)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Unable to export attendance.')
