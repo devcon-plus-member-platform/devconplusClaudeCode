@@ -771,10 +771,9 @@ export default function AdminEvents() {
       ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : 'TBA'
 
-  const getEventOptionLabel = (event: EventWithChapter) => `${formatEventDate(event.event_date)} — ${event.title}`
+  const getEventOptionLabel = (event: EventWithChapter) => event.title
 
-  const getEventSearchText = (event: EventWithChapter) =>
-    `${formatEventDate(event.event_date)} ${event.title}`.toLowerCase()
+  const getEventSearchText = (event: EventWithChapter) => event.title.toLowerCase()
 
   const filteredEventOptions = useMemo(() => {
     const query = eventSearch.trim().toLowerCase()
@@ -1216,6 +1215,31 @@ export default function AdminEvents() {
                   </div>
                 </div>
 
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Start Date</label>
+                      <input
+                        type="date"
+                        value={exportDialog.startDate}
+                        onChange={(event) =>
+                          setExportDialog((prev) => prev ? { ...prev, startDate: event.target.value } : prev)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="sr-only">End Date</label>
+                      <input
+                        type="date"
+                        value={exportDialog.endDate}
+                        onChange={(event) =>
+                          setExportDialog((prev) => prev ? { ...prev, endDate: event.target.value } : prev)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
                   {exportDialog.scope === 'event' && (
                     <div className="space-y-2">
                       <label className={labelClass}>Event</label>
@@ -1267,31 +1291,6 @@ export default function AdminEvents() {
                       </select>
                     </div>
                   )}
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={labelClass}>Start Date</label>
-                      <input
-                        type="date"
-                        value={exportDialog.startDate}
-                        onChange={(event) =>
-                          setExportDialog((prev) => prev ? { ...prev, startDate: event.target.value } : prev)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>End Date</label>
-                      <input
-                        type="date"
-                        value={exportDialog.endDate}
-                        onChange={(event) =>
-                          setExportDialog((prev) => prev ? { ...prev, endDate: event.target.value } : prev)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                  </div>
 
                   {exportDialog.kind === 'attendance' && (
                     <div>
