@@ -153,20 +153,12 @@ export default function EventDetail() {
         <div className="pt-2 space-y-3">
           {!user ? (
             /* Public / unauthenticated view */
-            <>
-              <button
-                onClick={() => navigate(`/sign-up?returnTo=${encodeURIComponent(registerPath)}`)}
-                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
-              >
-                Create Account & Register
-              </button>
-              <button
-                onClick={() => navigate(`/sign-in?returnTo=${encodeURIComponent(registerPath)}`)}
-                className="w-full border border-slate-200 bg-white text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors"
-              >
-                Sign In to Register
-              </button>
-            </>
+            <button
+              onClick={() => navigate(`/sign-up?returnTo=${encodeURIComponent(registerPath)}`)}
+              className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+            >
+              Create Account & Register
+            </button>
           ) : !reg ? (
             isChapterLocked ? (
               <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold py-4 rounded-2xl text-center text-md3-body-md">

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { HomeOutline, GiftOutline, QRCodeOutline, CaseOutline, UserOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -21,6 +21,7 @@ import logoHorizontal from '../assets/logos/logo-horizontal.svg'
 export default function MemberLayout() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
   const subscribeToEventChanges = useEventsStore((s) => s.subscribeToChanges)
   const subscribeToRewardChanges = useRewardsStore((s) => s.subscribeToChanges)
@@ -48,11 +49,12 @@ export default function MemberLayout() {
   // Redirect users who haven't completed the interest quiz yet.
   // interests === null means never been through /interests.
   // interests === [] means they skipped — don't redirect again.
+  // Pass the current path as returnTo so the quiz sends them back here after completion.
   useEffect(() => {
     if (user && user.interests === null) {
-      navigate('/interests', { replace: true })
+      navigate('/interests', { replace: true, state: { returnTo: location.pathname } })
     }
-  }, [user, navigate])
+  }, [user, navigate, location.pathname])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
