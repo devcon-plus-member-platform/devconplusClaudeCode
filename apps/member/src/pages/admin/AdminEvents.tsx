@@ -26,7 +26,7 @@ interface EventWithChapter extends Event {
 }
 
 type ExportKind = 'events' | 'attendance'
-type ExportScope = 'all' | 'event' | 'chapter'
+type ExportScope = 'all' | 'event'
 type AttendanceFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'checked_in' | 'not_checked_in'
 
 interface ExportDialogState {
@@ -34,8 +34,7 @@ interface ExportDialogState {
   scope: ExportScope
   eventId: string
   chapterId: string
-  startDate: string
-  endDate: string
+  eventDate: string
   attendanceStatus: AttendanceFilter
 }
 
@@ -167,8 +166,15 @@ const buildExportFilename = (prefix: string, label?: string) => {
   return `${prefix}-${dateStamp}.csv`
 }
 
-const normalizeDateStart = (value: string) => `${value}T00:00:00.000Z`
-const normalizeDateEnd = (value: string) => `${value}T23:59:59.999Z`
+const getEventDateKey = (value?: string | null) =>
+  value
+    ? new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(value))
+    : ''
 
 
 // ── SlideOver form props ───────────────────────────────────────────────────────
@@ -790,9 +796,16 @@ export default function AdminEvents() {
 
   const filteredEventOptions = useMemo(() => {
     const query = eventSearch.trim().toLowerCase()
-    if (!query) return eventOptions
-    return eventOptions.filter((event) => getEventSearchText(event).includes(query))
-  }, [eventOptions, eventSearch])
+    let list = eventOptions
+    if (exportDialog?.scope === 'event' && exportDialog.chapterId) {
+      list = list.filter((event) => event.chapter_id === exportDialog.chapterId)
+    }
+    if (exportDialog?.scope === 'event' && exportDialog.eventDate) {
+      list = list.filter((event) => getEventDateKey(event.event_date) === exportDialog.eventDate)
+    }
+    if (!query) return list
+    return list.filter((event) => getEventSearchText(event).includes(query))
+  }, [eventOptions, eventSearch, exportDialog?.chapterId, exportDialog?.eventDate, exportDialog?.scope])
 
   const filteredChapterOptions = useMemo(() => {
     const query = chapterSearch.trim().toLowerCase()
@@ -825,24 +838,6 @@ export default function AdminEvents() {
     void load()
   }, [])
 
-  const resolveEventIdsForChapter = async (chapterId: string) => {
-    const { data, error: chapterError } = await supabase
-      .from('events')
-      .select('id')
-      .eq('chapter_id', chapterId)
-    if (chapterError) throw new Error(chapterError.message)
-    return (data ?? []).map((row) => row.id)
-  }
-
-  const resolveEventIdsForRange = async (startDate: string, endDate: string) => {
-    let query = supabase.from('events').select('id')
-    if (startDate) query = query.gte('event_date', normalizeDateStart(startDate))
-    if (endDate) query = query.lte('event_date', normalizeDateEnd(endDate))
-    const { data, error: rangeError } = await query
-    if (rangeError) throw new Error(rangeError.message)
-    return (data ?? []).map((row) => row.id)
-  }
-
   const applyAttendanceStatusFilter = (query: any, status: AttendanceFilter) => {
     const filterable = query as { eq: (column: string, value: string | boolean) => any }
     if (status === 'checked_in') return filterable.eq('checked_in', true)
@@ -860,8 +855,7 @@ export default function AdminEvents() {
       scope: 'all',
       eventId: '',
       chapterId: '',
-      startDate: '',
-      endDate: '',
+      eventDate: '',
       attendanceStatus: 'all',
     })
   }
@@ -875,9 +869,6 @@ export default function AdminEvents() {
   const handleExportEvents = async (
     scope: ExportScope,
     eventId?: string,
-    chapterId?: string,
-    startDate?: string,
-    endDate?: string,
   ) => {
     setExportError(null)
     setExportLoading(true)
@@ -888,9 +879,6 @@ export default function AdminEvents() {
         .order('event_date', { ascending: false })
 
       if (scope === 'event' && eventId) query = query.eq('id', eventId)
-      if (scope === 'chapter' && chapterId) query = query.eq('chapter_id', chapterId)
-      if (startDate) query = query.gte('event_date', normalizeDateStart(startDate))
-      if (endDate) query = query.lte('event_date', normalizeDateEnd(endDate))
 
       const { data, error: exportErr } = await query
       if (exportErr) throw new Error(exportErr.message)
@@ -941,9 +929,6 @@ export default function AdminEvents() {
   const handleExportAttendance = async (
     scope: ExportScope,
     eventId?: string,
-    chapterId?: string,
-    startDate?: string,
-    endDate?: string,
     attendanceStatus?: AttendanceFilter,
   ) => {
     setExportError(null)
@@ -951,16 +936,6 @@ export default function AdminEvents() {
     try {
       let eventIds: string[] | null = null
       if (scope === 'event' && eventId) eventIds = [eventId]
-      if (scope === 'chapter' && chapterId) eventIds = await resolveEventIdsForChapter(chapterId)
-
-      if (startDate || endDate) {
-        const rangeIds = await resolveEventIdsForRange(startDate ?? '', endDate ?? '')
-        if (eventIds) {
-          eventIds = eventIds.filter((id) => rangeIds.includes(id))
-        } else {
-          eventIds = rangeIds
-        }
-      }
 
       let query: any = supabase
         .from('event_registrations')
@@ -1219,7 +1194,7 @@ export default function AdminEvents() {
                 <div>
                   <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-2">Scope</p>
                   <div className="flex flex-col gap-2">
-                    {(['all', 'event', 'chapter'] as ExportScope[]).map((scope) => (
+                    {(['all', 'event'] as ExportScope[]).map((scope) => (
                       <label key={scope} className="flex items-center gap-2 text-md3-body-md text-slate-700">
                         <input
                           type="radio"
@@ -1231,87 +1206,82 @@ export default function AdminEvents() {
                         />
                         {scope === 'all' && 'All data'}
                         {scope === 'event' && 'Specific event'}
-                        {scope === 'chapter' && 'Specific chapter'}
                       </label>
                     ))}
                   </div>
                 </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={labelClass}>Start Date</label>
-                      <input
-                        type="date"
-                        value={exportDialog.startDate}
-                        onChange={(event) =>
-                          setExportDialog((prev) => prev ? { ...prev, startDate: event.target.value } : prev)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className="sr-only">End Date</label>
-                      <input
-                        type="date"
-                        value={exportDialog.endDate}
-                        onChange={(event) =>
-                          setExportDialog((prev) => prev ? { ...prev, endDate: event.target.value } : prev)
-                        }
-                        className={inputClass}
-                      />
-                    </div>
-                  </div>
-
                   {exportDialog.scope === 'event' && (
-                    <div className="space-y-2">
-                      <label className={labelClass}>Event</label>
-                      <input
-                        type="text"
-                        value={eventSearch}
-                        onChange={(event) => setEventSearch(event.target.value)}
-                        placeholder="Search events…"
-                        className={inputClass}
-                      />
-                      <select
-                        value={exportDialog.eventId}
-                        onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
-                        className={inputClass}
-                        size={Math.min(6, Math.max(3, filteredEventOptions.length || 3))}
-                      >
-                        {filteredEventOptions.length === 0 && (
-                          <option value="">No matching events</option>
-                        )}
-                        {filteredEventOptions.map((event) => (
-                          <option key={event.id} value={event.id}>{getEventOptionLabel(event)}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {exportDialog.scope === 'chapter' && (
-                    <div className="space-y-2">
-                      <label className={labelClass}>Chapter</label>
-                      <input
-                        type="text"
-                        value={chapterSearch}
-                        onChange={(event) => setChapterSearch(event.target.value)}
-                        placeholder="Search chapters…"
-                        className={inputClass}
-                      />
-                      <select
-                        value={exportDialog.chapterId}
-                        onChange={(event) => setExportDialog((prev) => prev ? { ...prev, chapterId: event.target.value } : prev)}
-                        className={inputClass}
-                        size={Math.min(6, Math.max(3, filteredChapterOptions.length || 3))}
-                      >
-                        {filteredChapterOptions.length === 0 && (
-                          <option value="">No matching chapters</option>
-                        )}
-                        {filteredChapterOptions.map((chapter) => (
-                          <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <label className={labelClass}>Chapter</label>
+                        <input
+                          type="text"
+                          value={chapterSearch}
+                          onChange={(event) => setChapterSearch(event.target.value)}
+                          placeholder="Search chapters…"
+                          className={inputClass}
+                        />
+                        <select
+                          value={exportDialog.chapterId}
+                          onChange={(event) =>
+                            setExportDialog((prev) => prev ? {
+                              ...prev,
+                              chapterId: event.target.value,
+                              eventId: '',
+                            } : prev)
+                          }
+                          className={inputClass}
+                          size={Math.min(6, Math.max(3, filteredChapterOptions.length || 3))}
+                        >
+                          {filteredChapterOptions.length === 0 && (
+                            <option value="">No matching chapters</option>
+                          )}
+                          {filteredChapterOptions.map((chapter) => (
+                            <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Event Date</label>
+                        <input
+                          type="date"
+                          value={exportDialog.eventDate}
+                          onChange={(event) =>
+                            setExportDialog((prev) => prev ? {
+                              ...prev,
+                              eventDate: event.target.value,
+                              eventId: '',
+                            } : prev)
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={labelClass}>Event</label>
+                        <input
+                          type="text"
+                          value={eventSearch}
+                          onChange={(event) => setEventSearch(event.target.value)}
+                          placeholder="Search events…"
+                          className={inputClass}
+                        />
+                        <select
+                          value={exportDialog.eventId}
+                          onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
+                          className={inputClass}
+                          size={Math.min(6, Math.max(3, filteredEventOptions.length || 3))}
+                          disabled={!exportDialog.chapterId || !exportDialog.eventDate}
+                        >
+                          {filteredEventOptions.length === 0 && (
+                            <option value="">No matching events</option>
+                          )}
+                          {filteredEventOptions.map((event) => (
+                            <option key={event.id} value={event.id}>{getEventOptionLabel(event)}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
                   )}
 
                   {exportDialog.kind === 'attendance' && (
@@ -1347,25 +1317,19 @@ export default function AdminEvents() {
                     type="button"
                     disabled={
                       exportLoading ||
-                      (exportDialog.scope === 'event' && !exportDialog.eventId) ||
-                      (exportDialog.scope === 'chapter' && !exportDialog.chapterId)
+                      (exportDialog.scope === 'event' &&
+                        (!exportDialog.chapterId || !exportDialog.eventDate || !exportDialog.eventId))
                     }
                     onClick={async () => {
                       if (exportDialog.kind === 'events') {
                         await handleExportEvents(
                           exportDialog.scope,
                           exportDialog.eventId,
-                          exportDialog.chapterId,
-                          exportDialog.startDate,
-                          exportDialog.endDate,
                         )
                       } else {
                         await handleExportAttendance(
                           exportDialog.scope,
                           exportDialog.eventId,
-                          exportDialog.chapterId,
-                          exportDialog.startDate,
-                          exportDialog.endDate,
                           exportDialog.attendanceStatus,
                         )
                       }
