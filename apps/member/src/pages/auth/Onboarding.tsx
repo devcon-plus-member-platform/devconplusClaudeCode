@@ -9,7 +9,7 @@ const slides = [
     subtitle: "Sync, Support, Succeed. Get instant access to the Philippines’ largest tech volunteer community!",
   },
   {
-    image:    '/photos/devcon-mindanao.jpg',
+    image:    '/photos/devcon-mindanao.png',
     title:    '11 Chapters. 16 Years.\n60,000+ Geeks for Good.',
     subtitle: 'Join chapters across the country and make an impact locally and nationally.',
   },
