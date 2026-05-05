@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeftOutline } from 'solar-icon-set'
 import { useAuthStore } from '../../stores/useAuthStore'
@@ -29,10 +29,18 @@ const STEP_CATEGORIES: Record<Step, 'interest' | 'tech_stack' | 'community_role'
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
 const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
+function isSafeReturnTo(url: string | undefined | null): url is string {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
+}
+
 export default function InterestQuiz() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const fromProfile = searchParams.get('from') === 'profile'
+  const returnTo =
+    (location.state as { returnTo?: string } | null)?.returnTo ??
+    sessionStorage.getItem('devcon_returnTo')
 
   const user = useAuthStore((s) => s.user)
   const { options, isLoading, fetchOptions, saveSelections } = useInterestsStore()
@@ -83,7 +91,12 @@ export default function InterestQuiz() {
     setIsSaving(true)
     try {
       await saveSelections(toSave[0], toSave[1], toSave[2])
-      navigate(fromProfile ? '/profile' : '/home', { replace: true })
+      let dest = fromProfile ? '/profile' : '/home'
+      if (!fromProfile && isSafeReturnTo(returnTo)) {
+        dest = returnTo
+        sessionStorage.removeItem('devcon_returnTo')
+      }
+      navigate(dest, { replace: true })
     } finally {
       setIsSaving(false)
     }

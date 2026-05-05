@@ -57,8 +57,8 @@ function friendlyAuthError(msg: string): string {
   return msg
 }
 
-function getPostAuthRoute(): string {
-  return '/organizer-code-gate'
+function isSafeReturnTo(url: string | null): url is string {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
 }
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
@@ -69,6 +69,7 @@ export default function SignUp() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const refCode = searchParams.get('ref')
+  const returnTo = searchParams.get('returnTo')
   const { signUp, checkUsernameAvailable, signInWithGoogle } = useAuthStore()
   const [googleLoading, setGoogleLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -228,7 +229,7 @@ export default function SignUp() {
         // 3. Initialize store so the rest of the app has the correct user + isOAuthOnly=false
         await useAuthStore.getState().initialize()
         clearDraft()
-        navigate('/organizer-code-gate', { replace: true })
+        navigate('/organizer-code-gate', { replace: true, state: { returnTo: isSafeReturnTo(returnTo) ? returnTo : undefined } })
       } catch (err) {
         const raw = err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
         setFormError(friendlyAuthError(raw))
@@ -265,10 +266,11 @@ export default function SignUp() {
 
       if (emailConfirmationPending) {
         clearDraft()
+        if (isSafeReturnTo(returnTo)) sessionStorage.setItem('devcon_returnTo', returnTo)
         navigate('/email-sent', { state: { email: data.email, type: 'signup' } })
       } else {
         clearDraft()
-        navigate(getPostAuthRoute())
+        navigate('/organizer-code-gate', { state: { returnTo: isSafeReturnTo(returnTo) ? returnTo : undefined } })
       }
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
@@ -503,7 +505,12 @@ export default function SignUp() {
         {!isOAuthMode && (
           <p className="text-center text-md3-body-md text-slate-500 mt-6">
             Already have an account?{' '}
-            <Link to="/sign-in" className="text-blue font-semibold">Sign In</Link>
+            <Link
+              to={isSafeReturnTo(returnTo) ? `/sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/sign-in'}
+              className="text-blue font-semibold"
+            >
+              Sign In
+            </Link>
           </p>
         )}
       </div>

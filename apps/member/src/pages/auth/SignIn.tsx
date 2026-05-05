@@ -3,7 +3,7 @@ import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom'
 import { EyeOutline, EyeClosedOutline } from 'solar-icon-set'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useFormDraft } from '../../hooks/useFormDraft'
@@ -11,6 +11,10 @@ import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
 const MAX_ATTEMPTS = 5
 const LOCKOUT_MS   = 300_000
+
+function isSafeReturnTo(url: string | null): url is string {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
+}
 
 /** Map raw Supabase/GoTrue errors to user-friendly messages. */
 function friendlyAuthError(msg: string): string {
@@ -46,6 +50,8 @@ function GoogleIcon() {
 export default function SignIn() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const returnTo = searchParams.get('returnTo')
   const { signIn, signInWithGoogle } = useAuthStore()
   const { draft, saveDraft, clearDraft } = useFormDraft<{ email: string }>(
     'sign-in',
@@ -89,7 +95,7 @@ export default function SignIn() {
       await signIn(data.email, data.password, turnstileToken ?? undefined)
       failedAttempts.current = 0
       clearDraft()
-      navigate('/home')
+      navigate(isSafeReturnTo(returnTo) ? returnTo : '/home')
     } catch (err) {
       turnstileRef.current?.reset()
       setTurnstileToken(null)
@@ -231,7 +237,12 @@ export default function SignIn() {
 
         <p className="text-center text-md3-body-md text-slate-500 mt-6">
           Don't have an account?{' '}
-          <Link to="/sign-up" className="text-blue font-semibold">Sign Up</Link>
+          <Link
+            to={isSafeReturnTo(returnTo) ? `/sign-up?returnTo=${encodeURIComponent(returnTo)}` : '/sign-up'}
+            className="text-blue font-semibold"
+          >
+            Sign Up
+          </Link>
         </p>
       </div>
 

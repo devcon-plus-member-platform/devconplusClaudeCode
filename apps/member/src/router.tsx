@@ -62,6 +62,9 @@ export const router = createBrowserRouter([
   // Root — always start at onboarding
   { path: '/',                     element: <SplashScreen /> },
 
+  // Public routes — no layout, no auth required
+  { path: '/events/:slug',         element: <EventDetail /> },
+
   // Auth routes — no layout
   { path: '/onboarding',           element: <Onboarding /> },
   { path: '/sign-in',              element: <SignIn /> },
@@ -81,7 +84,6 @@ export const router = createBrowserRouter([
     children: [
       { path: '/home',                       element: <Dashboard /> },
       { path: '/events',                    element: <EventsList /> },
-      { path: '/events/:slug',                element: <EventDetail /> },
       { path: '/events/:slug/register',       element: <EventRegister /> },
       { path: '/events/:slug/pending',        element: <EventPending /> },
       { path: '/events/:slug/ticket',         element: <EventTicket /> },

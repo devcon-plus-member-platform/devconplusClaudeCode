@@ -19,15 +19,41 @@ export default function EventDetail() {
   const { events, registrations } = useEventsStore()
   const { user } = useAuthStore()
   const { loadApplications, getApplicationByEventId } = useVolunteerStore()
-  const event = events.find((e) => e.slug === slug)
-  const eventId = event?.id
 
+  const storeEvent = events.find((e) => e.slug === slug)
+  const [localEvent, setLocalEvent] = useState<NonNullable<typeof storeEvent> | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [notFound, setNotFound] = useState(false)
+
+  const event = storeEvent ?? localEvent ?? undefined
+
+  // Fetch event directly when not available from the authenticated store
   useEffect(() => {
-    loadApplications()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (event || !slug) return
+    setLoading(true)
+    supabase
+      .from('events')
+      .select('*')
+      .eq('slug', slug)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setNotFound(true)
+        } else {
+          setLocalEvent(data as NonNullable<typeof storeEvent>)
+        }
+        setLoading(false)
+      })
+  }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Only load volunteer applications for authenticated users
+  useEffect(() => {
+    if (user) loadApplications()
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const eventId = event?.id
   const reg = registrations.find((r) => r.event_id === eventId)
-  const volunteerApp = eventId ? getApplicationByEventId(eventId) : undefined
+  const volunteerApp = user && eventId ? getApplicationByEventId(eventId) : undefined
 
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== user?.chapter_id
 
@@ -43,11 +69,23 @@ export default function EventDetail() {
     }
   }, [isChapterLocked, event?.chapter_id])
 
-  if (!event) return <NotFound />
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (notFound || (!loading && !event)) return <NotFound />
+
+  if (!event) return null
 
   const dateStr = event.event_date
     ? new Date(event.event_date).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : 'Date TBA'
+
+  const registerPath = `/events/${slug}/register`
 
   return (
     <motion.div
@@ -67,7 +105,7 @@ export default function EventDetail() {
       </div>
 
       {/* ── Header ── */}
-      <header 
+      <header
         className="relative z-50 h-60 bg-slate-200 overflow-hidden"
         style={{ clipPath: 'ellipse(100% 100% at 50% 0%)' }}
       >
@@ -111,16 +149,32 @@ export default function EventDetail() {
           </div>
         )}
 
-        {/* CTA based on registration state */}
+        {/* CTA based on auth + registration state */}
         <div className="pt-2 space-y-3">
-          {!reg ? (
+          {!user ? (
+            /* Public / unauthenticated view */
+            <>
+              <button
+                onClick={() => navigate(`/sign-up?returnTo=${encodeURIComponent(registerPath)}`)}
+                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+              >
+                Create Account & Register
+              </button>
+              <button
+                onClick={() => navigate(`/sign-in?returnTo=${encodeURIComponent(registerPath)}`)}
+                className="w-full border border-slate-200 bg-white text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-colors"
+              >
+                Sign In to Register
+              </button>
+            </>
+          ) : !reg ? (
             isChapterLocked ? (
               <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold py-4 rounded-2xl text-center text-md3-body-md">
                 This event is exclusive to {eventChapterName ?? "this chapter's"} members
               </div>
             ) : (
               <button
-                onClick={() => navigate(`/events/${slug}/register`)}
+                onClick={() => navigate(registerPath)}
                 className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
               >
                 Request to Join
@@ -147,8 +201,8 @@ export default function EventDetail() {
             </div>
           )}
 
-          {/* Volunteer CTA — only for upcoming events, hidden for cross-chapter members */}
-          {event.status === 'upcoming' && (
+          {/* Volunteer CTA — only for authenticated members on upcoming events */}
+          {user && event.status === 'upcoming' && (
             isChapterLocked ? (
               <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold py-4 rounded-2xl text-center text-md3-body-md">
                 This event is exclusive to {eventChapterName ?? "this chapter's"} members

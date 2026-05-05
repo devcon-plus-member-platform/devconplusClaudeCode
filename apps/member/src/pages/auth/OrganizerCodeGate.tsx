@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { CameraOutline } from 'solar-icon-set'
 import { useAuthStore } from '../../stores/useAuthStore'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
@@ -9,6 +9,8 @@ const CODE_LOCKOUT_MS   = 60_000
 
 export default function OrganizerCodeGate() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo
   const { user, initials, setOrganizerSession, requestOrganizerUpgrade, uploadAvatar, updateProfile } = useAuthStore()
   const [code, setCode]       = useState('')
   const [error, setError]     = useState('')
@@ -106,7 +108,7 @@ export default function OrganizerCodeGate() {
 
   const handleContinueAsMember = () => {
     setOrganizerSession(false)
-    navigate('/interests')
+    navigate('/interests', { state: { returnTo } })
   }
 
   return (
