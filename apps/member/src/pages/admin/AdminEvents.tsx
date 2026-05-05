@@ -783,7 +783,6 @@ export default function AdminEvents() {
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [eventSearch, setEventSearch] = useState('')
-  const [chapterSearch, setChapterSearch] = useState('')
 
   const eventOptions = useMemo(() => {
     const sorted = [...events].sort((a, b) => (a.event_date ?? '').localeCompare(b.event_date ?? ''))
@@ -806,12 +805,6 @@ export default function AdminEvents() {
     if (!query) return list
     return list.filter((event) => getEventSearchText(event).includes(query))
   }, [eventOptions, eventSearch, exportDialog?.chapterId, exportDialog?.eventDate, exportDialog?.scope])
-
-  const filteredChapterOptions = useMemo(() => {
-    const query = chapterSearch.trim().toLowerCase()
-    if (!query) return chapters
-    return chapters.filter((chapter) => chapter.name.toLowerCase().includes(query))
-  }, [chapters, chapterSearch])
 
   useEffect(() => {
     const load = async () => {
@@ -849,7 +842,6 @@ export default function AdminEvents() {
   const openExportDialog = (kind: ExportKind) => {
     setExportError(null)
     setEventSearch('')
-    setChapterSearch('')
     setExportDialog({
       kind,
       scope: 'all',
@@ -862,7 +854,6 @@ export default function AdminEvents() {
 
   const closeExportDialog = () => {
     setEventSearch('')
-    setChapterSearch('')
     setExportDialog(null)
   }
 
@@ -1213,49 +1204,41 @@ export default function AdminEvents() {
 
                   {exportDialog.scope === 'event' && (
                     <>
-                      <div className="space-y-2">
-                        <label className={labelClass}>Chapter</label>
-                        <input
-                          type="text"
-                          value={chapterSearch}
-                          onChange={(event) => setChapterSearch(event.target.value)}
-                          placeholder="Search chapters…"
-                          className={inputClass}
-                        />
-                        <select
-                          value={exportDialog.chapterId}
-                          onChange={(event) =>
-                            setExportDialog((prev) => prev ? {
-                              ...prev,
-                              chapterId: event.target.value,
-                              eventId: '',
-                            } : prev)
-                          }
-                          className={inputClass}
-                          size={Math.min(6, Math.max(3, filteredChapterOptions.length || 3))}
-                        >
-                          {filteredChapterOptions.length === 0 && (
-                            <option value="">No matching chapters</option>
-                          )}
-                          {filteredChapterOptions.map((chapter) => (
-                            <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelClass}>Event Date</label>
-                        <input
-                          type="date"
-                          value={exportDialog.eventDate}
-                          onChange={(event) =>
-                            setExportDialog((prev) => prev ? {
-                              ...prev,
-                              eventDate: event.target.value,
-                              eventId: '',
-                            } : prev)
-                          }
-                          className={inputClass}
-                        />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className={labelClass}>Chapter</label>
+                          <select
+                            value={exportDialog.chapterId}
+                            onChange={(event) =>
+                              setExportDialog((prev) => prev ? {
+                                ...prev,
+                                chapterId: event.target.value,
+                                eventId: '',
+                              } : prev)
+                            }
+                            className={inputClass}
+                          >
+                            <option value="">Select chapter…</option>
+                            {chapters.map((chapter) => (
+                              <option key={chapter.id} value={chapter.id}>{chapter.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className={labelClass}>Event Date</label>
+                          <input
+                            type="date"
+                            value={exportDialog.eventDate}
+                            onChange={(event) =>
+                              setExportDialog((prev) => prev ? {
+                                ...prev,
+                                eventDate: event.target.value,
+                                eventId: '',
+                              } : prev)
+                            }
+                            className={inputClass}
+                          />
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className={labelClass}>Event</label>
