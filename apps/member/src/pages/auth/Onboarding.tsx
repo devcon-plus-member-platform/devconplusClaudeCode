@@ -9,17 +9,17 @@ const slides = [
     subtitle: "Sync, Support, Succeed. Get instant access to the Philippines’ largest tech volunteer community!",
   },
   {
-    image:    '/photos/devcon-15-anniversary.jpg',
+    image:    '/photos/devcon-mindanao.jpg',
     title:    '11 Chapters. 16 Years.\n60,000+ Geeks for Good.',
     subtitle: 'Join chapters across the country and make an impact locally and nationally.',
   },
   {
-    image:    '/photos/devcon-certificate-ceremony.jpg',
+    image:    '/photos/devcon-kids-iloilo.jpg',
     title:    'Volunteer. Earn Points.\nUnlock Rewards.',
     subtitle: 'Participate in events, contribute to projects, and earn points for exclusive rewards.',
   },
   {
-    image:    '/photos/devcon-jumpstart-internships.jpg',
+    image:    '/photos/devcon-15-anniversary.jpg',
     title:    'Access Global Opportunities.\nLevel Up Your Career.',
     subtitle: 'Connect with industry leaders and discover exclusive opportunities for your career.',
   },
