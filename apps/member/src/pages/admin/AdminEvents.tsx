@@ -1253,7 +1253,6 @@ export default function AdminEvents() {
                           value={exportDialog.eventId}
                           onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
                           className={inputClass}
-                          disabled={!exportDialog.eventDate}
                         >
                           {filteredEventOptions.length === 0 && (
                             <option value="">No matching events</option>
@@ -1300,7 +1299,7 @@ export default function AdminEvents() {
                     disabled={
                       exportLoading ||
                       (exportDialog.scope === 'event' &&
-                        (!exportDialog.eventDate || !exportDialog.eventId))
+                        (!exportDialog.eventId))
                     }
                     onClick={async () => {
                       if (exportDialog.kind === 'events') {
