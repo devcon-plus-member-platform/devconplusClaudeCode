@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
-import { Toaster, toast } from 'sonner'
+import { Toaster } from 'sonner'
 import { router } from './router'
 import { useThemeStore, PROGRAM_THEMES } from './stores/useThemeStore'
 import { useAuthStore } from './stores/useAuthStore'
 import { useEventsStore } from './stores/useEventsStore'
 import { useJobsStore } from './stores/useJobsStore'
 import { useNewsStore } from './stores/useNewsStore'
-import { useMediaQuery } from './hooks/useMediaQuery'
 import logoVertical from './assets/logos/logo-vertical.svg'
 import AnimatedDice from './components/AnimatedDice'
 
@@ -30,23 +29,10 @@ const PATTERN_LAYER_STYLE: React.CSSProperties = {
   backgroundRepeat: 'repeat',
 }
 
-let hasShownDesktopToast = false
-
 export default function App() {
   const { themeId } = useThemeStore()
   const { initialize, isInitialized } = useAuthStore()
   const [showLoadingText, setShowLoadingText] = useState(false)
-  const isDesktop = useMediaQuery('(min-width: 768px)')
-
-  useEffect(() => {
-    if (isInitialized && isDesktop && !hasShownDesktopToast) {
-      toast.info('DEVCON+ is best used on mobile devices.', {
-        id: 'desktop-warning',
-        duration: 5000,
-      })
-      hasShownDesktopToast = true
-    }
-  }, [isInitialized, isDesktop])
 
   useEffect(() => {
     const timer = setTimeout(() => setShowLoadingText(true), 10000)

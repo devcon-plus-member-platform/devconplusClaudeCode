@@ -13,10 +13,13 @@ import { useVolunteerStore } from '../stores/useVolunteerStore'
 import { useReferralsStore } from '../stores/useReferralsStore'
 import { useMissionsStore } from '../stores/useMissionsStore'
 import { supabase, onRealtimeDisconnect } from '../lib/supabase'
+import { toast } from 'sonner'
 
 import DesktopGuard from './DesktopGuard'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
+
+let hasShownDesktopToast = false
 
 export default function MemberLayout() {
   const { user } = useAuthStore()
@@ -55,6 +58,17 @@ export default function MemberLayout() {
       navigate('/interests', { replace: true, state: { returnTo: location.pathname } })
     }
   }, [user, navigate, location.pathname])
+
+  useEffect(() => {
+    if (hasShownDesktopToast) return
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      hasShownDesktopToast = true
+      toast.info('DEVCON+ is best used on mobile devices.', {
+        id: 'desktop-warning',
+        duration: 5000,
+      })
+    }
+  }, [])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
