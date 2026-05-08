@@ -109,7 +109,7 @@ export default function TermsAndConditions() {
               onClick={() => navigate(-1)}
               className="mt-0.5 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
             >
-              <ArrowLeftOutline color="white" width={20} height={20} />
+              <ArrowLeftOutline color="white" size={20} />
             </button>
             <div className="min-w-0">
               <p className="text-white/70 text-md3-label-md font-proxima uppercase tracking-widest mb-0.5">
