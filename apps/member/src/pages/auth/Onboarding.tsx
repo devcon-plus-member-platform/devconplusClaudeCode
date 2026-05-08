@@ -4,7 +4,7 @@ import logoVertical from '../../assets/logos/logo-vertical.svg'
 
 const slides = [
   {
-    image:    '/photos/devcon-summit-group.jpg',
+    image:    '/photos/devcon-iloilo.png',
     title:    "Your Portal to\nThe Philippines’ Largest\nVolunteer Tech Community!",
     subtitle: "Sync, Support, Succeed. Get instant access to the Philippines’ largest tech volunteer community!",
   },
@@ -14,12 +14,12 @@ const slides = [
     subtitle: 'Join chapters across the country and make an impact locally and nationally.',
   },
   {
-    image:    '/photos/devconxsui-iloilo.jpg',
+    image:    '/photos/devcon-summit-group.jpg',
     title:    'Volunteer. Earn Points.\nUnlock Rewards.',
     subtitle: 'Participate in events, contribute to projects, and earn points for exclusive rewards.',
   },
   {
-    image:    '/photos/devcon-luzon-chapter.png',
+    image:    '/photos/devcon-luzon-chapters.png',
     title:    'Access Global Opportunities.\nLevel Up Your Career.',
     subtitle: 'Connect with industry leaders and discover exclusive opportunities for your career.',
   },
