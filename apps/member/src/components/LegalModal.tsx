@@ -219,7 +219,7 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
                 onClick={onClose}
                 className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors pt-2"
               >
-                <CloseCircleOutline color="#94A3B8" width={22} height={22} />
+                <CloseCircleOutline color="#94A3B8" size={22} />
               </button>
             </div>
 
