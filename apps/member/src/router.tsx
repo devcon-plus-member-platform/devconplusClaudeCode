@@ -17,6 +17,8 @@ import ResetPassword from './pages/auth/ResetPassword'
 import OAuthCallback from './pages/auth/OAuthCallback'
 import OAuthProfileComplete from './pages/auth/OAuthProfileComplete'
 import NotFound from './pages/NotFound'
+import TermsAndConditions from './pages/legal/TermsAndConditions'
+import PrivacyPolicy from './pages/legal/PrivacyPolicy'
 
 // Member tab pages
 import Dashboard from './pages/dashboard/Dashboard'
@@ -77,6 +79,8 @@ export const router = createBrowserRouter([
   { path: '/email-confirm',            element: <EmailConfirm /> },
   { path: '/oauth-callback',           element: <OAuthCallback /> },
   { path: '/oauth-profile-complete',   element: <OAuthProfileComplete /> },
+  { path: '/terms-and-conditions',     element: <TermsAndConditions /> },
+  { path: '/privacy-policy',           element: <PrivacyPolicy /> },
 
   // Member routes — wrapped in MemberLayout with bottom tab nav
   {

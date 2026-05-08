@@ -452,7 +452,7 @@ export default function SignUp() {
 
           <div>
             <label className="text-md3-body-md font-medium text-slate-700 block mb-1">
-              Chapter
+              Nearest Chapter
             </label>
             <select
               {...register('chapter_id')}

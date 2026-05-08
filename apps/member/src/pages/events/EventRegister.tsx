@@ -329,7 +329,27 @@ export default function EventRegister() {
             className="mt-0.5 accent-blue"
           />
           <span className="text-md3-body-md text-slate-600">
-            I agree to the Terms & Conditions and Privacy Policy for this event.
+            I agree to the{' '}
+            <a
+              href="/terms-and-conditions"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-primary underline underline-offset-2"
+            >
+              Terms &amp; Conditions
+            </a>
+            {' '}and{' '}
+            <a
+              href="/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-primary underline underline-offset-2"
+            >
+              Privacy Policy
+            </a>
+            {' '}for this event.
           </span>
         </label>
 
