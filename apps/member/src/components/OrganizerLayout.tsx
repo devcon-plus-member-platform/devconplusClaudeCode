@@ -58,6 +58,7 @@ export default function OrganizerLayout() {
   const unsubRedemptionsRef = useRef<(() => void) | null>(null)
   const recoverRef = useRef<(() => void) | null>(null)
   const resubscribeRef = useRef<(() => void) | null>(null)
+  const lastRecoveryRef = useRef(0)
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -93,17 +94,21 @@ export default function OrganizerLayout() {
     recover()
     resubscribe()
 
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        recover()
-        resubscribe()
-      }
+    const runRecovery = () => {
+      const now = Date.now()
+      if (now - lastRecoveryRef.current < 3000) return
+      lastRecoveryRef.current = now
+      recover()
+      resubscribe()
     }
-    const handleOnline = () => { recover(); resubscribe() }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') runRecovery()
+    }
+    const handleOnline = () => runRecovery()
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
-    // Polling fallback: refetch + re-subscribe every 5 minutes — channels can
-    // silently die during idle even without a full network drop
+    // Polling fallback: refetch + re-subscribe every 5 minutes (exempt from debounce)
     const pollInterval = setInterval(() => { recover(); resubscribe() }, 5 * 60 * 1000)
 
     return () => {

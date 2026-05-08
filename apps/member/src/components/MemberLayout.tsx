@@ -93,6 +93,9 @@ export default function MemberLayout() {
   // always call the current store-aware logic.
   const recoverRef = useRef<(() => void) | null>(null)
   const resubscribeRef = useRef<(() => void) | null>(null)
+  // Debounce guard: prevents concurrent recovery runs when visibilitychange,
+  // online, and onRealtimeDisconnect all fire within the same "wake-up" burst.
+  const lastRecoveryRef = useRef(0)
 
   useEffect(() => {
     if (!user) return
@@ -160,36 +163,32 @@ export default function MemberLayout() {
     recover()
     resubscribe()
 
-    const handleVisibility = () => {
-      // When the tab becomes visible or focused, we must ensure data is fresh.
-      if (document.visibilityState === 'visible') {
-        recover()
-        // Resubscribe if not already connecting to catch silent channel drops.
-        const state = supabase.realtime.connectionState()
-        if (state !== 'connecting') {
-          resubscribe()
-        }
-      }
-    }
-    
-    const handleOnline = () => { recover(); resubscribe() }
-    
-    // Socket-level disconnect handler (heartbeat/network loss)
-    const unregisterDisconnect = onRealtimeDisconnect(() => { 
+    const runRecovery = () => {
+      const now = Date.now()
+      if (now - lastRecoveryRef.current < 3000) return
+      lastRecoveryRef.current = now
       recover()
-      resubscribe() 
-    })
+      const state = supabase.realtime.connectionState()
+      if (state !== 'connecting') resubscribe()
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') runRecovery()
+    }
+
+    const handleOnline = () => runRecovery()
+
+    // Socket-level disconnect handler (heartbeat/network loss)
+    const unregisterDisconnect = onRealtimeDisconnect(() => runRecovery())
 
     document.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('focus', handleVisibility)
     window.addEventListener('online', handleOnline)
-    
-    // Polling fallback: refetch + re-subscribe every 5 minutes
+
+    // Polling fallback: refetch + re-subscribe every 5 minutes (exempt from debounce)
     const pollInterval = setInterval(() => { recover(); resubscribe() }, 5 * 60 * 1000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('focus', handleVisibility)
       window.removeEventListener('online', handleOnline)
       unregisterDisconnect()
       clearInterval(pollInterval)

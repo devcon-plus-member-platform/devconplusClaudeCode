@@ -17,8 +17,7 @@ interface PointsState {
   tierProgress: number
   transactions: PointTransaction[]
   isLoading: boolean
-  isTransactionsLoading: boolean
-  isTotalPointsLoading: boolean
+  pendingLoads: number
   error: string | null
 
   loadTransactions: () => Promise<void>
@@ -35,14 +34,13 @@ export const usePointsStore = create<PointsState>((set, get) => ({
   tierProgress: 0,
   transactions: [],
   isLoading: false,
-  isTransactionsLoading: false,
-  isTotalPointsLoading: false,
+  pendingLoads: 0,
   error: null,
 
   loadTransactions: async () => {
     const user = useAuthStore.getState().user
     if (!user) return
-    set({ isTransactionsLoading: true, isLoading: true, error: null })
+    set((s) => ({ pendingLoads: s.pendingLoads + 1, isLoading: true, error: null }))
     try {
       const { data, error } = await supabase
         .from('point_transactions')
@@ -54,15 +52,17 @@ export const usePointsStore = create<PointsState>((set, get) => ({
     } catch (err) {
       set({ transactions: [], error: err instanceof Error ? err.message : String(err) })
     } finally {
-      const isTotalPointsLoading = get().isTotalPointsLoading
-      set({ isTransactionsLoading: false, isLoading: isTotalPointsLoading })
+      set((s) => {
+        const remaining = s.pendingLoads - 1
+        return { pendingLoads: remaining, isLoading: remaining > 0 }
+      })
     }
   },
 
   loadTotalPoints: async () => {
     const user = useAuthStore.getState().user
     if (!user) return
-    set({ isTotalPointsLoading: true, isLoading: true, error: null })
+    set((s) => ({ pendingLoads: s.pendingLoads + 1, isLoading: true, error: null }))
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -72,7 +72,7 @@ export const usePointsStore = create<PointsState>((set, get) => ({
       if (error) throw error
       const spendablePoints = data?.spendable_points ?? 0
       const lifetimePoints = data?.lifetime_points ?? 0
-      
+
       // Update local state
       set({
         spendablePoints,
@@ -97,8 +97,10 @@ export const usePointsStore = create<PointsState>((set, get) => ({
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
-      const isTransactionsLoading = get().isTransactionsLoading
-      set({ isTotalPointsLoading: false, isLoading: isTransactionsLoading })
+      set((s) => {
+        const remaining = s.pendingLoads - 1
+        return { pendingLoads: remaining, isLoading: remaining > 0 }
+      })
     }
   },
 

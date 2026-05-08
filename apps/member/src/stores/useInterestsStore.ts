@@ -21,12 +21,13 @@ interface InterestsState {
   ) => Promise<void>
 }
 
-export const useInterestsStore = create<InterestsState>((set) => ({
+export const useInterestsStore = create<InterestsState>((set, get) => ({
   options: [],
   isLoading: false,
   error: null,
 
   fetchOptions: async () => {
+    if (get().options.length > 0) return
     set({ isLoading: true, error: null })
     const { data, error } = await supabase
       .from('interest_options')
