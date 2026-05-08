@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import LegalModal, { type LegalModalType } from '../../components/LegalModal'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -76,6 +77,7 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false)
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [legalModal, setLegalModal] = useState<LegalModalType | null>(null)
   const turnstileRef = useRef<TurnstileInstance>(null)
   const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
@@ -491,6 +493,13 @@ export default function SignUp() {
             />
           )}
 
+          <p className="text-md3-label-md text-slate-400 text-center">
+            By creating an account you agree to our{' '}
+            <button type="button" onClick={() => setLegalModal('terms')} className="text-blue underline">Terms &amp; Conditions</button>
+            {' '}and{' '}
+            <button type="button" onClick={() => setLegalModal('privacy')} className="text-blue underline">Privacy Policy</button>.
+          </p>
+
           <button
             type="submit"
             disabled={isSubmitting || (!isOAuthMode && !turnstileToken)}
@@ -514,6 +523,8 @@ export default function SignUp() {
           </p>
         )}
       </div>
+
+      <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import LegalModal, { type LegalModalType } from '../../components/LegalModal'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeftOutline } from 'solar-icon-set'
 import { useEventsStore } from '../../stores/useEventsStore'
@@ -128,6 +129,7 @@ export default function EventRegister() {
   const { events, registrations, register } = useEventsStore()
   const { user } = useAuthStore()
   const [agreed, setAgreed] = useState<boolean>((draft.agreed as boolean) ?? false)
+  const [legalModal, setLegalModal] = useState<LegalModalType | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -330,25 +332,21 @@ export default function EventRegister() {
           />
           <span className="text-md3-body-md text-slate-600">
             I agree to the{' '}
-            <a
-              href="/terms-and-conditions"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setLegalModal('terms') }}
               className="text-primary underline underline-offset-2"
             >
               Terms &amp; Conditions
-            </a>
+            </button>
             {' '}and{' '}
-            <a
-              href="/privacy-policy"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setLegalModal('privacy') }}
               className="text-primary underline underline-offset-2"
             >
               Privacy Policy
-            </a>
+            </button>
             {' '}for this event.
           </span>
         </label>
@@ -367,6 +365,8 @@ export default function EventRegister() {
           {submitting ? 'Submitting…' : 'Confirm Registration'}
         </button>
       </form>
+
+      <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
     </div>
   )
 }
