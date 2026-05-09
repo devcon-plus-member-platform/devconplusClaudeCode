@@ -256,7 +256,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (authUnsubscribe) authUnsubscribe()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if ((event as string) === 'TOKEN_REFRESH_FAILED') {
-        // Refresh token invalid / revoked — clear stale session and redirect to sign-in
+        // Revoked or expired refresh token — clear session and redirect to sign-in.
         await supabase.auth.signOut()
         set({ user: null, initials: '', chapterName: null, isOrganizerSession: false })
         window.location.replace('/sign-in')

@@ -94,7 +94,7 @@ export const useEventsStore = create<EventsState>((set) => ({
   error: null,
 
   fetchEvents: async () => {
-    set({ isLoading: true, error: null })
+    set((s) => ({ isLoading: s.events.length === 0, error: null }))
     try {
       const { data, error } = await supabase
         .from('events')
@@ -103,7 +103,7 @@ export const useEventsStore = create<EventsState>((set) => ({
       if (error) throw error
       set({ events: sortByEventDate((data ?? []) as Event[]) })
     } catch (err) {
-      set({ events: [], error: err instanceof Error ? err.message : String(err) })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoading: false })
     }
@@ -186,7 +186,7 @@ export const useEventsStore = create<EventsState>((set) => ({
   },
 
   fetchRegistrations: async (userId) => {
-    set({ isLoading: true, error: null })
+    set((s) => ({ isLoading: s.registrations.length === 0, error: null }))
     try {
       const { data, error } = await supabase
         .from('event_registrations')
@@ -195,7 +195,7 @@ export const useEventsStore = create<EventsState>((set) => ({
       if (error) throw error
       set({ registrations: (data ?? []) as FullRegistration[] })
     } catch (err) {
-      set({ registrations: [], error: err instanceof Error ? err.message : String(err) })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoading: false })
     }

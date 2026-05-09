@@ -96,6 +96,8 @@ export default function MemberLayout() {
   // Debounce guard: prevents concurrent recovery runs when visibilitychange,
   // online, and onRealtimeDisconnect all fire within the same "wake-up" burst.
   const lastRecoveryRef = useRef(0)
+  // Scheduled follow-up recovery attempts (cleared on next runRecovery or unmount).
+  const retryTimersRef = useRef<number[]>([])
 
   useEffect(() => {
     if (!user) return
@@ -165,18 +167,20 @@ export default function MemberLayout() {
 
     const runRecovery = () => {
       const now = Date.now()
-      if (now - lastRecoveryRef.current < 3000) {
-        console.log('[MemberLayout] runRecovery debounced')
-        return
-      }
+      if (now - lastRecoveryRef.current < 3000) return
       lastRecoveryRef.current = now
-      console.log('[MemberLayout] runRecovery fired — recover + resubscribe')
       recover()
       resubscribe()
+      // Follow-up attempts in case the first round hits a stale TCP connection.
+      // Stores preserve stale data so these retries are invisible to the user.
+      retryTimersRef.current.forEach(clearTimeout)
+      retryTimersRef.current = [
+        setTimeout(() => { recover(); resubscribe() }, 5_000),
+        setTimeout(() => { recover(); resubscribe() }, 15_000),
+      ]
     }
 
     const handleVisibility = () => {
-      console.log('[MemberLayout] visibilitychange →', document.visibilityState)
       if (document.visibilityState === 'visible') runRecovery()
     }
 
@@ -196,6 +200,8 @@ export default function MemberLayout() {
       window.removeEventListener('online', handleOnline)
       unregisterDisconnect()
       clearInterval(pollInterval)
+      retryTimersRef.current.forEach(clearTimeout)
+      retryTimersRef.current = []
       unsubEventsRef.current?.()
       unsubRewardsRef.current?.()
       unsubMissionsRef.current?.()

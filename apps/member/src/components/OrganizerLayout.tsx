@@ -59,6 +59,7 @@ export default function OrganizerLayout() {
   const recoverRef = useRef<(() => void) | null>(null)
   const resubscribeRef = useRef<(() => void) | null>(null)
   const lastRecoveryRef = useRef(0)
+  const retryTimersRef = useRef<number[]>([])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -100,6 +101,11 @@ export default function OrganizerLayout() {
       lastRecoveryRef.current = now
       recover()
       resubscribe()
+      retryTimersRef.current.forEach(clearTimeout)
+      retryTimersRef.current = [
+        setTimeout(() => { recover(); resubscribe() }, 5_000),
+        setTimeout(() => { recover(); resubscribe() }, 15_000),
+      ]
     }
 
     const handleVisibility = () => {
@@ -117,6 +123,8 @@ export default function OrganizerLayout() {
       window.removeEventListener('online', handleOnline)
       unregisterDisconnect()
       clearInterval(pollInterval)
+      retryTimersRef.current.forEach(clearTimeout)
+      retryTimersRef.current = []
       unsubEventsRef.current?.()
       unsubRewardsRef.current?.()
       unsubRedemptionsRef.current?.()

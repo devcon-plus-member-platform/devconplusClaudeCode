@@ -12,8 +12,11 @@ export const supabase = createClient<Database>(
       lock: async (name, acquireTimeout, fn) => {
         if (typeof navigator !== 'undefined' && navigator.locks) {
           if (acquireTimeout <= 0) {
+            // Cap indefinite waits at 1 s. A backgrounded-tab token refresh can hold
+            // this lock for minutes; without a cap every queued Supabase call hangs
+            // indefinitely → all store isLoading flags stay true until the lock frees.
             const ctrl = new AbortController()
-            const t = setTimeout(() => ctrl.abort(), 30_000)
+            const t = setTimeout(() => ctrl.abort(), 1_000)
             try {
               return await navigator.locks.request(name, { signal: ctrl.signal }, fn)
             } catch (err) {
@@ -29,8 +32,8 @@ export const supabase = createClient<Database>(
             return await navigator.locks.request(name, { signal: controller.signal }, fn)
           } catch (err) {
             if ((err as DOMException).name === 'AbortError') {
-              // Lock acquisition timed out (background refresh stalled).
-              // Call fn() without the lock so the operation can proceed.
+              // Lock acquisition timed out — call fn() without the lock so the
+              // operation can proceed rather than hanging indefinitely.
               return fn()
             }
             throw err
@@ -46,7 +49,6 @@ export const supabase = createClient<Database>(
       // cannot kill the 25 s ping and silently close the WebSocket.
       worker: true,
       params: {
-        // Throttle broadcast events to avoid overwhelming the client on busy channels
         eventsPerSecond: 10,
       },
     },
@@ -59,9 +61,7 @@ let _onDisconnect: (() => void) | null = null
 
 /**
  * Register a callback that fires whenever the Realtime heartbeat detects the
- * WebSocket is down ('disconnected' or 'timeout' status). This uses the official
- * onHeartbeat API rather than internal hooks, so it cannot race the built-in
- * auto-reconnect timer.
+ * WebSocket is down ('disconnected' or 'timeout' status).
  * Returns a cleanup function that unregisters the callback.
  */
 export function onRealtimeDisconnect(cb: () => void): () => void {
@@ -71,18 +71,13 @@ export function onRealtimeDisconnect(cb: () => void): () => void {
 
 // Use the official onHeartbeat API to detect silent disconnects.
 // The heartbeat fires every 25 s (driven by the Web Worker when worker:true).
-// Status 'disconnected' = socket not open when heartbeat tried to send.
-// Status 'timeout'      = server stopped replying to pings.
 //
 // IMPORTANT: do NOT call supabase.realtime.connect() here.
 // The library's own reconnectTimer already handles socket reconnection with
 // exponential backoff. Calling connect() from the heartbeat callback would
-// race that timer: if a socket is already CONNECTING (readyState=0), connect()
-// replaces it with a new socket, orphaning the first → both fail → infinite loop
-// that only a page reload can escape.
-//
-// Our only job here is to notify the layout to recreate channels once the socket
-// comes back. The library reconnects the socket; we reconnect the channels.
+// race that timer and can cause an infinite reconnect loop.
+// Our only job here is to notify the layout to recreate channels once the
+// socket comes back.
 supabase.realtime.onHeartbeat((status) => {
   if (status === 'disconnected' || status === 'timeout') {
     _onDisconnect?.()

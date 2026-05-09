@@ -16,7 +16,7 @@ export const useNewsStore = create<NewsState>((set) => ({
   error: null,
 
   fetchNews: async () => {
-    set({ isLoading: true, error: null })
+    set((s) => ({ isLoading: s.posts.length === 0, error: null }))
     try {
       const { data, error } = await supabase
         .from('news_posts')
@@ -25,7 +25,7 @@ export const useNewsStore = create<NewsState>((set) => ({
       if (error) throw error
       set({ posts: (data ?? []) as NewsPost[] })
     } catch (err) {
-      set({ posts: [], error: err instanceof Error ? err.message : String(err) })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoading: false })
     }

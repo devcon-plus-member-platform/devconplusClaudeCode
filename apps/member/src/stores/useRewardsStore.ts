@@ -63,7 +63,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
 
   // ── Member: active rewards only ─────────────────────────────────────────
   fetchRewards: async () => {
-    set({ isLoading: true, error: null })
+    set((s) => ({ isLoading: s.rewards.length === 0, error: null }))
     try {
       const { data, error } = await supabase
         .from('rewards')
@@ -73,7 +73,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       if (error) throw error
       set({ rewards: (data ?? []) as Reward[] })
     } catch (err) {
-      set({ rewards: [], error: err instanceof Error ? err.message : String(err) })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoading: false })
     }
@@ -81,7 +81,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
 
   // ── Organizer: all rewards ───────────────────────────────────────────────
   fetchAllRewards: async () => {
-    set({ isLoadingAll: true, error: null })
+    set((s) => ({ isLoadingAll: s.allRewards.length === 0, error: null }))
     try {
       const { data, error } = await supabase
         .from('rewards')
@@ -90,7 +90,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       if (error) throw error
       set({ allRewards: (data ?? []) as Reward[] })
     } catch (err) {
-      set({ allRewards: [], error: err instanceof Error ? err.message : String(err) })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoadingAll: false })
     }

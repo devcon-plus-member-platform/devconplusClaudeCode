@@ -19,7 +19,7 @@ export const useJobsStore = create<JobsState>((set, get) => ({
   error: null,
 
   fetchJobs: async () => {
-    set({ isLoading: true, error: null })
+    set((s) => ({ isLoading: s.jobs.length === 0, error: null }))
     try {
       const { data, error } = await supabase
         .from('jobs')
@@ -29,7 +29,7 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       if (error) throw error
       set({ jobs: (data ?? []) as Job[] })
     } catch (err) {
-      set({ jobs: [], error: err instanceof Error ? err.message : String(err) })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoading: false })
     }
