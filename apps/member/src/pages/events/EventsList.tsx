@@ -233,8 +233,8 @@ export default function EventsList() {
             transition={{ duration: 0.15 }}
           >
           <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
-            {/* Loading skeletons */}
-            {isLoading && (
+            {/* Loading skeletons — only when no cached data yet */}
+            {isLoading && events.length === 0 && (
               <div className="pt-4 space-y-3">
                 <SkeletonFeaturedEvent />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -287,7 +287,7 @@ export default function EventsList() {
             )}
 
             {/* Featured hero card */}
-            {!isLoading && showHero && (
+            {showHero && (
               <div className="pt-4 pb-2">
                 <motion.div
                   variants={fadeUp}
@@ -305,7 +305,7 @@ export default function EventsList() {
             )}
 
             {/* Event list — staggered */}
-            {!isLoading && displayEvents.length > 0 && (
+            {displayEvents.length > 0 && (
               <motion.div
                 key={`discover-grid-${deferredQuery}`}
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-2"

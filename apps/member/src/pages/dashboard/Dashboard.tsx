@@ -317,7 +317,7 @@ useEffect(() => {
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />
             </button>
           </div>
-          {eventsLoading ? (
+          {eventsLoading && nearbyEvents.length === 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1, 2, 3].map((i) => <SkeletonEventCard key={i} />)}
             </div>
@@ -374,7 +374,7 @@ useEffect(() => {
             </button>
           </div>
 
-          {jobsLoading ? (
+          {jobsLoading && jobs.length === 0 ? (
             <div className="flex flex-col gap-3">
               {[1, 2].map((i) => (
                 <SkeletonJobCard key={i} />
@@ -602,7 +602,7 @@ useEffect(() => {
             </button>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-            {pointsLoading ? (
+            {pointsLoading && recentTxns.length === 0 ? (
               <>
                 {[1, 2, 3, 4].map((i) => (
                   <SkeletonXPRow key={i} border={i < 4} />
