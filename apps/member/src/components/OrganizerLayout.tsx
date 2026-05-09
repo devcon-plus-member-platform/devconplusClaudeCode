@@ -103,8 +103,8 @@ export default function OrganizerLayout() {
       resubscribe()
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = [
-        setTimeout(() => { recover(); resubscribe() }, 5_000),
-        setTimeout(() => { recover(); resubscribe() }, 15_000),
+        window.setTimeout(() => { recover(); resubscribe() }, 5_000),
+        window.setTimeout(() => { recover(); resubscribe() }, 15_000),
       ]
     }
 
