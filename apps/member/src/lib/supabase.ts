@@ -9,13 +9,6 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      // Use navigator.locks to serialize concurrent token-refresh calls and
-      // prevent multiple tabs from consuming the same refresh token.
-      // We honour the acquireTimeout passed by GoTrue (default 10 s) via an
-      // AbortController signal. On timeout we fall back to calling fn()
-      // directly — this trades a theoretical multi-tab refresh-token race for
-      // the guarantee that a stale/hung background refresh never permanently
-      // blocks user-initiated writes (e.g. form submissions).
       lock: async (name, acquireTimeout, fn) => {
         if (typeof navigator !== 'undefined' && navigator.locks) {
           if (acquireTimeout <= 0) {
