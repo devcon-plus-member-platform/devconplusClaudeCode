@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
 import { useRewardsStore } from '../stores/useRewardsStore'
 import { useOrgVolunteerStore } from '../stores/useOrgVolunteerStore'
-import { supabase } from '../lib/supabase'
+import { supabase, onRealtimeDisconnect } from '../lib/supabase'
 import DesktopGuard from './DesktopGuard'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -82,6 +82,8 @@ export default function OrganizerLayout() {
     recoverRef.current = recover
 
     const resubscribe = () => {
+      // Force reconnect if the socket itself is fully closed (e.g. after network drop)
+      if (supabase.realtime.connectionState() === 'closed') supabase.realtime.connect()
       unsubEventsRef.current?.()
       unsubRewardsRef.current?.()
       unsubRedemptionsRef.current?.()
@@ -106,6 +108,7 @@ export default function OrganizerLayout() {
       if (document.visibilityState === 'visible') runRecovery()
     }
     const handleOnline = () => runRecovery()
+    const unregisterDisconnect = onRealtimeDisconnect(() => runRecovery())
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
     // Polling fallback: refetch + re-subscribe every 5 minutes (exempt from debounce)
@@ -114,6 +117,7 @@ export default function OrganizerLayout() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleOnline)
+      unregisterDisconnect()
       clearInterval(pollInterval)
       unsubEventsRef.current?.()
       unsubRewardsRef.current?.()

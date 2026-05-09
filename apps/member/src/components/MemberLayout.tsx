@@ -168,8 +168,7 @@ export default function MemberLayout() {
       if (now - lastRecoveryRef.current < 3000) return
       lastRecoveryRef.current = now
       recover()
-      const state = supabase.realtime.connectionState()
-      if (state !== 'connecting') resubscribe()
+      resubscribe()
     }
 
     const handleVisibility = () => {
