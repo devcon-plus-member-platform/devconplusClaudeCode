@@ -1,10 +1,44 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@devcon-plus/supabase'
 
+const FETCH_TIMEOUT_MS = 15_000
+
+const fetchWithTimeout: typeof fetch = async (input, init) => {
+  const userSignal = init?.signal ?? null
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (userSignal?.aborted) throw new DOMException('Aborted', 'AbortError')
+
+    const timeoutCtrl = new AbortController()
+    const timer = setTimeout(() => timeoutCtrl.abort(), FETCH_TIMEOUT_MS)
+    const onUserAbort = () => timeoutCtrl.abort()
+    userSignal?.addEventListener('abort', onUserAbort, { once: true })
+
+    try {
+      return await fetch(input, { ...init, signal: timeoutCtrl.signal })
+    } catch (err) {
+      // User cancelled (e.g., React unmount) — propagate, don't retry.
+      if (userSignal?.aborted) throw err
+      // Our timeout fired on first attempt — retry with a fresh connection.
+      if (timeoutCtrl.signal.aborted && attempt === 0) continue
+      // Real network error or second timeout — give up.
+      throw err
+    } finally {
+      clearTimeout(timer)
+      userSignal?.removeEventListener('abort', onUserAbort)
+    }
+  }
+
+  throw new Error('fetchWithTimeout: unreachable')
+}
+
 export const supabase = createClient<Database>(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_ANON_KEY as string,
   {
+    global: {
+      fetch: fetchWithTimeout,
+    },
     auth: {
       persistSession: true,
       autoRefreshToken: true,
