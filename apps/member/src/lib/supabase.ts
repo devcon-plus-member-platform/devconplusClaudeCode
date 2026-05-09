@@ -19,8 +19,16 @@ export const supabase = createClient<Database>(
       lock: async (name, acquireTimeout, fn) => {
         if (typeof navigator !== 'undefined' && navigator.locks) {
           if (acquireTimeout <= 0) {
-            // Indefinite wait explicitly requested — honour it.
-            return navigator.locks.request(name, fn)
+            const ctrl = new AbortController()
+            const t = setTimeout(() => ctrl.abort(), 30_000)
+            try {
+              return await navigator.locks.request(name, { signal: ctrl.signal }, fn)
+            } catch (err) {
+              if ((err as DOMException).name === 'AbortError') return fn()
+              throw err
+            } finally {
+              clearTimeout(t)
+            }
           }
           const controller = new AbortController()
           const timer = setTimeout(() => controller.abort(), acquireTimeout)

@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
 import { useRewardsStore } from '../stores/useRewardsStore'
 import { useOrgVolunteerStore } from '../stores/useOrgVolunteerStore'
-import { supabase } from '../lib/supabase'
+import { supabase, onRealtimeDisconnect } from '../lib/supabase'
 import DesktopGuard from './DesktopGuard'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -108,12 +108,14 @@ export default function OrganizerLayout() {
     const handleOnline = () => runRecovery()
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
-    // Polling fallback: refetch + re-subscribe every 5 minutes (exempt from debounce)
-    const pollInterval = setInterval(() => { recover(); resubscribe() }, 5 * 60 * 1000)
+    const unregisterDisconnect = onRealtimeDisconnect(() => runRecovery())
+    // Polling fallback: refetch + re-subscribe every 90 s (exempt from debounce)
+    const pollInterval = setInterval(() => { recover(); resubscribe() }, 90_000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleOnline)
+      unregisterDisconnect()
       clearInterval(pollInterval)
       unsubEventsRef.current?.()
       unsubRewardsRef.current?.()

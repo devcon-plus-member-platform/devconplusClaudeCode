@@ -168,8 +168,7 @@ export default function MemberLayout() {
       if (now - lastRecoveryRef.current < 3000) return
       lastRecoveryRef.current = now
       recover()
-      const state = supabase.realtime.connectionState()
-      if (state !== 'connecting') resubscribe()
+      resubscribe()
     }
 
     const handleVisibility = () => {
@@ -184,8 +183,8 @@ export default function MemberLayout() {
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
 
-    // Polling fallback: refetch + re-subscribe every 5 minutes (exempt from debounce)
-    const pollInterval = setInterval(() => { recover(); resubscribe() }, 5 * 60 * 1000)
+    // Polling fallback: refetch + re-subscribe every 90 s (exempt from debounce)
+    const pollInterval = setInterval(() => { recover(); resubscribe() }, 90_000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
