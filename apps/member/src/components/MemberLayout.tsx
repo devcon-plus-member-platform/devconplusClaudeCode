@@ -165,13 +165,18 @@ export default function MemberLayout() {
 
     const runRecovery = () => {
       const now = Date.now()
-      if (now - lastRecoveryRef.current < 3000) return
+      if (now - lastRecoveryRef.current < 3000) {
+        console.log('[MemberLayout] runRecovery debounced')
+        return
+      }
       lastRecoveryRef.current = now
+      console.log('[MemberLayout] runRecovery fired — recover + resubscribe')
       recover()
       resubscribe()
     }
 
     const handleVisibility = () => {
+      console.log('[MemberLayout] visibilitychange →', document.visibilityState)
       if (document.visibilityState === 'visible') runRecovery()
     }
 
