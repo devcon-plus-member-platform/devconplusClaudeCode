@@ -6,8 +6,14 @@ const FETCH_TIMEOUT_MS = 15_000
 // H2 connection reuse note: aborting an HTTP/2 stream does not close the
 // underlying TCP connection — the browser reuses the same (dead) socket on
 // retry. We work around this by adding `cache: 'reload'` on the retry, which
-// signals to the network stack to bypass the connection pool and open a fresh
-// socket. This mimics what a full page refresh does naturally.
+// signals the browser to bypass the H2 connection pool and open a fresh socket.
+// This mimics what a full page refresh does naturally.
+//
+// Two retry triggers:
+//  - Timeout (AbortController fires after FETCH_TIMEOUT_MS)
+//  - Network error (TypeError "Failed to fetch") — the common case on mobile
+//    after a tab switch where the H2 socket was RST by the server while
+//    backgrounded. The failure is instant, so timeout-only retry never fires.
 const fetchWithTimeout: typeof fetch = async (input, init) => {
   const userSignal = init?.signal ?? null
 
@@ -24,14 +30,18 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
       signal: timeoutCtrl.signal,
       // On retry, force a fresh connection — bypasses the H2 pool that may
       // still hold the stale dead socket from the first attempt.
-      ...(attempt > 0 ? { cache: 'no-store' as RequestCache } : {}),
+      ...(attempt > 0 ? { cache: 'reload' as RequestCache } : {}),
     }
 
     try {
       return await fetch(input, fetchInit)
     } catch (err) {
       if (userSignal?.aborted) throw err
-      if (timeoutCtrl.signal.aborted && attempt === 0) continue
+      const isTimeout = timeoutCtrl.signal.aborted
+      // TypeError ("Failed to fetch") is a network-level failure — dead socket,
+      // RST, or DNS. Safe to retry: auth errors return 401/403, not TypeErrors.
+      const isNetworkError = err instanceof TypeError && !isTimeout
+      if ((isTimeout || isNetworkError) && attempt === 0) continue
       throw err
     } finally {
       clearTimeout(timer)
