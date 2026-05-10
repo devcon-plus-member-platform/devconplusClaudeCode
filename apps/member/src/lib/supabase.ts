@@ -3,6 +3,11 @@ import type { Database } from '@devcon-plus/supabase'
 
 const FETCH_TIMEOUT_MS = 15_000
 
+// H2 connection reuse note: aborting an HTTP/2 stream does not close the
+// underlying TCP connection — the browser reuses the same (dead) socket on
+// retry. We work around this by adding `cache: 'reload'` on the retry, which
+// signals to the network stack to bypass the connection pool and open a fresh
+// socket. This mimics what a full page refresh does naturally.
 const fetchWithTimeout: typeof fetch = async (input, init) => {
   const userSignal = init?.signal ?? null
 
@@ -14,14 +19,19 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
     const onUserAbort = () => timeoutCtrl.abort()
     userSignal?.addEventListener('abort', onUserAbort, { once: true })
 
+    const fetchInit: RequestInit = {
+      ...init,
+      signal: timeoutCtrl.signal,
+      // On retry, force a fresh connection — bypasses the H2 pool that may
+      // still hold the stale dead socket from the first attempt.
+      ...(attempt > 0 ? { cache: 'no-store' as RequestCache } : {}),
+    }
+
     try {
-      return await fetch(input, { ...init, signal: timeoutCtrl.signal })
+      return await fetch(input, fetchInit)
     } catch (err) {
-      // User cancelled (e.g., React unmount) — propagate, don't retry.
       if (userSignal?.aborted) throw err
-      // Our timeout fired on first attempt — retry with a fresh connection.
       if (timeoutCtrl.signal.aborted && attempt === 0) continue
-      // Real network error or second timeout — give up.
       throw err
     } finally {
       clearTimeout(timer)
