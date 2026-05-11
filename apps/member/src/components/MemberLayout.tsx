@@ -21,6 +21,10 @@ import logoHorizontal from '../assets/logos/logo-horizontal.svg'
 
 let hasShownDesktopToast = false
 
+// Routes inside MemberLayout that guests (unauthenticated users) may view.
+// Keep this list minimal — only routes whose components handle !user gracefully.
+const GUEST_PATHS = ['/events']
+
 export default function MemberLayout() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
@@ -46,8 +50,10 @@ export default function MemberLayout() {
 
 
   useEffect(() => {
-    if (!user) navigate('/sign-in', { replace: true })
-  }, [user, navigate])
+    if (!user && !GUEST_PATHS.includes(location.pathname)) {
+      navigate('/sign-in', { replace: true })
+    }
+  }, [user, navigate, location.pathname])
 
   // Redirect users who haven't completed the interest quiz yet.
   // interests === null means never been through /interests.
