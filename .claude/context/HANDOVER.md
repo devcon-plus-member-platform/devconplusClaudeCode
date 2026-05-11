@@ -1,7 +1,7 @@
 # DEVCON+ — Comprehensive Project Transition Documentation
 > Document Type: Developer & Stakeholder Handover  
 > Version: 1.0  
-> Last Updated: April 16, 2026  
+> Last Updated: May 11, 2026  
 > Prepared by: Outgoing Development Team (DEVCON Jumpstart Internship, Cohort 3)  
 > Receiving Team: Incoming developers starting the week of April 21, 2026  
 > Live App: https://devconplusbeta-v1.vercel.app  
@@ -95,7 +95,8 @@ The following features are intentionally deferred. Use `<ComingSoonModal />` if 
 | April 8, 2026 | Cloudflare Turnstile CAPTCHA added to auth forms |
 | April 15, 2026 | MD3 type scale applied across all UI; domain + email setup guide written |
 | **April 26, 2026** | **Claude Code AI subscription ends — last AI-assisted development day** |
-| April 30, 2026 | Development freeze — no new features after this date |
+| April 30, 2026 | Development freeze milestone — core MVP feature complete |
+| May 2026 | Post-graduation: legal pages, GTM, resilience hardening, export improvements |
 | May 15, 2026 | Public preview target (Cohort 3 Graduation showcase) |
 
 ---
@@ -404,11 +405,27 @@ https://devconplusbeta-v1.vercel.app
 
 ## 4.1 Handover Summary
 
-As of April 17, 2026, the DEVCON+ MVP is **functionally complete and deployed to production** at https://devconplusbeta-v1.vercel.app. All core user flows (member registration, QR check-in, points, organizer tools, admin panel) are working end-to-end on the live Supabase project.
+As of May 11, 2026, the DEVCON+ MVP is **functionally complete and deployed to production** at https://devconplusbeta-v1.vercel.app. All core user flows (member registration, QR check-in, points, organizer tools, admin panel) are working end-to-end on the live Supabase project.
 
-**MVP Completion: ~90%**
+**MVP Completion: ~95%**
 
-The remaining 10% consists of infrastructure configuration items (custom domain, email SMTP, Google OAuth redirect URI update) that are blocked on external access (DNS admin, Google Cloud Console), plus final QA, security audit, and data cleanup tasks.
+Post-graduation (May) work has focused on resilience, legal compliance, and analytics. The remaining items are infrastructure configuration blocked on external access (DNS, GCP Console) and final QA/data cleanup.
+
+### May 2026 Changes (post-graduation)
+
+| Change | Notes |
+|--------|-------|
+| Terms & Conditions + Privacy Policy pages | Public routes `/terms-and-conditions` and `/privacy-policy`. Linked via `<LegalModal />` from SignUp and EventRegister. |
+| Google Tag Manager | GTM-N6PD5PJQ integrated in `index.html` (head + noscript). |
+| Turnstile CAPTCHA on EmailSent | Captcha now required on the email resend flow in addition to sign-up/sign-in. |
+| `fetchWithTimeout` in `supabase.ts` | Custom `fetch` wrapper with retry logic, `'reload'` cache strategy, and AbortController support. |
+| Realtime recovery: 90-second polling | Interval dropped from 5 min → 90 s. Follow-up retries at +5 s and +15 s added for stale connection handling. |
+| Loading skeleton refinement | Skeletons only shown when no cached data — removes flash on cached pages. |
+| Chapter sorting fix | Manila sorted first in Luzon region during sign-up chapter selection. |
+| Onboarding slide 2 image | Updated from `devcon-luzon-chapter.jpg` to `devcon-luzon-chapters.png`. |
+| Safe return URL handling | OAuth callback and SignIn now validate return URLs to prevent open redirect. |
+| Event detail public access | `/events/:id` now accessible without authentication. |
+| Admin CSV export | Date range inputs, attendance status filter, improved filename format. |
 
 ### Development Loom Videos (oldest to recent)
 
@@ -423,9 +440,9 @@ These recordings are feature walkthroughs of DEVCON+ from early development to p
 | Mar 24 | https://www.loom.com/share/42bd477c7301465ebc0db4803272d168 | Sprint checkpoint — Supabase live, stores migrated from mocks |
 | Apr 06 | https://www.loom.com/share/ea88bcd374db42d79fd0c3d2d1bffb65 | QR system live, PWA deployed, edge functions verified |
 
-## 4.2 Immediate Handover Checklist (Must Complete Before April 30)
+## 4.2 Checklist (as of May 11, 2026)
 
-### L1 — Blocking (Must Resolve)
+### L1 — Still Blocking (Not Yet Resolved)
 
 | Item | Blocker | Action Required |
 |------|---------|----------------|

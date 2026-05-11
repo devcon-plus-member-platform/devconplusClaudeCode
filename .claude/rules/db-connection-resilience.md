@@ -26,20 +26,34 @@ All three of the following MUST call BOTH `recover()` AND `resubscribe()`:
 |---------|-------|-------|
 | Tab becomes visible | `visibilitychange` → `document.visibilityState === 'visible'` | Handles device sleep / alt-tab |
 | Network restores | `window` `online` event | Handles WiFi↔cellular switch, brief drop |
-| Periodic keepalive | `setInterval` every 5 minutes | Handles silent channel death during idle |
+| Periodic keepalive | `setInterval` every **90 seconds** | Handles silent channel death during idle |
 
 **Do NOT pass `recover` alone to any of these. Always pair it with `resubscribe`.**
+
+The layout also fires **debounced follow-up attempts** at +5 s and +15 s after each visibility/online trigger. This catches connections that appear alive but serve stale data (common on mobile Safari after extended backgrounding).
 
 ```ts
 // WRONG — only refetches data, leaves dead channels
 window.addEventListener('online', recover)
-setInterval(recover, 5 * 60 * 1000)
+setInterval(recover, 90_000)
 
-// CORRECT — refetches data AND re-establishes WebSocket channels
-const handleOnline = () => { recover(); resubscribe() }
-window.addEventListener('online', handleOnline)
-setInterval(() => { recover(); resubscribe() }, 5 * 60 * 1000)
+// CORRECT — refetches data AND re-establishes WebSocket channels,
+// with follow-up retries for stale connections
+const handleTrigger = () => {
+  recover(); resubscribe()
+  window.setTimeout(() => { recover(); resubscribe() }, 5_000)
+  window.setTimeout(() => { recover(); resubscribe() }, 15_000)
+}
+window.addEventListener('online', handleTrigger)
+// Polling fallback — exempt from debounce
+const pollInterval = setInterval(() => { recover(); resubscribe() }, 90_000)
+
+// On unmount — always clear timers
+clearInterval(pollInterval)
+window.removeEventListener('online', handleTrigger)
 ```
+
+**Clear all `setTimeout` handles on component unmount** to prevent post-unmount state updates.
 
 ## Realtime Store Requirements
 
@@ -61,7 +75,7 @@ Every Zustand store that creates a Supabase realtime channel MUST:
 When writing or modifying any component, store, or layout that touches Supabase realtime:
 
 - [ ] Does `resubscribe()` get called on `online` event?
-- [ ] Does `resubscribe()` get called in the `setInterval` keepalive?
+- [ ] Does `resubscribe()` get called in the `setInterval` keepalive (90 s)?
 - [ ] Does `resubscribe()` get called on `visibilitychange` → visible?
 - [ ] Does every `removeEventListener` reference the exact named handler function (not an anonymous arrow)?
 - [ ] Does every new realtime channel have a status callback?

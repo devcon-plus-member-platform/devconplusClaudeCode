@@ -1,5 +1,5 @@
 # DEVCON+ — Claude Code Master Context File
-> Last Updated: May 4, 2026
+> Last Updated: May 11, 2026
 > Version: MVP 1.6
 > Team: 3 interns + Claude Code
 > Hard Deadline: April 30, 2026 (Cohort 3 Graduation)
@@ -432,9 +432,11 @@ CREATE POLICY "Users view own points" ON point_transactions
 /sign-up                 → SignUp
 /organizer-code-gate     → OrganizerCodeGate
 /forgot-password         → ForgotPassword
-/email-sent              → EmailSent
+/email-sent              → EmailSent (Turnstile captcha on resend)
 /reset-password          → ResetPassword
 /email-confirm           → EmailConfirm
+/terms-and-conditions    → TermsAndConditions (public, no auth)
+/privacy-policy          → PrivacyPolicy (public, no auth)
 
 — MemberLayout (floating pill bottom nav on mobile, sidebar on desktop) —
 /home                    → Dashboard
@@ -530,7 +532,7 @@ Left sidebar: bg-blue, w-48 lg:w-56, rounded-2xl
 ```
 Slide 1: /photos/devcon-summit-group.jpg
          "The Philippines' Largest Volunteer Tech Community"
-Slide 2: /photos/devcon-15-anniversary.jpg
+Slide 2: /photos/devcon-luzon-chapters.png       ← updated May 2026
          "11 Chapters. 16 Years. 60,000+ Geeks for Good."
 Slide 3: /photos/devcon-certificate-ceremony.jpg
          "Volunteer. Earn Points. Unlock Rewards."
@@ -750,6 +752,7 @@ Nav item:             whileTap={{ scale: 0.88 }}, type: 'spring', stiffness: 400
 <SendAnnouncementSheet />    organizer bottom sheet for broadcasting announcements (creates event_announcements row)
 <PasswordConfirmModal />     confirm password for sensitive actions
 <PasswordStrengthMeter />    password strength indicator (used in SignUp / ProfileEdit)
+<LegalModal />               inline bottom sheet for Terms & Conditions / Privacy Policy (used in SignUp, EventRegister)
 <Skeleton />                 loading skeleton placeholder
 <KonamiCodeWrapper />        Easter egg wrapper (to be removed before production — see DEVCON_PLUS.md L1)
 <KonamiModal />              Easter egg modal dialog
@@ -811,15 +814,16 @@ eventTheme.ts        — getEventThemeStyle(devcon_category): inline CSS vars fo
                        resolveEventTheme(devcon_category, fallbackTheme): hex values
 supabase.ts          — Supabase client with custom navigator.locks auth lock
                        (no timeout) + realtime throttle at 10 events/sec
+                       + fetchWithTimeout (retry logic, 'reload' cache, abort support)
 validation.ts        — form validation helpers (Zod schemas, reusable validators)
 useRecoverOnFocus.ts — recovery hook: refetches + resubscribes on visibilitychange,
-                       online event, and 5-minute polling interval
+                       online event, and 90-second polling interval
 ```
 
 ### Hooks (`apps/member/src/hooks/`)
 ```
 useRecoverOnFocus.ts — recovery hook: refetches + resubscribes on visibilitychange,
-                       online event, and 5-minute polling interval
+                       online event, and 90-second polling interval
 useFormDraft.ts      — saves form state to localStorage (cross-tab, default) or
                        sessionStorage (within-tab, pass storage: 'session').
                        Used in: sign-in email, sign-up form, event create/edit,
@@ -940,7 +944,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 - No dead navigation — every route renders something
 - `framer-motion` `whileTap={{ scale: 0.95 }}` on all tappable cards and buttons
 - Use `motion.div` + `variants={staggerContainer}` + `variants={cardItem}` for list sections
-- **Realtime recovery pattern:** data fetches + realtime resubscriptions must be triggered on `visibilitychange` (visible), `window.online`, and a 5-minute polling interval. Use `useRecoverOnFocus` or mirror the pattern from `MemberLayout`/`OrganizerLayout`.
+- **Realtime recovery pattern:** data fetches + realtime resubscriptions must be triggered on `visibilitychange` (visible), `window.online`, and a **90-second polling interval**. The layout also fires debounced follow-up attempts at +5 s and +15 s after each trigger to handle stale connections. Use `useRecoverOnFocus` or mirror the pattern from `MemberLayout`/`OrganizerLayout`.
 
 ---
 
@@ -957,7 +961,7 @@ npm run typecheck                     # tsc --noEmit across all packages
 
 ---
 
-## 17. CURRENT BUILD STATUS (as of March 30, 2026)
+## 17. CURRENT BUILD STATUS (as of May 11, 2026)
 
 ### Completed
 - [x] Monorepo scaffold (apps/member, packages/supabase)
@@ -1018,13 +1022,25 @@ npm run typecheck                     # tsc --noEmit across all packages
 - [x] Missions System — basic gamified missions flow
 - [x] Event URL slugs — /events/:slug (human-readable) replacing /events/:uuid
 - [x] password_reset rate limit deployed
+- [x] Terms & Conditions page (`/terms-and-conditions`) + Privacy Policy page (`/privacy-policy`) — public routes, no auth required
+- [x] `<LegalModal />` component — inline bottom sheet for T&C / Privacy Policy linked from SignUp + EventRegister
+- [x] Google Tag Manager integrated (GTM-N6PD5PJQ) in `index.html`
+- [x] Turnstile CAPTCHA extended to EmailSent component (resend email flow)
+- [x] `fetchWithTimeout` utility in `supabase.ts` — wraps `fetch` with retry logic, 'reload' cache strategy, and abort support for network resilience
+- [x] Realtime recovery pattern enhanced: debounced trigger + follow-up attempts at +5 s and +15 s; polling interval reduced to **90 seconds**
+- [x] Loading skeleton refined — shown only when no cached data is available (avoids flash on cached page)
+- [x] Chapter sorting fix — Manila prioritized first in Luzon region list during sign-up
+- [x] Onboarding slide 2 image updated to `devcon-luzon-chapters.png`
+- [x] Safe return URL handling in OAuth callback and SignIn (prevents open redirect)
+- [x] Event detail publicly accessible without auth (unauthenticated users can view event info)
+- [x] Admin CSV export enhanced: date range inputs, attendance status filter, improved filename generation with event labels + Philippine date format
 
-### Remaining for MVP
-- [ ] Deploy any remaining Edge Functions not yet live (verify via Supabase dashboard)
-- [ ] PROMOTED badge audit (verify 2nd job + 2nd news post in live data)
-- [ ] Remove test accounts + Easter eggs (KonamiCodeWrapper / KonamiModal) per DEVCON_PLUS.md L1
-- [ ] Final QA on all flows end-to-end
-- [ ] Google OAuth callback URL confirmed for production domain
+### Remaining / Ongoing
+- [ ] Remove test accounts + Easter eggs (KonamiCodeWrapper / KonamiModal) per L1 checklist
+- [ ] PROMOTED badge audit (verify 2nd job + 2nd Tech news post are `is_promoted = true` in live data)
+- [ ] Google OAuth callback URL + Edge Function CORS update for production domain (`plus-beta.devcon.ph`)
+- [ ] Transactional email end-to-end test after DNS verification
+- [ ] Final QA on all flows on real mobile device (iPhone Safari + Android Chrome)
 
 ---
 
