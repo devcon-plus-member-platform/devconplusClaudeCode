@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 // import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
@@ -62,6 +62,7 @@ export default function EventDetail() {
 
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== user?.chapter_id
 
+  const [shareToast, setShareToast] = useState(false)
   const [eventChapterName, setEventChapterName] = useState<string | null>(null)
   useEffect(() => {
     if (isChapterLocked && event?.chapter_id) {
@@ -86,6 +87,25 @@ export default function EventDetail() {
 
   if (!event) return null
 
+  const handleShare = async () => {
+    const url = window.location.href
+    if ('share' in navigator) {
+      try {
+        await navigator.share({ title: event.title, text: `${event.title} — DEVCON+`, url })
+      } catch {
+        // user cancelled — do nothing
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url)
+        setShareToast(true)
+        setTimeout(() => setShareToast(false), 2500)
+      } catch {
+        // clipboard unavailable
+      }
+    }
+  }
+
   const dateStr = event.event_date
     ? new Date(event.event_date).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : 'Date TBA'
@@ -99,7 +119,7 @@ export default function EventDetail() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
-      {/* Floating back button (Sticky/Fixed) */}
+      {/* Floating back + share buttons */}
       <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 pt-12 pointer-events-none">
         <button
           onClick={() => navigate(-1)}
@@ -107,7 +127,31 @@ export default function EventDetail() {
         >
           <ArrowLeftOutline className="w-5 h-5" color="white" />
         </button>
+        <button
+          onClick={() => void handleShare()}
+          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-white/40 transition-colors shadow-lg pointer-events-auto"
+          aria-label="Share event"
+        >
+          <ShareOutline className="w-5 h-5" color="white" />
+        </button>
       </div>
+
+      {/* Clipboard copy toast */}
+      <AnimatePresence>
+        {shareToast && (
+          <motion.div
+            key="share-toast"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            className="fixed bottom-28 inset-x-0 mx-auto w-fit z-[100] flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[13px] font-proxima font-semibold px-4 py-2.5 rounded-full shadow-xl whitespace-nowrap"
+          >
+            <CopyOutline color="white" width={14} height={14} />
+            Link copied to clipboard
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Header ── */}
       <header
