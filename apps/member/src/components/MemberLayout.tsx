@@ -229,7 +229,7 @@ export default function MemberLayout() {
     unsubNotifsRef.current = subscribeNotifications(approvedIds, eventTitles)
   }, [registrations, events, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!user) return null
+  if (!user && !GUEST_PATHS.includes(location.pathname)) return null
 
   return (
     <DesktopGuard>
