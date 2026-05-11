@@ -166,14 +166,22 @@ export default function EventsList() {
             </h1>
             
             <div className="flex items-center gap-[8px]">
-              <button 
+              {!user && (
+                <button
+                  onClick={() => navigate('/sign-up')}
+                  className="bg-white text-primary font-proxima font-semibold text-[13px] px-4 h-[38px] rounded-full shadow-lg active:opacity-80 transition-opacity"
+                >
+                  Sign Up
+                </button>
+              )}
+              <button
                 onClick={toggleSearch}
                 className="bg-white/20 backdrop-blur-md size-[42px] flex items-center justify-center rounded-full border border-white/30 transition-colors active:bg-white/30 shadow-lg"
                 aria-label="Search events"
               >
                 <MagniferOutline className="w-[18px] h-[18px]" color="white" />
               </button>
-              <button 
+              <button
                 onClick={() => setShowChapterSheet(true)}
                 className="bg-white/20 backdrop-blur-md size-[42px] flex items-center justify-center rounded-full border border-white/30 transition-colors active:bg-white/30 shadow-lg"
                 aria-label="Filter events"
