@@ -138,7 +138,7 @@ export default function SignUp() {
         .then(({ data: profile }) => {
           const isComplete = Boolean(profile?.chapter_id && profile?.username)
 
-          if (isComplete && !isOAuthOnly) {
+          if (isComplete) {
             // Fully set up — redirect away
             navigate('/home', { replace: true })
             return

@@ -60,15 +60,7 @@ export default function OAuthCallback() {
         return
       }
 
-      // Branch 2: complete profile but no local password → existing OAuth-only user
-      const identities = session.user.identities ?? []
-      const isOAuthOnly = !identities.some(id => id.provider === 'email')
-      if (isOAuthOnly) {
-        navigate('/sign-up', { replace: true })
-        return
-      }
-
-      // Branch 3: fully set up user
+      // Branch 2: fully set up user
       const savedReturnTo = sessionStorage.getItem('devcon_returnTo')
       if (savedReturnTo) sessionStorage.removeItem('devcon_returnTo')
 
