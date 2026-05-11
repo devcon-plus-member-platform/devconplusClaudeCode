@@ -124,6 +124,12 @@ export default function Onboarding() {
               >
                 I have an account
               </button>
+              <button
+                onClick={() => navigate('/events')}
+                className="text-white/50 text-[12px] font-medium transition-opacity hover:opacity-100 py-1"
+              >
+                Browse Events
+              </button>
             </>
           ) : (
             <>
