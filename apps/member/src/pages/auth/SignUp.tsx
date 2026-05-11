@@ -91,7 +91,7 @@ export default function SignUp() {
   )
 
   useEffect(() => {
-    supabase.from('chapters').select('id, name, region').order('name').then(({ data }) => {
+    supabase.from('chapters').select('id, name, region').then(({ data }) => {
       if (data) setChapters(data as Chapter[])
     })
   }, [])
@@ -460,7 +460,15 @@ export default function SignUp() {
             >
               <option value="">Select your chapter…</option>
               {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
-                const group = chapters.filter((c) => c.region === region)
+                const group = chapters
+                  .filter((c) => c.region === region)
+                  .sort((a, b) => {
+                    if (region === 'Luzon') {
+                      if (a.name === 'Manila' && b.name !== 'Manila') return -1
+                      if (b.name === 'Manila' && a.name !== 'Manila') return 1
+                    }
+                    return a.name.localeCompare(b.name)
+                  })
                 if (!group.length) return null
                 return (
                   <optgroup key={region} label={region}>
