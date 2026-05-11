@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { LetterOutline, RestartOutline } from 'solar-icon-set'
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { supabase } from '../../lib/supabase'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
@@ -20,6 +21,8 @@ export default function EmailSent() {
   const [cooldown, setCooldown] = useState(0)
   const [resendError, setResendError] = useState<string | null>(null)
   const [resendSuccess, setResendSuccess] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileInstance>(null)
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -32,18 +35,27 @@ export default function EmailSent() {
     setResendSuccess(false)
     try {
       if (type === 'signup') {
-        const { error } = await supabase.auth.resend({ type: 'signup', email })
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: { captchaToken: turnstileToken ?? undefined },
+        })
         if (error) throw error
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
+          captchaToken: turnstileToken ?? undefined,
         })
         if (error) throw error
       }
       setResendSuccess(true)
       setCooldown(RESEND_COOLDOWN)
+      turnstileRef.current?.reset()
+      setTurnstileToken(null)
     } catch (err) {
       setResendError(err instanceof Error ? err.message : 'Failed to resend. Try again.')
+      turnstileRef.current?.reset()
+      setTurnstileToken(null)
     }
   }
 
@@ -100,9 +112,18 @@ export default function EmailSent() {
           <p className="text-red text-md3-label-md mb-3">{resendError}</p>
         )}
 
+        <Turnstile
+          ref={turnstileRef}
+          siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''}
+          onSuccess={(token) => setTurnstileToken(token)}
+          onExpire={() => setTurnstileToken(null)}
+          onError={() => setTurnstileToken(null)}
+          options={{ theme: 'light', size: 'normal' }}
+        />
+
         <button
           onClick={handleResend}
-          disabled={cooldown > 0}
+          disabled={cooldown > 0 || !turnstileToken}
           className="flex items-center gap-2 text-md3-body-md font-semibold text-blue disabled:text-slate-400 disabled:cursor-not-allowed transition-colors mb-8"
         >
           <RestartOutline className="w-4 h-4" />
