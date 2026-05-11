@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { DangerTriangleOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
-import type { Session } from '@supabase/supabase-js'
 import { callRateLimit } from '../../stores/useAuthStore'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
@@ -36,7 +35,7 @@ export default function OAuthCallback() {
     // If there's already an error in the URL, don't wait for a session
     if (error) return
 
-    async function redirect(userId: string, session: Session) {
+    async function redirect(userId: string) {
       if (navigated.current) return
       navigated.current = true
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -80,12 +79,12 @@ export default function OAuthCallback() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        void redirect(session.user.id, session)
+        void redirect(session.user.id)
       }
     })
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) void redirect(session.user.id, session)
+      if (session?.user) void redirect(session.user.id)
     })
 
     return () => {

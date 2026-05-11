@@ -127,8 +127,6 @@ export default function SignUp() {
       const provider = session.user.app_metadata?.provider as string | undefined
       if (!provider || provider === 'email') return  // normal email signup
 
-      const identities = session.user.identities ?? []
-      const isOAuthOnly = !identities.some(id => id.provider === 'email')
 
       void supabase
         .from('profiles')
