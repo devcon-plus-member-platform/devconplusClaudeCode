@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, MapPointOutline, TicketOutline, HeartOutline } from 'solar-icon-set'
-import { motion } from 'framer-motion'
+import { ArrowLeftOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline } from 'solar-icon-set'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
-import { useVolunteerStore } from '../../stores/useVolunteerStore'
+// import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
 import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase } from '../../lib/supabase'
 import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
+import { slideUp, backdrop } from '../../lib/animation'
+
+const VOLUNTEER_FORM_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSczVxZPmHIRPphNJNgbuRVzEC5QTponVzjDPPMmkSxP0cIdrg/viewform?embedded=true'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -18,12 +22,13 @@ export default function EventDetail() {
   const navigate = useNavigate()
   const { events, registrations } = useEventsStore()
   const { user } = useAuthStore()
-  const { loadApplications, getApplicationByEventId } = useVolunteerStore()
+  // const { loadApplications, getApplicationByEventId } = useVolunteerStore() // disabled: volunteer-for-event feature
 
   const storeEvent = events.find((e) => e.slug === slug)
   const [localEvent, setLocalEvent] = useState<NonNullable<typeof storeEvent> | null>(null)
   const [loading, setLoading] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [showVolunteerForm, setShowVolunteerForm] = useState(false)
 
   const event = storeEvent ?? localEvent ?? undefined
 
@@ -46,14 +51,14 @@ export default function EventDetail() {
       })
   }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Only load volunteer applications for authenticated users
-  useEffect(() => {
-    if (user) loadApplications()
-  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Disabled: volunteer-for-event feature — load volunteer applications for authenticated users
+  // useEffect(() => {
+  //   if (user) loadApplications()
+  // }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const eventId = event?.id
   const reg = registrations.find((r) => r.event_id === eventId)
-  const volunteerApp = user && eventId ? getApplicationByEventId(eventId) : undefined
+  // const volunteerApp = user && eventId ? getApplicationByEventId(eventId) : undefined // disabled: volunteer-for-event feature
 
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== user?.chapter_id
 
@@ -193,7 +198,7 @@ export default function EventDetail() {
             </div>
           )}
 
-          {/* Volunteer CTA — only for authenticated members on upcoming events */}
+          {/* Disabled: volunteer-for-event feature — restore by uncommenting the block below
           {user && event.status === 'upcoming' && (
             isChapterLocked ? (
               <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold py-4 rounded-2xl text-center text-md3-body-md">
@@ -228,8 +233,69 @@ export default function EventDetail() {
               </motion.button>
             )
           )}
+          */}
+
+          {/* Future Volunteer CTA — shown for all authenticated users */}
+          {user && (
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowVolunteerForm(true)}
+              className="w-full border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
+            >
+              <HeartOutline color="rgb(var(--color-primary))" width={20} height={20} />
+              Apply as Future Volunteer
+            </motion.button>
+          )}
         </div>
       </div>
+
+      {/* Future Volunteer Google Form bottom sheet */}
+      <AnimatePresence>
+        {showVolunteerForm && (
+          <>
+            <motion.div
+              key="backdrop"
+              variants={backdrop}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowVolunteerForm(false)}
+            />
+            <motion.div
+              key="sheet"
+              variants={slideUp}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="fixed bottom-0 left-0 right-0 z-[80] bg-white rounded-t-3xl overflow-hidden"
+              style={{ height: '88dvh' }}
+            >
+              {/* Sheet header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <div>
+                  <p className="text-md3-label-md font-bold text-slate-900">Apply as Future Volunteer</p>
+                  <p className="text-md3-label-sm text-slate-400">DEVCON Philippines</p>
+                </div>
+                <button
+                  onClick={() => setShowVolunteerForm(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 active:bg-slate-200 transition-colors"
+                >
+                  <CloseCircleOutline color="#64748B" width={20} height={20} />
+                </button>
+              </div>
+
+              {/* Embedded Google Form */}
+              <iframe
+                src={VOLUNTEER_FORM_URL}
+                title="Apply as Future Volunteer"
+                className="w-full h-full border-0"
+                style={{ height: 'calc(88dvh - 57px)' }}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
