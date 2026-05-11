@@ -242,7 +242,7 @@ export default function EventDetail() {
               onClick={() => setShowVolunteerForm(true)}
               className="w-full border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
             >
-              <HeartOutline color="rgb(var(--color-primary))" width={20} height={20} />
+              <HeartOutline color="rgb(var(--color-primary))" size={20} />
               Apply as Future Volunteer
             </motion.button>
           )}
@@ -281,7 +281,7 @@ export default function EventDetail() {
                   onClick={() => setShowVolunteerForm(false)}
                   className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 active:bg-slate-200 transition-colors"
                 >
-                  <CloseCircleOutline color="#64748B" width={20} height={20} />
+                  <CloseCircleOutline color="#64748B" size={20} />
                 </button>
               </div>
 
