@@ -231,17 +231,19 @@ export default function MemberLayout() {
 
   if (!user && !GUEST_PATHS.includes(location.pathname)) return null
 
+  const isGuest = !user
+
   return (
     <DesktopGuard>
       <ScrollToTop />
       {/* ── MOBILE layout (< md) ── */}
       <div className="flex flex-col h-dvh bg-slate-50 overflow-hidden md:hidden">
-        <div ref={scrollRef} data-scroll-container className="flex-1 overflow-y-auto pb-24 no-scrollbar">
+        <div ref={scrollRef} data-scroll-container className={`flex-1 overflow-y-auto no-scrollbar ${isGuest ? '' : 'pb-24'}`}>
           <Outlet />
         </div>
 
-        {/* Floating pill bottom nav — mobile only */}
-        <div
+        {/* Floating pill bottom nav — mobile only, hidden for guests */}
+        {!isGuest && <div
           className="fixed bottom-4 left-4 right-4 z-50"
           style={{ paddingBottom: 'var(--safe-bottom)' }}
         >
@@ -337,14 +339,14 @@ export default function MemberLayout() {
             </NavLink>
 
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ── TABLET / DESKTOP layout (md+) ── */}
       <div className="hidden md:flex h-screen bg-slate-100 p-4 gap-4 overflow-hidden">
 
-        {/* Floating sidebar */}
-        <aside className="w-48 lg:w-56 shrink-0 bg-primary rounded-2xl shadow-card flex flex-col overflow-hidden">
+        {/* Floating sidebar — hidden for guests */}
+        {!isGuest && <aside className="w-48 lg:w-56 shrink-0 bg-primary rounded-2xl shadow-card flex flex-col overflow-hidden">
           {/* Logo */}
           <div className="px-4 py-5 border-b border-white/10">
             <img src={logoHorizontal} alt="DEVCON+" className="h-5 w-auto" />
@@ -427,7 +429,7 @@ export default function MemberLayout() {
             </NavLink>
 
           </nav>
-        </aside>
+        </aside>}
 
         {/* Main content card */}
         <main className="flex-1 bg-white rounded-2xl shadow-card border border-slate-100 overflow-hidden flex flex-col">
