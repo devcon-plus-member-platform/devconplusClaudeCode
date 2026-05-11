@@ -20,6 +20,15 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
 const REGIONS = ['Luzon', 'Visayas', 'Mindanao'] as const
 
+type EventFilter = 'all' | 'near_you' | 'devcon_only' | 'featured'
+
+const EVENT_FILTERS: { id: EventFilter; label: string }[] = [
+  { id: 'all', label: 'All Events' },
+  { id: 'near_you', label: 'Near You' },
+  { id: 'devcon_only', label: 'DEVCON' },
+  { id: 'featured', label: 'Featured' },
+]
+
 function formatEventDate(iso: string): { month: string; day: string } {
   const d = new Date(iso)
   return {
@@ -46,9 +55,12 @@ export default function EventsList() {
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Event type filter (chip bar)
+  const [eventFilter, setEventFilter] = useState<EventFilter>('all')
+
   // Chapter filter state
   const [chapters, setChapters] = useState<Chapter[]>([])
-  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(user?.chapter_id ?? null)
+  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [showChapterSheet, setShowChapterSheet] = useState(false)
   const [attendeeCounts, setAttendeeCounts] = useState<Record<string, number>>({})
   const [attendeeDetails, setAttendeeDetails] = useState<Record<string, { avatar_url: string | null; full_name: string }[]>>({})
@@ -105,12 +117,27 @@ export default function EventsList() {
   const trimmedQuery = searchQuery.trim()
   const deferredQuery = useDeferredValue(trimmedQuery)
 
+  // Stage 1: event-type chip filter
+  const typeFilteredEvents = useMemo(() => {
+    switch (eventFilter) {
+      case 'near_you':
+        return user?.chapter_id ? events.filter((e) => e.chapter_id === user.chapter_id) : events
+      case 'devcon_only':
+        return events.filter((e) => !e.devcon_category || e.devcon_category === 'devcon')
+      case 'featured':
+        return events.filter((e) => e.is_featured)
+      default:
+        return events
+    }
+  }, [events, eventFilter, user?.chapter_id])
+
+  // Stage 2: chapter sheet filter stacked on top
   const { chapterFilteredEvents, activeEvents } = useMemo(() => {
     const chapterFilteredEvents = selectedChapterId
-      ? events.filter((e) => e.chapter_id === selectedChapterId)
-      : events
+      ? typeFilteredEvents.filter((e) => e.chapter_id === selectedChapterId)
+      : typeFilteredEvents
     return { chapterFilteredEvents, activeEvents: chapterFilteredEvents.filter((e) => !isEventArchived(e)) }
-  }, [events, selectedChapterId])
+  }, [typeFilteredEvents, selectedChapterId])
 
   const { matchingEvents, featuredEvent, displayEvents, showHero } = useMemo(() => {
     const matchingEvents = activeEvents.filter(event =>
@@ -220,6 +247,29 @@ export default function EventsList() {
           </div>
         </div>
 
+        {/* ── Event-type filter chip bar (Discover only) ── */}
+        {tab === 'discover' && (
+          <div className="px-4 pb-2 pointer-events-auto overflow-x-auto no-scrollbar">
+            <div className="flex gap-2 w-max">
+              {EVENT_FILTERS.map(({ id, label }) => (
+                <motion.button
+                  key={id}
+                  onClick={() => setEventFilter(id)}
+                  className={`flex-shrink-0 h-[30px] px-3.5 rounded-full text-[12px] font-proxima font-semibold transition-colors ${
+                    eventFilter === id
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'bg-primary/10 text-primary'
+                  }`}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                >
+                  {label}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <SearchBar
           isVisible={isSearchVisible}
           value={searchQuery}
@@ -273,23 +323,30 @@ export default function EventsList() {
               />
             )}
 
-            {/* Empty state — chapter filter yields nothing */}
+            {/* Empty state — filter combination yields nothing */}
             {!isLoading && !deferredQuery && events.length > 0 && chapterFilteredEvents.length === 0 && (
               <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                   <CalendarMarkOutline className="w-8 h-8" color="#0b46a3" />
                 </div>
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">
-                  No events in {selectedChapterName}
+                  {eventFilter === 'near_you' && 'No upcoming events nearby'}
+                  {eventFilter === 'devcon_only' && 'No DEVCON events right now'}
+                  {eventFilter === 'featured' && 'No featured events'}
+                  {eventFilter === 'all' && `No events in ${selectedChapterName}`}
                 </h3>
                 <p className="text-md3-body-md text-slate-500 text-center mb-5">
-                  This chapter has no upcoming events. Try a different chapter.
+                  {eventFilter === 'near_you'
+                    ? "Your chapter has no upcoming events. Check back soon!"
+                    : eventFilter !== 'all'
+                    ? 'Try a different filter or check back later.'
+                    : 'This chapter has no upcoming events. Try a different chapter.'}
                 </p>
                 <button
-                  onClick={() => setSelectedChapterId(null)}
+                  onClick={() => { setEventFilter('all'); setSelectedChapterId(null) }}
                   className="bg-primary text-white font-semibold text-md3-body-md px-6 py-2.5 rounded-xl"
                 >
-                  Show All Chapters
+                  Show All Events
                 </button>
               </div>
             )}
