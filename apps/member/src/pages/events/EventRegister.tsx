@@ -334,12 +334,20 @@ export default function EventRegister() {
             I agree to the{' '}
             <button
               type="button"
+              onClick={(e) => { e.stopPropagation(); setLegalModal('safespace') }}
+              className="text-primary underline underline-offset-2"
+            >
+              Safe Space
+            </button>
+            {', '}
+            <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); setLegalModal('terms') }}
               className="text-primary underline underline-offset-2"
             >
               Terms &amp; Conditions
             </button>
-            {' '}and{' '}
+            {', and '}
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setLegalModal('privacy') }}

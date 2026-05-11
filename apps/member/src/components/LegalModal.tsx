@@ -53,6 +53,22 @@ const TC_SECTIONS: Section[] = [
       { label: 'Career Facilitation', text: 'DEVCON+ acts as a bridge between the developer community and professional opportunities; however, we do not guarantee employment or specific outcomes.' },
     ],
   },
+  {
+    number: '6',
+    title: 'Safe Space & Event Risk Consent',
+    items: [
+      { label: 'Safe and Respectful Environment', text: 'By attending a DEVCON offline event, you agree to help us maintain a safe, welcoming, and respectful environment for everyone. We will not tolerate harassment, discrimination, or threats.' },
+      { label: 'Safety and Responsibility', text: 'We do our best to ensure safety at our events. However, by attending, you agree to accept the inherent risks associated with any in-person events.' },
+    ],
+  },
+  {
+    number: '7',
+    title: 'Contact',
+    items: [
+      { label: 'Organizer Contact and Responsibility', text: 'Local events are organized by individual DEVCON chapters. For guidelines and support, contact the local Facebook page of the DEVCON Chapter organizing the event.' },
+      { label: 'National Events', text: 'For summits or events organized directly by the national DEVCON office, contact hello@devcon.ph.' },
+    ],
+  },
 ]
 
 // ── Privacy Policy content ───────────────────────────────────────────────────
@@ -175,9 +191,34 @@ function SectionCard({ section }: { section: PPSection }) {
   )
 }
 
+// ── Safe Space content ───────────────────────────────────────────────────────
+
+const SS_SECTIONS: Section[] = [
+  {
+    number: '1',
+    title: 'Safe and Respectful Environment',
+    body: 'By attending a DEVCON offline event, you agree to help us maintain a safe, welcoming, and respectful environment for everyone. We will not tolerate harassment, discrimination, or threats.',
+  },
+  {
+    number: '2',
+    title: 'Safety and Responsibility',
+    body: 'We do our best to ensure safety at our events. However, by attending, you agree to accept the inherent risks associated with any in-person events.',
+  },
+  {
+    number: '3',
+    title: 'Organizer Contact & Responsibility',
+    body: 'Local events are organized by individual DEVCON chapters. For guidelines and support, contact the local Facebook page of the DEVCON Chapter organizing the event.',
+  },
+  {
+    number: '4',
+    title: 'National Events',
+    body: 'For summits or events organized directly by the national DEVCON office, contact hello@devcon.ph.',
+  },
+]
+
 // ── Public component ─────────────────────────────────────────────────────────
 
-export type LegalModalType = 'terms' | 'privacy'
+export type LegalModalType = 'terms' | 'privacy' | 'safespace'
 
 interface LegalModalProps {
   type: LegalModalType | null
@@ -213,7 +254,7 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
             <div className="flex items-center justify-between px-4 pt-3 pb-3 border-b border-slate-100 shrink-0">
               <div className="w-9 h-1 bg-slate-200 rounded-full mx-auto absolute left-1/2 -translate-x-1/2 top-3" />
               <h2 className="text-md3-title-md font-bold text-slate-900 font-proxima pt-2">
-                {isTerms ? 'Terms & Conditions' : 'Privacy Policy'}
+                {type === 'terms' ? 'Terms & Conditions' : type === 'privacy' ? 'Privacy Policy' : 'Safe Space & Event Consent'}
               </h2>
               <button
                 onClick={onClose}
@@ -225,7 +266,16 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
 
             {/* Scrollable content */}
             <div className="overflow-y-auto flex-1 px-4 pt-4 pb-8 space-y-3">
-              {isTerms ? (
+              {type === 'safespace' ? (
+                <>
+                  <div className="bg-blue/8 border border-blue/15 rounded-2xl px-4 py-3">
+                    <p className="text-md3-label-md text-slate-500 leading-relaxed">
+                      By attending any DEVCON event, you agree to the following safe space guidelines and consent terms.
+                    </p>
+                  </div>
+                  {SS_SECTIONS.map((s) => <SectionCard key={s.number} section={s} />)}
+                </>
+              ) : isTerms ? (
                 <>
                   <div className="bg-blue/8 border border-blue/15 rounded-2xl px-4 py-3">
                     <p className="text-md3-label-md text-slate-500 leading-relaxed">

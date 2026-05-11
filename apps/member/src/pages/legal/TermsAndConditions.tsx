@@ -86,6 +86,34 @@ const SECTIONS: Section[] = [
       },
     ],
   },
+  {
+    number: '6',
+    title: 'Safe Space & Event Risk Consent',
+    items: [
+      {
+        label: 'Safe and Respectful Environment',
+        text: 'By attending a DEVCON offline event, you agree to help us maintain a safe, welcoming, and respectful environment for everyone. We will not tolerate harassment, discrimination, or threats.',
+      },
+      {
+        label: 'Safety and Responsibility',
+        text: 'We do our best to ensure safety at our events. However, by attending, you agree to accept the inherent risks associated with any in-person events.',
+      },
+    ],
+  },
+  {
+    number: '7',
+    title: 'Contact',
+    items: [
+      {
+        label: 'Organizer Contact and Responsibility',
+        text: 'Local events are organized by individual DEVCON chapters. For guidelines and support, contact the local Facebook page of the DEVCON Chapter organizing the event.',
+      },
+      {
+        label: 'National Events',
+        text: 'For summits or events organized directly by the national DEVCON office, contact hello@devcon.ph.',
+      },
+    ],
+  },
 ]
 
 export default function TermsAndConditions() {
