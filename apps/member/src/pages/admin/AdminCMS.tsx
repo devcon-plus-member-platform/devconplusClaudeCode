@@ -1018,12 +1018,12 @@ interface XpTierForm {
 
 // ── Tab 4: Missions ───────────────────────────────────────────────────────
 
-type MissionSubmissionType = 'proof_upload' | 'link' | 'self_attest'
+type MissionSubmissionType = 'proof_upload' | 'link' | 'submit_for_approval'
 
 const SUBMISSION_TYPE_LABELS: Record<MissionSubmissionType, string> = {
-  proof_upload: 'Proof Upload (needs review)',
-  link:         'Link (open URL)',
-  self_attest:  'Self-Attest (auto-approved)',
+  proof_upload:        'Proof Upload (needs review)',
+  link:                'Link (open URL)',
+  submit_for_approval: 'Submit for Approval (needs review)',
 }
 
 interface MissionRow {
@@ -1304,8 +1304,8 @@ function MissionsTab() {
                     <p className="text-md3-body-md font-semibold text-slate-900">{sub.profiles?.full_name ?? 'Unknown'}</p>
                     <p className="text-md3-label-md text-slate-400">{sub.profiles?.email}</p>
                     <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.missions?.title}</p>
-                    {sub.pr_link === 'self-attested' ? (
-                      <span className="text-md3-label-md text-slate-400 mt-1 block italic">Self-attested</span>
+                    {sub.pr_link === 'submitted-for-approval' ? (
+                      <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
                     ) : (
                       <a
                         href={sub.pr_link}

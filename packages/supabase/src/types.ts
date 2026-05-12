@@ -257,10 +257,10 @@ export type MissionDifficulty  = 'easy' | 'medium' | 'hard'
 export type MissionStatus      = 'available' | 'claimed'
 export type SubmissionStatus   = 'pending' | 'approved'
 /** How a member completes a mission:
- *  proof_upload — submits a link for admin review
- *  link         — opens a URL; no submission created
- *  self_attest  — self-confirms; XP auto-awarded without admin review */
-export type SubmissionType     = 'proof_upload' | 'link' | 'self_attest'
+ *  proof_upload        — submits a link for admin review
+ *  link                — opens a URL; no submission created
+ *  submit_for_approval — member declares completion; admin reviews (same queue as proof_upload) */
+export type SubmissionType     = 'proof_upload' | 'link' | 'submit_for_approval'
 
 export interface Mission {
   id: string

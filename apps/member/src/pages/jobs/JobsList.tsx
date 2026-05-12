@@ -219,7 +219,7 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
   const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({})
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({})
-  // Per-mission: self_attest "Mark as Done" in-flight state
+  // Per-mission: submit_for_approval "Mark as Done" in-flight state
   const [attesting, setAttesting] = useState<Record<string, boolean>>({})
   const [attestErrors, setAttestErrors] = useState<Record<string, string>>({})
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -283,7 +283,7 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
     setAttestErrors((p) => ({ ...p, [missionId]: '' }))
     try {
       // Creates a pending submission — admin reviews and awards XP from the queue
-      await submitMission(missionId, user.id, 'self-attested')
+      await submitMission(missionId, user.id, 'submitted-for-approval')
     } catch (err) {
       setAttestErrors((p) => ({ ...p, [missionId]: err instanceof Error ? err.message : 'Could not confirm. Try again.' }))
     } finally {
@@ -438,7 +438,7 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                         <CupFirstOutline className="w-5 h-5 shrink-0" color="#D97706" />
                         <div>
                           <p className="text-md3-body-md font-bold text-amber-700">
-                            {mission.submission_type === 'self_attest' ? 'Mission completed!' : 'You won this mission!'}
+                            {mission.submission_type === 'submit_for_approval' ? 'Mission completed!' : 'You won this mission!'}
                           </p>
                           <p className="text-md3-label-md text-amber-600">+{mission.xp_reward} XP has been added to your account.</p>
                         </div>
@@ -469,8 +469,8 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                       </>
                     )}
 
-                    {/* ── Type: self_attest — "Mark as Done" → pending admin review ── */}
-                    {mission.submission_type === 'self_attest' && !hasWon && (
+                    {/* ── Type: submit_for_approval — "Mark as Done" → pending admin review ── */}
+                    {mission.submission_type === 'submit_for_approval' && !hasWon && (
                       <div className="space-y-2">
                         {/* Optional resource link */}
                         {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
