@@ -8,7 +8,7 @@ import SplashScreen from './pages/auth/SplashScreen'
 import Onboarding from './pages/auth/Onboarding'
 import SignIn from './pages/auth/SignIn'
 import SignUp from './pages/auth/SignUp'
-import OrganizerCodeGate from './pages/auth/OrganizerCodeGate'
+// import OrganizerCodeGate from './pages/auth/OrganizerCodeGate' // temporarily disabled
 import InterestQuiz from './pages/auth/InterestQuiz'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import EmailSent from './pages/auth/EmailSent'
@@ -71,7 +71,7 @@ export const router = createBrowserRouter([
   { path: '/onboarding',           element: <Onboarding /> },
   { path: '/sign-in',              element: <SignIn /> },
   { path: '/sign-up',              element: <SignUp /> },
-  { path: '/organizer-code-gate',  element: <OrganizerCodeGate /> },
+  // { path: '/organizer-code-gate',  element: <OrganizerCodeGate /> }, // temporarily disabled
   { path: '/interests',            element: <InterestQuiz /> },
   { path: '/forgot-password',      element: <ForgotPassword /> },
   { path: '/email-sent',           element: <EmailSent /> },

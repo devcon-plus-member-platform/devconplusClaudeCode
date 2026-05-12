@@ -22,7 +22,7 @@ export default function EmailConfirm() {
       if (savedReturnTo) localStorage.removeItem('devcon_returnTo')
       const destination = (typeof savedReturnTo === 'string' && savedReturnTo.startsWith('/') && !savedReturnTo.startsWith('//'))
         ? savedReturnTo
-        : '/organizer-code-gate'
+        : '/home' // was: '/organizer-code-gate' — temporarily disabled
       setTimeout(() => navigate(destination), 2000)
     }
 

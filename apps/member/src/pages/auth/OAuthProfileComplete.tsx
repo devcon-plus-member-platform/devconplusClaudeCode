@@ -101,7 +101,7 @@ export default function OAuthProfileComplete() {
     // Initialize store so OrganizerCodeGate can read user + initials
     await useAuthStore.getState().initialize()
 
-    navigate('/organizer-code-gate', { replace: true })
+    navigate('/home', { replace: true }) // was: navigate('/organizer-code-gate') — temporarily disabled
   }
 
   return (

@@ -226,7 +226,7 @@ export default function SignUp() {
         // 3. Initialize store so the rest of the app has the correct user + isOAuthOnly=false
         await useAuthStore.getState().initialize()
         clearDraft()
-        navigate('/organizer-code-gate', { replace: true, state: { returnTo: isSafeReturnTo(returnTo) ? returnTo : undefined } })
+        navigate('/home', { replace: true }) // was: navigate('/organizer-code-gate') — temporarily disabled
       } catch (err) {
         const raw = err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
         setFormError(friendlyAuthError(raw))
@@ -266,7 +266,7 @@ export default function SignUp() {
         if (isSafeReturnTo(returnTo)) {
           navigate(returnTo, { replace: true })
         } else {
-          navigate('/organizer-code-gate')
+          navigate('/home') // was: navigate('/organizer-code-gate') — temporarily disabled
         }
       }
     } catch (err) {
