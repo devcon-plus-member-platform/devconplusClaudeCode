@@ -18,8 +18,8 @@ export default function EmailConfirm() {
 
     function onConfirmed() {
       setStatus('confirmed')
-      const savedReturnTo = sessionStorage.getItem('devcon_returnTo')
-      if (savedReturnTo) sessionStorage.removeItem('devcon_returnTo')
+      const savedReturnTo = localStorage.getItem('devcon_returnTo')
+      if (savedReturnTo) localStorage.removeItem('devcon_returnTo')
       const destination = (typeof savedReturnTo === 'string' && savedReturnTo.startsWith('/') && !savedReturnTo.startsWith('//'))
         ? savedReturnTo
         : '/organizer-code-gate'

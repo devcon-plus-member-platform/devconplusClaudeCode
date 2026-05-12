@@ -259,7 +259,7 @@ export default function SignUp() {
 
       if (emailConfirmationPending) {
         clearDraft()
-        if (isSafeReturnTo(returnTo)) sessionStorage.setItem('devcon_returnTo', returnTo)
+        if (isSafeReturnTo(returnTo)) localStorage.setItem('devcon_returnTo', returnTo)
         navigate('/email-sent', { state: { email: data.email, type: 'signup' } })
       } else {
         clearDraft()
