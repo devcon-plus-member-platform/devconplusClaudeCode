@@ -97,7 +97,7 @@ export default function EventDetail() {
       }
     } else {
       try {
-        await navigator.clipboard.writeText(url)
+        await (navigator as Navigator).clipboard.writeText(url)
         setShareToast(true)
         setTimeout(() => setShareToast(false), 2500)
       } catch {
@@ -147,7 +147,7 @@ export default function EventDetail() {
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             className="fixed bottom-28 inset-x-0 mx-auto w-fit z-[100] flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[13px] font-proxima font-semibold px-4 py-2.5 rounded-full shadow-xl whitespace-nowrap"
           >
-            <CopyOutline color="white" width={14} height={14} />
+            <CopyOutline color="white" size={14} />
             Link copied to clipboard
           </motion.div>
         )}
@@ -202,12 +202,15 @@ export default function EventDetail() {
         <div className="pt-2 space-y-3">
           {!user ? (
             /* Public / unauthenticated view */
-            <button
-              onClick={() => navigate(`/sign-up?returnTo=${encodeURIComponent(registerPath)}`)}
-              className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
-            >
-              Create Account & Register
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => navigate(`/sign-up?returnTo=${encodeURIComponent(registerPath)}`)}
+                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+              >
+                Register for this Event
+              </button>
+              <p className="text-center text-md3-label-md text-slate-400">Free account required — takes under a minute</p>
+            </div>
           ) : !reg ? (
             isChapterLocked ? (
               <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold py-4 rounded-2xl text-center text-md3-body-md">

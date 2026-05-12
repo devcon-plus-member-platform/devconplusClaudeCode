@@ -18,7 +18,12 @@ export default function EmailConfirm() {
 
     function onConfirmed() {
       setStatus('confirmed')
-      setTimeout(() => navigate('/organizer-code-gate'), 2000)
+      const savedReturnTo = sessionStorage.getItem('devcon_returnTo')
+      if (savedReturnTo) sessionStorage.removeItem('devcon_returnTo')
+      const destination = (typeof savedReturnTo === 'string' && savedReturnTo.startsWith('/') && !savedReturnTo.startsWith('//'))
+        ? savedReturnTo
+        : '/organizer-code-gate'
+      setTimeout(() => navigate(destination), 2000)
     }
 
     function onFailed(msg?: string) {

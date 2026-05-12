@@ -263,7 +263,11 @@ export default function SignUp() {
         navigate('/email-sent', { state: { email: data.email, type: 'signup' } })
       } else {
         clearDraft()
-        navigate('/organizer-code-gate', { state: { returnTo: isSafeReturnTo(returnTo) ? returnTo : undefined } })
+        if (isSafeReturnTo(returnTo)) {
+          navigate(returnTo, { replace: true })
+        } else {
+          navigate('/organizer-code-gate')
+        }
       }
     } catch (err) {
       const raw = err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
@@ -304,6 +308,7 @@ export default function SignUp() {
               disabled={googleLoading}
               onClick={async () => {
                 setGoogleLoading(true)
+                if (isSafeReturnTo(returnTo)) sessionStorage.setItem('devcon_returnTo', returnTo)
                 try { await signInWithGoogle() } catch { setGoogleLoading(false) }
               }}
               className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white border border-slate-200 rounded-xl text-md3-body-md font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-5 shadow-card disabled:opacity-60"
