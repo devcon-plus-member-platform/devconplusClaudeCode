@@ -69,10 +69,11 @@ interface SlideOverProps {
   onClose: () => void
   onSubmit: () => void
   saving: boolean
+  submitLabel?: string
   children: React.ReactNode
 }
 
-function SlideOver({ title, onClose, onSubmit, saving, children }: SlideOverProps) {
+function SlideOver({ title, onClose, onSubmit, saving, submitLabel = 'Save', children }: SlideOverProps) {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
@@ -94,7 +95,7 @@ function SlideOver({ title, onClose, onSubmit, saving, children }: SlideOverProp
               disabled={saving}
               className="w-full py-2.5 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors disabled:opacity-50"
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? 'Saving…' : submitLabel}
             </button>
           </div>
         </form>
@@ -531,6 +532,7 @@ interface JobForm {
   work_type: 'remote' | 'onsite' | 'hybrid' | 'full_time' | 'part_time'
   description: string
   apply_url: string
+  logo_url: string
   is_promoted: boolean
   is_active: boolean
 }
@@ -542,6 +544,7 @@ const defaultJobForm = (): JobForm => ({
   work_type: 'remote',
   description: '',
   apply_url: '',
+  logo_url: '',
   is_promoted: false,
   is_active: true,
 })
@@ -584,6 +587,7 @@ function JobsTab() {
       work_type: j.work_type,
       description: j.description ?? '',
       apply_url: j.apply_url ?? '',
+      logo_url: j.logo_url ?? '',
       is_promoted: j.is_promoted,
       is_active: j.is_active,
     })
@@ -600,6 +604,7 @@ function JobsTab() {
       work_type: form.work_type,
       description: form.description.trim() || null,
       apply_url: form.apply_url.trim() || null,
+      logo_url: form.logo_url.trim() || null,
       is_promoted: form.is_promoted,
       is_active: form.is_active,
     }
@@ -709,7 +714,28 @@ function JobsTab() {
           onClose={() => setSlideOver(null)}
           onSubmit={() => void handleSave()}
           saving={saving}
+          submitLabel={slideOver === 'create' ? 'Create Job' : 'Save Changes'}
         >
+          {/* Logo preview + URL */}
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+            {form.logo_url ? (
+              <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                <img src={form.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-blue flex items-center justify-center shrink-0">
+                <span className="text-white font-proxima font-bold text-[16px] uppercase">
+                  {form.company[0] ?? 'J'}
+                </span>
+              </div>
+            )}
+            <p className="text-md3-label-md text-slate-400">Logo preview</p>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Logo URL</label>
+            <input className={INPUT_CLS} value={form.logo_url} onChange={f('logo_url')} placeholder="https://example.com/logo.png" />
+            <p className="text-[11px] text-slate-400 mt-1">Leave blank to show the company initial.</p>
+          </div>
           <div>
             <label className={LABEL_CLS}>Title</label>
             <input className={INPUT_CLS} value={form.title} onChange={f('title')} placeholder="e.g. Senior Frontend Developer" required />

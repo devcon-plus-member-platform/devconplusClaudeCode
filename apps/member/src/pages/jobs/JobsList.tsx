@@ -115,11 +115,17 @@ function JobsTab({ initialExpandId, searchQuery }: { initialExpandId: string | n
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
                   {/* Logo */}
-                  <div className="w-12 h-12 bg-primary rounded-full shrink-0 flex items-center justify-center">
-                    <span className="text-white font-proxima font-bold text-md3-title-lg uppercase">
-                      {job.company?.[0] ?? 'J'}
-                    </span>
-                  </div>
+                  {job.logo_url ? (
+                    <div className="w-12 h-12 rounded-xl shrink-0 bg-white border border-slate-100 overflow-hidden flex items-center justify-center">
+                      <img src={job.logo_url} alt={job.company} className="w-full h-full object-contain p-1.5" />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 bg-primary rounded-full shrink-0 flex items-center justify-center">
+                      <span className="text-white font-proxima font-bold text-md3-title-lg uppercase">
+                        {job.company[0] ?? 'J'}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-col gap-[2px]">

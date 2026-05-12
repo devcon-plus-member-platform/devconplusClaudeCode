@@ -10,8 +10,8 @@ const NAV_ITEMS = [
   { path: '/admin/users',     label: 'Users',      Icon: UsersGroupRoundedOutline,           end: false, superOnly: false },
   { path: '/admin/org-codes', label: 'Org Codes',  Icon: KeyOutline,        end: false, superOnly: false },
   { path: '/admin/events',    label: 'Events',     Icon: CalendarOutline,    end: false, superOnly: false },
-  { path: '/admin/chapters',  label: 'Chapters',   Icon: BuildingsOutline,       end: false, superOnly: false },
-  { path: '/admin/upgrades',  label: 'Chapter Management',        Icon: ShieldCheckOutline,     end: false, superOnly: false },
+  { path: '/admin/chapters',  label: 'Chapters',          Icon: BuildingsOutline,   end: false, superOnly: false },
+  { path: '/admin/upgrades',  label: 'Chapter Management', Icon: ShieldCheckOutline, end: false, superOnly: false },
   { path: '/admin/kiosk',     label: 'Kiosk',      Icon: ScannerOutline,        end: false, superOnly: true  },
 ]
 
