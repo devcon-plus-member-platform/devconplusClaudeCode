@@ -576,7 +576,7 @@ export default function JobsList() {
           {/* Header Row: Title + Icons */}
           <div className="relative z-10 flex items-center justify-between px-4 pt-6">
             <h1 className="text-white text-[24px] font-semibold font-proxima leading-none tracking-tight">
-              Jobs and Missions
+              AI & Dev Jobs and Missions
             </h1>
             
             <div className="flex items-center gap-[8px]">
