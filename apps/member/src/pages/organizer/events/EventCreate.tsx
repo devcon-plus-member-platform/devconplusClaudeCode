@@ -42,7 +42,10 @@ type EventCreateDraft = FormData & {
 export function OrgEventCreate() {
   const navigate = useNavigate()
   const { createEvent } = useEventsStore()
-  const { user } = useAuthStore()
+  const { user, chapterName } = useAuthStore()
+
+  const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
+  const [chapters, setChapters] = useState<Array<{ id: string; name: string; region: string }>>([])
 
   const { draft, saveDraft, clearDraft } = useFormDraft<EventCreateDraft>(
     'org-event-create',
@@ -105,6 +108,7 @@ export function OrgEventCreate() {
       is_free:           (draft.is_free            as boolean) ?? true,
       ticket_price_php:  (draft.ticket_price_php   as number)  ?? 0,
       capacity:          (draft.capacity           as number)  ?? undefined,
+      chapter_id:        (draft.chapter_id         as string)  ?? (user?.chapter_id ?? ''),
       visibility:        'public',
       tags:              [],
     },
@@ -133,6 +137,17 @@ export function OrgEventCreate() {
     saveDraft({ ...getValues(), tags, visibility, customFields })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tags, visibility, customFields])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    void supabase
+      .from('chapters')
+      .select('id, name, region')
+      .order('name')
+      .then(({ data }) => {
+        if (data) setChapters(data as Array<{ id: string; name: string; region: string }>)
+      })
+  }, [isAdmin])
 
   // ── Cover image handlers ─────────────────────────────────────────────────
 
@@ -219,6 +234,8 @@ export function OrgEventCreate() {
       }
     }
 
+    const chapterId = isAdmin ? data.chapter_id : user.chapter_id
+
     try {
       await createEvent({
         title:               data.title,
@@ -238,7 +255,7 @@ export function OrgEventCreate() {
         requires_approval:   data.requires_approval,
         is_chapter_locked:   data.is_chapter_locked,
         cover_image_url,
-        chapter_id:          user.chapter_id,
+        chapter_id:          chapterId,
         created_by:          user.id,
         custom_form_schema:  customFields.length > 0 ? customFields as unknown as Json : null,
       })
@@ -373,6 +390,53 @@ export function OrgEventCreate() {
         <motion.div variants={fadeUp}>
           <SectionHeader title="Categorization" />
           <div className="space-y-4">
+            <div>
+              <label className={labelClass}>Chapter <span className="text-red normal-case">*</span></label>
+              <select
+                {...register('chapter_id')}
+                disabled={!isAdmin}
+                className={`${inputClass} ${!isAdmin ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
+              >
+                {!isAdmin && (
+                  <option value={user?.chapter_id ?? ''}>
+                    {chapterName ?? 'Your chapter'}
+                  </option>
+                )}
+                {isAdmin && (
+                  <>
+                    <option value="">Select chapter…</option>
+                    {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
+                      const group = chapters
+                        .filter((c) => c.region === region)
+                        .sort((a, b) => {
+                          if (region === 'Luzon') {
+                            if (a.name === 'Manila' && b.name !== 'Manila') return -1
+                            if (b.name === 'Manila' && a.name !== 'Manila') return 1
+                          }
+                          return a.name.localeCompare(b.name)
+                        })
+                      if (!group.length) return null
+                      return (
+                        <optgroup key={region} label={region}>
+                          {group.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </optgroup>
+                      )
+                    })}
+                  </>
+                )}
+              </select>
+              {errors.chapter_id && (
+                <p className="text-md3-label-md text-red mt-1">{errors.chapter_id.message}</p>
+              )}
+              {!isAdmin && (
+                <p className="text-md3-label-md text-slate-400 mt-1">
+                  Chapter is locked to your organizer profile.
+                </p>
+              )}
+            </div>
+
             {/* DEVCON Program */}
             <div>
               <label className={labelClass}>

@@ -126,6 +126,7 @@ export function OrgEventEdit() {
           volunteer_points:  hasDraft ? (draft.volunteer_points  as number)  ?? (event.volunteer_points  ?? DEFAULT_VOLUNTEER_POINTS) : event.volunteer_points  ?? DEFAULT_VOLUNTEER_POINTS,
           requires_approval: hasDraft ? (draft.requires_approval as boolean) ?? (event.requires_approval ?? false)                  : event.requires_approval ?? false,
           is_chapter_locked: hasDraft ? (draft.is_chapter_locked as boolean) ?? (event.is_chapter_locked ?? false)                  : event.is_chapter_locked ?? false,
+          chapter_id:        hasDraft ? (draft.chapter_id       as string)  ?? event.chapter_id                         : event.chapter_id,
           is_free:           hasDraft ? (draft.is_free           as boolean) ?? (event.is_free           ?? true)                   : event.is_free           ?? true,
           ticket_price_php:  hasDraft ? (draft.ticket_price_php  as number)  ?? (event.ticket_price_php  ?? 0)                     : event.ticket_price_php  ?? 0,
           capacity:          hasDraft ? (draft.capacity          as number | undefined) ?? event.capacity ?? undefined               : event.capacity          ?? undefined,
@@ -136,6 +137,7 @@ export function OrgEventEdit() {
           volunteer_points:  DEFAULT_VOLUNTEER_POINTS,
           requires_approval: false,
           is_chapter_locked: false,
+          chapter_id:        '',
           is_free:           true,
           ticket_price_php:  0,
           visibility:        'public',
@@ -352,6 +354,7 @@ export function OrgEventEdit() {
         initial="hidden"
         animate="visible"
       >
+        <input type="hidden" {...register('chapter_id')} />
         {/* ── EVENT DETAILS ── */}
         <motion.div variants={fadeUp}>
           <SectionHeader title="Event Details" />

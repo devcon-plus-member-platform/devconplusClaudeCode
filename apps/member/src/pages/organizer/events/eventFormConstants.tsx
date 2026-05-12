@@ -68,6 +68,7 @@ export const schema = z
       .max(1000, 'Maximum 1000 XP'),
     requires_approval: z.boolean(),
     is_chapter_locked: z.boolean(),
+    chapter_id: z.string().min(1, 'Chapter is required'),
     cover_image_url: z.string().url().optional().or(z.literal('')),
   })
   .superRefine((data, ctx) => {
