@@ -253,9 +253,14 @@ export interface Referral {
 
 // ── Missions (Bounty System) ─────────────────────────────────────────────────
 
-export type MissionDifficulty = 'easy' | 'medium' | 'hard'
-export type MissionStatus     = 'available' | 'claimed'
-export type SubmissionStatus  = 'pending' | 'approved'
+export type MissionDifficulty  = 'easy' | 'medium' | 'hard'
+export type MissionStatus      = 'available' | 'claimed'
+export type SubmissionStatus   = 'pending' | 'approved'
+/** How a member completes a mission:
+ *  proof_upload — submits a link for admin review
+ *  link         — opens a URL; no submission created
+ *  self_attest  — self-confirms; XP auto-awarded without admin review */
+export type SubmissionType     = 'proof_upload' | 'link' | 'self_attest'
 
 export interface Mission {
   id: string
@@ -264,6 +269,7 @@ export interface Mission {
   xp_reward: number
   difficulty: MissionDifficulty
   status: MissionStatus
+  submission_type: SubmissionType
   github_url: string | null
   is_active: boolean
   created_at: string

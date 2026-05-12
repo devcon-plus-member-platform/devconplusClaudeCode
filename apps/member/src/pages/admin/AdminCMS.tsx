@@ -1018,6 +1018,14 @@ interface XpTierForm {
 
 // ── Tab 4: Missions ───────────────────────────────────────────────────────
 
+type MissionSubmissionType = 'proof_upload' | 'link' | 'self_attest'
+
+const SUBMISSION_TYPE_LABELS: Record<MissionSubmissionType, string> = {
+  proof_upload: 'Proof Upload (needs review)',
+  link:         'Link (open URL)',
+  self_attest:  'Self-Attest (auto-approved)',
+}
+
 interface MissionRow {
   id: string
   title: string
@@ -1025,6 +1033,7 @@ interface MissionRow {
   xp_reward: number
   difficulty: 'easy' | 'medium' | 'hard'
   status: 'available' | 'claimed'
+  submission_type: MissionSubmissionType
   github_url: string | null
   is_active: boolean
   created_at: string
@@ -1046,6 +1055,7 @@ interface MissionForm {
   description: string
   xp_reward: string
   difficulty: 'easy' | 'medium' | 'hard'
+  submission_type: MissionSubmissionType
   github_url: string
   is_active: boolean
 }
@@ -1055,6 +1065,7 @@ const defaultMissionForm = (): MissionForm => ({
   description: '',
   xp_reward: '100',
   difficulty: 'medium',
+  submission_type: 'proof_upload',
   github_url: '',
   is_active: true,
 })
@@ -1120,12 +1131,13 @@ function MissionsTab() {
   const openEdit = (m: MissionRow) => {
     setEditingItem(m)
     setForm({
-      title:       m.title,
-      description: m.description ?? '',
-      xp_reward:   String(m.xp_reward),
-      difficulty:  m.difficulty,
-      github_url:  m.github_url ?? '',
-      is_active:   m.is_active,
+      title:           m.title,
+      description:     m.description ?? '',
+      xp_reward:       String(m.xp_reward),
+      difficulty:      m.difficulty,
+      submission_type: m.submission_type ?? 'proof_upload',
+      github_url:      m.github_url ?? '',
+      is_active:       m.is_active,
     })
     setSlideOver('edit')
   }
@@ -1134,12 +1146,13 @@ function MissionsTab() {
     setSaving(true)
     setError(null)
     const payload = {
-      title:       form.title.trim(),
-      description: form.description.trim() || null,
-      xp_reward:   parseInt(form.xp_reward, 10) || 100,
-      difficulty:  form.difficulty,
-      github_url:  form.github_url.trim() || null,
-      is_active:   form.is_active,
+      title:           form.title.trim(),
+      description:     form.description.trim() || null,
+      xp_reward:       parseInt(form.xp_reward, 10) || 100,
+      difficulty:      form.difficulty,
+      submission_type: form.submission_type,
+      github_url:      form.github_url.trim() || null,
+      is_active:       form.is_active,
     }
     try {
       if (slideOver === 'create') {
@@ -1243,6 +1256,9 @@ function MissionsTab() {
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${DIFF_COLORS[m.difficulty]}`}>
                       {m.difficulty}
                     </span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 capitalize">
+                      {(m.submission_type ?? 'proof_upload').replace('_', ' ')}
+                    </span>
                     {m.status === 'claimed' && (
                       <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">
                         claimed
@@ -1288,14 +1304,18 @@ function MissionsTab() {
                     <p className="text-md3-body-md font-semibold text-slate-900">{sub.profiles?.full_name ?? 'Unknown'}</p>
                     <p className="text-md3-label-md text-slate-400">{sub.profiles?.email}</p>
                     <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.missions?.title}</p>
-                    <a
-                      href={sub.pr_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
-                    >
-                      {sub.pr_link}
-                    </a>
+                    {sub.pr_link === 'self-attested' ? (
+                      <span className="text-md3-label-md text-slate-400 mt-1 block italic">Self-attested</span>
+                    ) : (
+                      <a
+                        href={sub.pr_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
+                      >
+                        {sub.pr_link}
+                      </a>
+                    )}
                     <p className="text-[10px] text-slate-400 mt-1">
                       Submitted {new Date(sub.submitted_at).toLocaleString()}
                     </p>
@@ -1346,8 +1366,24 @@ function MissionsTab() {
             </div>
           </div>
           <div>
-            <label className={LABEL_CLS}>GitHub URL</label>
-            <input className={INPUT_CLS} type="url" value={form.github_url} onChange={f('github_url')} placeholder="https://github.com/org/repo" />
+            <label className={LABEL_CLS}>Submission Type</label>
+            <select className={INPUT_CLS} value={form.submission_type} onChange={f('submission_type')}>
+              {(Object.keys(SUBMISSION_TYPE_LABELS) as MissionSubmissionType[]).map((t) => (
+                <option key={t} value={t}>{SUBMISSION_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>
+              {form.submission_type === 'link' ? 'Link URL' : 'GitHub URL'}
+            </label>
+            <input
+              className={INPUT_CLS}
+              type="url"
+              value={form.github_url}
+              onChange={f('github_url')}
+              placeholder={form.submission_type === 'link' ? 'https://...' : 'https://github.com/org/repo'}
+            />
           </div>
           <ToggleRow label="Active" checked={form.is_active} onChange={(v) => setForm((p) => ({ ...p, is_active: v }))} />
         </SlideOver>

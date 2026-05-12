@@ -214,11 +214,14 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
   const { missions, participants, submissions, isLoading, error, fetchAll, startMission, submitMission, subscribeToChanges } = useMissionsStore()
   const { user } = useAuthStore()
   const [expandedId, setExpandedId] = useState<string | null>(initialExpandId)
-  // Per-mission: is the link input visible?
+  // Per-mission: is the link input visible? (proof_upload flow)
   const [submitOpen, setSubmitOpen] = useState<Record<string, boolean>>({})
   const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({})
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({})
+  // Per-mission: self_attest "Mark as Done" in-flight state
+  const [attesting, setAttesting] = useState<Record<string, boolean>>({})
+  const [attestErrors, setAttestErrors] = useState<Record<string, string>>({})
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
@@ -271,6 +274,20 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
       setSubmitErrors((p) => ({ ...p, [missionId]: err instanceof Error ? err.message : 'Submit failed.' }))
     } finally {
       setSubmitting((p) => ({ ...p, [missionId]: false }))
+    }
+  }
+
+  const handleAttest = async (missionId: string) => {
+    if (!user) return
+    setAttesting((p) => ({ ...p, [missionId]: true }))
+    setAttestErrors((p) => ({ ...p, [missionId]: '' }))
+    try {
+      // Creates a pending submission — admin reviews and awards XP from the queue
+      await submitMission(missionId, user.id, 'self-attested')
+    } catch (err) {
+      setAttestErrors((p) => ({ ...p, [missionId]: err instanceof Error ? err.message : 'Could not confirm. Try again.' }))
+    } finally {
+      setAttesting((p) => ({ ...p, [missionId]: false }))
     }
   }
 
@@ -415,106 +432,186 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                       </p>
                     )}
 
-                    {/* GitHub link */}
-                    {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
-                      <a href={mission.github_url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-md3-body-md text-slate-500 hover:text-slate-800 transition-colors">
-                        <CodeSquareOutline className="w-4 h-4 shrink-0" />
-                        <span className="truncate text-md3-label-md">{mission.github_url}</span>
-                        <ShareOutline className="w-3 h-3 shrink-0 ml-auto" />
-                      </a>
-                    )}
-
-                    {/* ── State A: Not joined ── */}
-                    {!isJoined && !hasWon && (
-                      <motion.button
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => void handleStart(mission.id)}
-                        className="w-full bg-primary text-white font-bold text-md3-body-md py-3 rounded-full shadow-sm"
-                      >
-                        Start Mission
-                      </motion.button>
-                    )}
-
-                    {/* ── State B/C: Joined — show submit UI ── */}
-                    {isJoined && !hasWon && (
-                      <div className="space-y-2">
-                        {/* Current submission info */}
-                        {mySubmission && !submitOpen[mission.id] && (
-                          <div className="bg-slate-50 rounded-xl p-3 space-y-1">
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your Submission</p>
-                            <a href={mySubmission.pr_link} target="_blank" rel="noopener noreferrer"
-                              className="text-md3-label-md text-blue hover:underline break-all block">{mySubmission.pr_link}</a>
-                            <p className="text-[10px] text-slate-400">
-                              Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Link input */}
-                        <AnimatePresence>
-                          {submitOpen[mission.id] && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }} className="overflow-hidden space-y-2"
-                            >
-                              <input
-                                type="text"
-                                inputMode="url"
-                                maxLength={2048}
-                                value={linkDrafts[mission.id] ?? ''}
-                                onChange={(e) => setLinkDrafts((p) => ({ ...p, [mission.id]: e.target.value }))}
-                                placeholder="https://..."
-                                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
-                              />
-                              {submitErrors[mission.id] && (
-                                <p className="text-md3-label-md text-red">{submitErrors[mission.id]}</p>
-                              )}
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => setSubmitOpen((p) => ({ ...p, [mission.id]: false }))}
-                                  className="flex-1 py-2.5 rounded-full border border-slate-200 text-slate-600 text-md3-body-md font-semibold"
-                                >
-                                  Cancel
-                                </button>
-                                <motion.button
-                                  whileTap={{ scale: 0.97 }}
-                                  onClick={() => void handleSubmit(mission.id)}
-                                  disabled={submitting[mission.id]}
-                                  className="flex-1 py-2.5 rounded-full bg-primary text-white text-md3-body-md font-bold disabled:opacity-50 shadow-sm"
-                                >
-                                  {submitting[mission.id] ? 'Submitting…' : mySubmission ? 'Update Link' : 'Submit'}
-                                </motion.button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {/* CTA button */}
-                        {!submitOpen[mission.id] && (
-                          <motion.button
-                            whileTap={{ scale: 0.97 }}
-                            onClick={() => openSubmit(mission.id, mySubmission?.pr_link)}
-                            className={`w-full font-bold text-md3-body-md py-3 rounded-full shadow-sm ${
-                              mySubmission
-                                ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                : 'bg-primary text-white'
-                            }`}
-                          >
-                            {mySubmission ? 'Update Link' : 'Submit Link'}
-                          </motion.button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── State D: Won ── */}
+                    {/* ── Won state (all types) ── */}
                     {hasWon && (
                       <div className="bg-gold/10 rounded-xl p-3 flex items-center gap-3">
                         <CupFirstOutline className="w-5 h-5 shrink-0" color="#D97706" />
                         <div>
-                          <p className="text-md3-body-md font-bold text-amber-700">You won this mission!</p>
+                          <p className="text-md3-body-md font-bold text-amber-700">
+                            {mission.submission_type === 'self_attest' ? 'Mission completed!' : 'You won this mission!'}
+                          </p>
                           <p className="text-md3-label-md text-amber-600">+{mission.xp_reward} XP has been added to your account.</p>
                         </div>
+                      </div>
+                    )}
+
+                    {/* ── Type: link — track participation + open URL ── */}
+                    {!hasWon && mission.submission_type === 'link' && (
+                      <>
+                        {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
+                          <motion.a
+                            href={mission.github_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => { if (user && !isJoined) void handleStart(mission.id) }}
+                            className="w-full bg-primary text-white font-bold text-md3-body-md py-3 rounded-full shadow-sm flex items-center justify-center gap-2"
+                          >
+                            <ShareOutline color="#fff" />
+                            Open Link
+                          </motion.a>
+                        )}
+                        {isJoined && (
+                          <p className="text-[11px] text-slate-400 text-center">
+                            You opened this link
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {/* ── Type: self_attest — "Mark as Done" → pending admin review ── */}
+                    {mission.submission_type === 'self_attest' && !hasWon && (
+                      <div className="space-y-2">
+                        {/* Optional resource link */}
+                        {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
+                          <a href={mission.github_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-md3-body-md text-slate-500 hover:text-slate-800 transition-colors">
+                            <CodeSquareOutline className="w-4 h-4 shrink-0" />
+                            <span className="truncate text-md3-label-md">{mission.github_url}</span>
+                            <ShareOutline className="w-3 h-3 shrink-0 ml-auto" />
+                          </a>
+                        )}
+
+                        {/* Pending review state */}
+                        {mySubmission && mySubmission.status === 'pending' && (
+                          <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                            <div>
+                              <p className="text-md3-label-md font-semibold text-slate-700">Pending review</p>
+                              <p className="text-[10px] text-slate-400">Submitted {new Date(mySubmission.submitted_at).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {!isJoined && (
+                          <motion.button
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => void handleStart(mission.id)}
+                            className="w-full bg-primary text-white font-bold text-md3-body-md py-3 rounded-full shadow-sm"
+                          >
+                            Start Mission
+                          </motion.button>
+                        )}
+
+                        {isJoined && !mySubmission && (
+                          <>
+                            {attestErrors[mission.id] && (
+                              <p className="text-md3-label-md text-red">{attestErrors[mission.id]}</p>
+                            )}
+                            <motion.button
+                              whileTap={{ scale: 0.97 }}
+                              onClick={() => void handleAttest(mission.id)}
+                              disabled={attesting[mission.id]}
+                              className="w-full bg-primary text-white font-bold text-md3-body-md py-3 rounded-full shadow-sm disabled:opacity-50"
+                            >
+                              {attesting[mission.id] ? 'Submitting…' : 'Mark as Done'}
+                            </motion.button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Type: proof_upload — submit link for admin review ── */}
+                    {!hasWon && mission.submission_type === 'proof_upload' && (
+                      <div className="space-y-2">
+                        {/* Optional GitHub reference */}
+                        {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && !submitOpen[mission.id] && (
+                          <a href={mission.github_url} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-md3-body-md text-slate-500 hover:text-slate-800 transition-colors">
+                            <CodeSquareOutline className="w-4 h-4 shrink-0" />
+                            <span className="truncate text-md3-label-md">{mission.github_url}</span>
+                            <ShareOutline className="w-3 h-3 shrink-0 ml-auto" />
+                          </a>
+                        )}
+
+                        {/* Not joined yet */}
+                        {!isJoined && (
+                          <motion.button
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => void handleStart(mission.id)}
+                            className="w-full bg-primary text-white font-bold text-md3-body-md py-3 rounded-full shadow-sm"
+                          >
+                            Start Mission
+                          </motion.button>
+                        )}
+
+                        {/* Joined — show submit UI */}
+                        {isJoined && (
+                          <>
+                            {mySubmission && !submitOpen[mission.id] && (
+                              <div className="bg-slate-50 rounded-xl p-3 space-y-1">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your Submission</p>
+                                <a href={mySubmission.pr_link} target="_blank" rel="noopener noreferrer"
+                                  className="text-md3-label-md text-blue hover:underline break-all block">{mySubmission.pr_link}</a>
+                                <p className="text-[10px] text-slate-400">
+                                  Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
+                                </p>
+                              </div>
+                            )}
+
+                            <AnimatePresence>
+                              {submitOpen[mission.id] && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }} className="overflow-hidden space-y-2"
+                                >
+                                  <input
+                                    type="text"
+                                    inputMode="url"
+                                    maxLength={2048}
+                                    value={linkDrafts[mission.id] ?? ''}
+                                    onChange={(e) => setLinkDrafts((p) => ({ ...p, [mission.id]: e.target.value }))}
+                                    placeholder="https://..."
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
+                                  />
+                                  {submitErrors[mission.id] && (
+                                    <p className="text-md3-label-md text-red">{submitErrors[mission.id]}</p>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => setSubmitOpen((p) => ({ ...p, [mission.id]: false }))}
+                                      className="flex-1 py-2.5 rounded-full border border-slate-200 text-slate-600 text-md3-body-md font-semibold"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <motion.button
+                                      whileTap={{ scale: 0.97 }}
+                                      onClick={() => void handleSubmit(mission.id)}
+                                      disabled={submitting[mission.id]}
+                                      className="flex-1 py-2.5 rounded-full bg-primary text-white text-md3-body-md font-bold disabled:opacity-50 shadow-sm"
+                                    >
+                                      {submitting[mission.id] ? 'Submitting…' : mySubmission ? 'Update Link' : 'Submit'}
+                                    </motion.button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            {!submitOpen[mission.id] && (
+                              <motion.button
+                                whileTap={{ scale: 0.97 }}
+                                onClick={() => openSubmit(mission.id, mySubmission?.pr_link)}
+                                className={`w-full font-bold text-md3-body-md py-3 rounded-full shadow-sm ${
+                                  mySubmission
+                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                    : 'bg-primary text-white'
+                                }`}
+                              >
+                                {mySubmission ? 'Update Link' : 'Submit Link'}
+                              </motion.button>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
