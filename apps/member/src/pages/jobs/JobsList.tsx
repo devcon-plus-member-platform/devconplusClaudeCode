@@ -214,9 +214,9 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
   const { missions, participants, submissions, isLoading, error, fetchAll, startMission, submitMission, subscribeToChanges } = useMissionsStore()
   const { user } = useAuthStore()
   const [expandedId, setExpandedId] = useState<string | null>(initialExpandId)
-  // Per-mission: is the PR link input visible?
+  // Per-mission: is the link input visible?
   const [submitOpen, setSubmitOpen] = useState<Record<string, boolean>>({})
-  const [prDrafts, setPrDrafts] = useState<Record<string, string>>({})
+  const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({})
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({})
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -246,16 +246,16 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
   }
 
   const openSubmit = (missionId: string, existingLink?: string) => {
-    setPrDrafts((p) => ({ ...p, [missionId]: existingLink ?? '' }))
+    setLinkDrafts((p) => ({ ...p, [missionId]: existingLink ?? '' }))
     setSubmitOpen((p) => ({ ...p, [missionId]: true }))
     setSubmitErrors((p) => ({ ...p, [missionId]: '' }))
   }
 
   const handleSubmit = async (missionId: string) => {
     if (!user) return
-    const link = (prDrafts[missionId] ?? '').trim()
+    const link = (linkDrafts[missionId] ?? '').trim()
     if (!link) {
-      setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter your PR link.' }))
+      setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter a link.' }))
       return
     }
     if (!link.startsWith('https://') && !link.startsWith('http://')) {
@@ -451,7 +451,7 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                           </div>
                         )}
 
-                        {/* PR link input */}
+                        {/* Link input */}
                         <AnimatePresence>
                           {submitOpen[mission.id] && (
                             <motion.div
@@ -462,9 +462,9 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                                 type="text"
                                 inputMode="url"
                                 maxLength={2048}
-                                value={prDrafts[mission.id] ?? ''}
-                                onChange={(e) => setPrDrafts((p) => ({ ...p, [mission.id]: e.target.value }))}
-                                placeholder="https://github.com/your/repo/pull/123"
+                                value={linkDrafts[mission.id] ?? ''}
+                                onChange={(e) => setLinkDrafts((p) => ({ ...p, [mission.id]: e.target.value }))}
+                                placeholder="https://..."
                                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
                               />
                               {submitErrors[mission.id] && (
@@ -483,7 +483,7 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                                   disabled={submitting[mission.id]}
                                   className="flex-1 py-2.5 rounded-full bg-primary text-white text-md3-body-md font-bold disabled:opacity-50 shadow-sm"
                                 >
-                                  {submitting[mission.id] ? 'Submitting…' : mySubmission ? 'Update Link' : 'Submit PR'}
+                                  {submitting[mission.id] ? 'Submitting…' : mySubmission ? 'Update Link' : 'Submit'}
                                 </motion.button>
                               </div>
                             </motion.div>
@@ -501,7 +501,7 @@ function MissionsTab({ initialExpandId, searchQuery }: { initialExpandId: string
                                 : 'bg-primary text-white'
                             }`}
                           >
-                            {mySubmission ? 'Update PR Link' : 'Submit PR Link'}
+                            {mySubmission ? 'Update Link' : 'Submit Link'}
                           </motion.button>
                         )}
                       </div>

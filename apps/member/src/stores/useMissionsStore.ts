@@ -15,7 +15,7 @@ interface MissionsState {
 
   fetchAll: (force?: boolean) => Promise<void>
   startMission: (missionId: string, userId: string) => Promise<void>
-  submitMission: (missionId: string, userId: string, prLink: string) => Promise<void>
+  submitMission: (missionId: string, userId: string, link: string) => Promise<void>
   subscribeToChanges: () => () => void
 }
 
@@ -72,7 +72,7 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
     }))
   },
 
-  submitMission: async (missionId, userId, prLink) => {
+  submitMission: async (missionId, userId, link) => {
     const existing = get().submissions.find(
       (s) => s.mission_id === missionId && s.user_id === userId
     )
@@ -80,18 +80,18 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
     if (existing) {
       const { error } = await supabase
         .from('mission_submissions')
-        .update({ pr_link: prLink, submitted_at: now })
+        .update({ pr_link: link, submitted_at: now })
         .eq('id', existing.id)
       if (error) throw error
       set((s) => ({
         submissions: s.submissions.map((sub) =>
-          sub.id === existing.id ? { ...sub, pr_link: prLink, submitted_at: now } : sub
+          sub.id === existing.id ? { ...sub, pr_link: link, submitted_at: now } : sub
         ),
       }))
     } else {
       const { data, error } = await supabase
         .from('mission_submissions')
-        .insert({ mission_id: missionId, user_id: userId, pr_link: prLink })
+        .insert({ mission_id: missionId, user_id: userId, pr_link: link })
         .select()
         .single()
       if (error) throw error
