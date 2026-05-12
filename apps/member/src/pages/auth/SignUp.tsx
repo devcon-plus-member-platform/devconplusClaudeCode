@@ -16,18 +16,18 @@ const USERNAME_RE = /^[a-z0-9_]+$/
 
 interface Chapter { id: string; name: string; region: string }
 
-const optionalUrl = z.string().url('Must be a valid URL').or(z.literal('')).optional()
+// const optionalUrl = z.string().url('Must be a valid URL').or(z.literal('')).optional()
 
 const schema = z.object({
-  full_name:         z.string().min(2, 'Name required').max(100, 'Name must be under 100 characters'),
-  username:          z.string().min(3, 'Min 3 characters').max(20, 'Max 20 characters').regex(USERNAME_RE, 'Only lowercase letters, numbers, underscores'),
-  email:             z.string().email('Invalid email'),
-  password:          z.string().min(8, 'At least 8 characters').max(128, 'Password must be under 128 characters'),
-  school_or_company: z.string().max(100, 'Must be under 100 characters').optional(),
-  chapter_id:        z.string().min(1, 'Please select your chapter'),
-  linkedin_url:      optionalUrl,
-  github_url:        optionalUrl,
-  portfolio_url:     optionalUrl,
+  full_name:  z.string().min(2, 'Name required').max(100, 'Name must be under 100 characters'),
+  username:   z.string().min(3, 'Min 3 characters').max(20, 'Max 20 characters').regex(USERNAME_RE, 'Only lowercase letters, numbers, underscores'),
+  email:      z.string().email('Invalid email'),
+  password:   z.string().min(8, 'At least 8 characters').max(128, 'Password must be under 128 characters'),
+  // school_or_company: z.string().max(100, 'Must be under 100 characters').optional(),
+  chapter_id: z.string().min(1, 'Please select your chapter'),
+  // linkedin_url:  optionalUrl,
+  // github_url:    optionalUrl,
+  // portfolio_url: optionalUrl,
 })
 type FormData = z.infer<typeof schema>
 
@@ -99,14 +99,14 @@ export default function SignUp() {
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      full_name:         (draft.full_name         as string) ?? '',
-      username:          (draft.username           as string) ?? '',
-      email:             (draft.email              as string) ?? '',
-      school_or_company: (draft.school_or_company  as string) ?? '',
-      chapter_id:        (draft.chapter_id         as string) ?? '',
-      linkedin_url:      (draft.linkedin_url        as string) ?? '',
-      github_url:        (draft.github_url          as string) ?? '',
-      portfolio_url:     (draft.portfolio_url       as string) ?? '',
+      full_name:  (draft.full_name  as string) ?? '',
+      username:   (draft.username   as string) ?? '',
+      email:      (draft.email      as string) ?? '',
+      // school_or_company: (draft.school_or_company as string) ?? '',
+      chapter_id: (draft.chapter_id as string) ?? '',
+      // linkedin_url:  (draft.linkedin_url  as string) ?? '',
+      // github_url:    (draft.github_url    as string) ?? '',
+      // portfolio_url: (draft.portfolio_url as string) ?? '',
     },
   })
   const watchedPassword = watch('password') ?? ''
@@ -130,34 +130,31 @@ export default function SignUp() {
 
       void supabase
         .from('profiles')
-        .select('full_name, username, email, school_or_company, chapter_id, linkedin_url, github_url, portfolio_url')
+        // .select('full_name, username, email, school_or_company, chapter_id, linkedin_url, github_url, portfolio_url')
+        .select('full_name, username, email, chapter_id')
         .eq('id', session.user.id)
         .maybeSingle()
         .then(({ data: profile }) => {
           const isComplete = Boolean(profile?.chapter_id && profile?.username)
 
           if (isComplete) {
-            // Fully set up — redirect away
             navigate('/home', { replace: true })
             return
           }
 
-          // Enter OAuth completion mode
           setIsOAuthMode(true)
           setOauthEmail(session.user.email ?? '')
           const meta = session.user.user_metadata
 
           if (profile) {
-            // Existing user with no password — pre-fill all fields from DB profile
-            setValue('full_name',         profile.full_name ?? '')
-            setValue('username',          profile.username ?? '')
-            setValue('school_or_company', profile.school_or_company ?? '')
-            setValue('chapter_id',        profile.chapter_id ?? '')
-            setValue('linkedin_url',      profile.linkedin_url ?? '')
-            setValue('github_url',        profile.github_url ?? '')
-            setValue('portfolio_url',     profile.portfolio_url ?? '')
+            setValue('full_name',  profile.full_name ?? '')
+            setValue('username',   profile.username ?? '')
+            // setValue('school_or_company', profile.school_or_company ?? '')
+            setValue('chapter_id', profile.chapter_id ?? '')
+            // setValue('linkedin_url',  profile.linkedin_url  ?? '')
+            // setValue('github_url',    profile.github_url    ?? '')
+            // setValue('portfolio_url', profile.portfolio_url ?? '')
           } else {
-            // New user — pre-fill name from Google metadata
             const googleName = (meta.full_name as string | undefined)
               ?? (meta.name as string | undefined)
               ?? ''
@@ -208,17 +205,17 @@ export default function SignUp() {
         const meta = session.user.user_metadata
 
         const { error: profileErr } = await supabase.from('profiles').upsert({
-          id:                session.user.id,
-          full_name:         data.full_name,
-          username:          data.username.toLowerCase(),
-          email:             session.user.email ?? '',
-          chapter_id:        data.chapter_id,
-          school_or_company: data.school_or_company || null,
-          avatar_url:        (meta.avatar_url as string | undefined) ?? null,
-          linkedin_url:      data.linkedin_url  || null,
-          github_url:        data.github_url    || null,
-          portfolio_url:     data.portfolio_url || null,
-          role:              'member',
+          id:         session.user.id,
+          full_name:  data.full_name,
+          username:   data.username.toLowerCase(),
+          email:      session.user.email ?? '',
+          chapter_id: data.chapter_id,
+          // school_or_company: data.school_or_company || null,
+          avatar_url: (meta.avatar_url as string | undefined) ?? null,
+          // linkedin_url:  data.linkedin_url  || null,
+          // github_url:    data.github_url    || null,
+          // portfolio_url: data.portfolio_url || null,
+          role:       'member',
         }, { onConflict: 'id', ignoreDuplicates: false })
 
         if (profileErr) {
@@ -242,12 +239,8 @@ export default function SignUp() {
     try {
       const { emailConfirmationPending } = await signUp(
         data.email, data.password, data.full_name, data.username, data.chapter_id,
-        data.school_or_company, turnstileToken ?? undefined,
-        {
-          linkedin_url:  data.linkedin_url  || undefined,
-          github_url:    data.github_url    || undefined,
-          portfolio_url: data.portfolio_url || undefined,
-        },
+        /* data.school_or_company */ undefined, turnstileToken ?? undefined,
+        // { linkedin_url: data.linkedin_url || undefined, github_url: data.github_url || undefined, portfolio_url: data.portfolio_url || undefined },
       )
 
       const REFERRAL_CODE_RE = /^[A-Z0-9]{6,12}$/i
@@ -403,6 +396,7 @@ export default function SignUp() {
             {errors.password && <p className="text-red text-md3-label-md mt-1">{errors.password.message}</p>}
           </div>
 
+          {/* OPTIONAL PROFILING FIELDS — hidden from sign-up; editable in Profile > Edit Profile
           <div>
             <label className="text-md3-body-md font-medium text-slate-700 block mb-1">
               School / Company <span className="text-slate-400 font-normal">(optional)</span>
@@ -449,6 +443,7 @@ export default function SignUp() {
               {errors.portfolio_url && <p className="text-red text-md3-label-md mt-1">{errors.portfolio_url.message}</p>}
             </div>
           </div>
+          END OPTIONAL PROFILING FIELDS */}
 
           <div>
             <label className="text-md3-body-md font-medium text-slate-700 block mb-1">

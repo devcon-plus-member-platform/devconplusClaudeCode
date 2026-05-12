@@ -108,7 +108,8 @@ export default function OrganizerCodeGate() {
 
   const handleContinueAsMember = () => {
     setOrganizerSession(false)
-    navigate('/interests', { state: { returnTo } })
+    // navigate('/interests', { state: { returnTo } })  // skipped — users can set interests from Profile
+    navigate(returnTo ?? '/home', { replace: true })
   }
 
   return (

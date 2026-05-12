@@ -55,15 +55,12 @@ export default function MemberLayout() {
     }
   }, [user, navigate, location.pathname])
 
-  // Redirect users who haven't completed the interest quiz yet.
-  // interests === null means never been through /interests.
-  // interests === [] means they skipped — don't redirect again.
-  // Pass the current path as returnTo so the quiz sends them back here after completion.
-  useEffect(() => {
-    if (user && user.interests === null) {
-      navigate('/interests', { replace: true, state: { returnTo: location.pathname } })
-    }
-  }, [user, navigate, location.pathname])
+  // Interest quiz redirect disabled — users can set interests from Profile instead.
+  // useEffect(() => {
+  //   if (user && user.interests === null) {
+  //     navigate('/interests', { replace: true, state: { returnTo: location.pathname } })
+  //   }
+  // }, [user, navigate, location.pathname])
 
   useEffect(() => {
     if (hasShownDesktopToast) return
