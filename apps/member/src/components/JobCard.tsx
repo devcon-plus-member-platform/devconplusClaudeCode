@@ -8,11 +8,11 @@ import { WORK_TYPE_LABELS } from '../lib/constants'
 function CompanyAvatar({ logoUrl, company }: { logoUrl: string | null; company: string }) {
   if (logoUrl) {
     return (
-      <div className="w-12 h-12 rounded-xl shrink-0 bg-white border border-slate-100 overflow-hidden flex items-center justify-center">
+      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl">
         <img
           src={logoUrl}
           alt={company}
-          className="w-full h-full object-contain p-1.5"
+          className="w-full h-full object-contain"
         />
       </div>
     )

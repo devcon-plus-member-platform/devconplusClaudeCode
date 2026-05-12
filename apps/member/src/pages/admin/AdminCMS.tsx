@@ -719,8 +719,8 @@ function JobsTab() {
           {/* Logo preview + URL */}
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
             {form.logo_url ? (
-              <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
-                <img src={form.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
+              <div className="w-10 h-10 shrink-0">
+                <img src={form.logo_url} alt="logo" className="w-full h-full object-contain rounded-lg" />
               </div>
             ) : (
               <div className="w-10 h-10 rounded-full bg-blue flex items-center justify-center shrink-0">

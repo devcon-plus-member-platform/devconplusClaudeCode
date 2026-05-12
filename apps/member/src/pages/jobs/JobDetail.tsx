@@ -72,14 +72,13 @@ export default function JobDetail() {
       </header>
 
       {/* ── Company identity card ── */}
-      <div className="px-4 -mt-6 mb-2 flex items-center gap-3">
-        {/* Logo: square container so any aspect ratio fits cleanly */}
+      <div className="px-4 pt-4 mb-2 flex items-center gap-3">
         {job.logo_url ? (
-          <div className="w-14 h-14 rounded-2xl shadow-md border border-slate-100 bg-white overflow-hidden flex items-center justify-center shrink-0">
+          <div className="w-14 h-14 shrink-0">
             <img
               src={job.logo_url}
               alt={job.company}
-              className="w-full h-full object-contain p-1.5"
+              className="w-full h-full object-contain rounded-2xl"
             />
           </div>
         ) : (
