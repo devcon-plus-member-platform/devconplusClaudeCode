@@ -12,6 +12,7 @@ export const JOBS: Job[] = [
     description:
       'Build next-generation web and mobile experiences for enterprise clients across the Philippines and Southeast Asia.',
     apply_url: 'https://careers.accenture.com',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-01T00:00:00Z',
@@ -25,6 +26,7 @@ export const JOBS: Job[] = [
     description:
       'Join the Sui Foundation to build high-performance blockchain applications on the Sui network. Work on DeFi, NFTs, and Web3 infrastructure.',
     apply_url: 'https://sui.io/careers',
+    logo_url: null,
     is_promoted: true,
     is_active: true,
     posted_at: '2026-02-03T00:00:00Z',
@@ -38,6 +40,7 @@ export const JOBS: Job[] = [
     description:
       'Design intuitive and beautiful digital banking experiences for millions of Filipino customers.',
     apply_url: 'https://ing.com.ph/careers',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-05T00:00:00Z',
@@ -51,6 +54,7 @@ export const JOBS: Job[] = [
     description:
       'Work on cutting-edge data science and AI products at one of the Philippines\' top tech consultancies.',
     apply_url: 'https://thinkingmachin.es/careers',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-06T00:00:00Z',
@@ -64,6 +68,7 @@ export const JOBS: Job[] = [
     description:
       'Own infrastructure reliability and CI/CD pipelines powering connectivity for 80M+ Filipinos.',
     apply_url: 'https://globe.com.ph/careers',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-08T00:00:00Z',
@@ -77,6 +82,7 @@ export const JOBS: Job[] = [
     description:
       'Build the live-streaming and community features of the Philippines\' top local social platform.',
     apply_url: 'https://kumu.ph/careers',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-10T00:00:00Z',
@@ -90,6 +96,7 @@ export const JOBS: Job[] = [
     description:
       'Design and maintain data pipelines for the Philippines\' leading mobile wallet, serving 90M+ users.',
     apply_url: 'https://gcash.com/careers',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-12T00:00:00Z',
@@ -103,6 +110,7 @@ export const JOBS: Job[] = [
     description:
       'Lead product strategy for Maya\'s fintech ecosystem — payments, lending, and digital banking.',
     apply_url: 'https://maya.ph/careers',
+    logo_url: null,
     is_promoted: false,
     is_active: true,
     posted_at: '2026-02-14T00:00:00Z',

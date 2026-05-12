@@ -10,6 +10,19 @@ import NotFound from '../NotFound'
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
 const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
+const LOGO_GRADIENTS = [
+  'from-blue-400 to-blue-600',
+  'from-violet-400 to-violet-600',
+  'from-emerald-400 to-emerald-600',
+  'from-orange-400 to-orange-600',
+  'from-rose-400 to-rose-600',
+  'from-cyan-400 to-cyan-600',
+]
+
+function companyGradient(company: string): string {
+  return LOGO_GRADIENTS[(company.charCodeAt(0) ?? 0) % LOGO_GRADIENTS.length]
+}
+
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -41,9 +54,9 @@ export default function JobDetail() {
       {/* ── Header ── */}
       <header className="sticky top-0 z-50 flex flex-col pointer-events-none">
         {/* ── Blue Background Container ── */}
-        <div 
+        <div
           className="bg-primary relative overflow-hidden z-0 pointer-events-auto pb-[32px] pt-14"
-          style={{ 
+          style={{
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,
             backgroundSize: '60px 60px',
@@ -63,13 +76,36 @@ export default function JobDetail() {
               {job.title}
             </h1>
           </div>
-          <div className="px-[76px]">
+          <div className="px-[76px] flex items-center gap-2">
+            {/* Company logo inline with name */}
+            {job.logo_url ? (
+              <div className="w-5 h-5 rounded-full bg-white overflow-hidden flex items-center justify-center shrink-0">
+                <img src={job.logo_url} alt={job.company} className="w-full h-full object-contain p-[2px]" />
+              </div>
+            ) : (
+              <div className={`w-5 h-5 rounded-full shrink-0 bg-gradient-to-br ${companyGradient(job.company)}`} />
+            )}
             <p className="text-white/70 text-[13px] font-proxima uppercase tracking-widest font-bold">
               {job.company}
             </p>
           </div>
         </div>
       </header>
+
+      {/* ── Company identity card ── */}
+      <div className="px-4 -mt-6 mb-2 flex items-center gap-3">
+        <div className="w-14 h-14 rounded-2xl shadow-md border border-slate-100 bg-white overflow-hidden flex items-center justify-center shrink-0">
+          {job.logo_url ? (
+            <img src={job.logo_url} alt={job.company} className="w-full h-full object-contain p-2" />
+          ) : (
+            <div className={`w-full h-full bg-gradient-to-br ${companyGradient(job.company)}`} />
+          )}
+        </div>
+        <div>
+          <p className="font-proxima font-bold text-slate-900 text-[15px] leading-tight">{job.company}</p>
+          <p className="font-proxima text-slate-400 text-[12px]">{job.title}</p>
+        </div>
+      </div>
 
       <div className="p-4 space-y-4 pb-24">
         {/* Meta chips */}

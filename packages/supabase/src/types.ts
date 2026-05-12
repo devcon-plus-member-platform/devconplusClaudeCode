@@ -192,6 +192,7 @@ export interface Job {
   work_type: WorkType
   description: string | null
   apply_url: string | null
+  logo_url: string | null
   is_promoted: boolean
   is_active: boolean
   posted_at: string

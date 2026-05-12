@@ -270,6 +270,7 @@ export type Database = {
           is_active: boolean | null
           is_promoted: boolean | null
           location: string | null
+          logo_url: string | null
           posted_at: string | null
           title: string
           work_type: string | null
@@ -282,6 +283,7 @@ export type Database = {
           is_active?: boolean | null
           is_promoted?: boolean | null
           location?: string | null
+          logo_url?: string | null
           posted_at?: string | null
           title: string
           work_type?: string | null
@@ -294,6 +296,7 @@ export type Database = {
           is_active?: boolean | null
           is_promoted?: boolean | null
           location?: string | null
+          logo_url?: string | null
           posted_at?: string | null
           title?: string
           work_type?: string | null
