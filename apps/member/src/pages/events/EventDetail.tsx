@@ -209,7 +209,6 @@ export default function EventDetail() {
               >
                 Register for this Event
               </button>
-              <p className="text-center text-md3-label-md text-slate-400">Free account required — takes under a minute</p>
             </div>
           ) : !reg ? (
             isChapterLocked ? (
@@ -282,17 +281,15 @@ export default function EventDetail() {
           )}
           */}
 
-          {/* Future Volunteer CTA — shown for all authenticated users */}
-          {user && (
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowVolunteerForm(true)}
-              className="w-full border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
-            >
-              <HeartOutline color="rgb(var(--color-primary))" size={20} />
-              Apply as Future Volunteer
-            </motion.button>
-          )}
+          {/* Future Volunteer CTA — shown to all visitors */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowVolunteerForm(true)}
+            className="w-full border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
+          >
+            <HeartOutline color="rgb(var(--color-primary))" size={20} />
+            Apply as Future Volunteer
+          </motion.button>
         </div>
       </div>
 
