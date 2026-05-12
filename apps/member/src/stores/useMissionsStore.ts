@@ -37,7 +37,7 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const [mRes, pRes, sRes] = await Promise.all([
-        supabase.from('missions').select('*').order('created_at', { ascending: false }),
+        supabase.from('missions').select('*').eq('is_active', true).order('created_at', { ascending: false }),
         supabase.from('mission_participants').select('*'),
         supabase.from('mission_submissions').select('*'),
       ])

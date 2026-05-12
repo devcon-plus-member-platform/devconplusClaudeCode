@@ -44,11 +44,11 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`w-10 h-5 rounded-full transition-colors relative ${checked ? 'bg-blue' : 'bg-slate-200'}`}
+      className={`w-10 h-5 rounded-full transition-colors relative overflow-hidden ${checked ? 'bg-blue' : 'bg-slate-200'}`}
     >
       <span
-        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-          checked ? 'translate-x-5' : 'translate-x-0.5'
+        className={`absolute top-0.5 left-0 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
         }`}
       />
     </button>
@@ -1026,6 +1026,7 @@ interface MissionRow {
   difficulty: 'easy' | 'medium' | 'hard'
   status: 'available' | 'claimed'
   github_url: string | null
+  is_active: boolean
   created_at: string
 }
 
@@ -1046,6 +1047,7 @@ interface MissionForm {
   xp_reward: string
   difficulty: 'easy' | 'medium' | 'hard'
   github_url: string
+  is_active: boolean
 }
 
 const defaultMissionForm = (): MissionForm => ({
@@ -1054,6 +1056,7 @@ const defaultMissionForm = (): MissionForm => ({
   xp_reward: '100',
   difficulty: 'medium',
   github_url: '',
+  is_active: true,
 })
 
 const DIFF_COLORS = {
@@ -1122,6 +1125,7 @@ function MissionsTab() {
       xp_reward:   String(m.xp_reward),
       difficulty:  m.difficulty,
       github_url:  m.github_url ?? '',
+      is_active:   m.is_active,
     })
     setSlideOver('edit')
   }
@@ -1135,6 +1139,7 @@ function MissionsTab() {
       xp_reward:   parseInt(form.xp_reward, 10) || 100,
       difficulty:  form.difficulty,
       github_url:  form.github_url.trim() || null,
+      is_active:   form.is_active,
     }
     try {
       if (slideOver === 'create') {
@@ -1243,6 +1248,9 @@ function MissionsTab() {
                         claimed
                       </span>
                     )}
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${m.is_active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'}`}>
+                      {m.is_active ? 'Active' : 'Inactive'}
+                    </span>
                   </div>
                   <p className="text-md3-label-md text-slate-400 mt-0.5">+{m.xp_reward} XP</p>
                 </div>
@@ -1341,6 +1349,7 @@ function MissionsTab() {
             <label className={LABEL_CLS}>GitHub URL</label>
             <input className={INPUT_CLS} type="url" value={form.github_url} onChange={f('github_url')} placeholder="https://github.com/org/repo" />
           </div>
+          <ToggleRow label="Active" checked={form.is_active} onChange={(v) => setForm((p) => ({ ...p, is_active: v }))} />
         </SlideOver>
       )}
 
