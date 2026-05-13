@@ -202,12 +202,6 @@ export default function EventDetail() {
           </div>
         )}
 
-        {isExternal && (
-          <div className="bg-slate-100 rounded-xl px-3 py-2 text-center">
-            <p className="text-slate-500 text-md3-label-md font-medium">Registration</p>
-            <p className="text-slate-700 font-bold">Hosted externally</p>
-          </div>
-        )}
 
         {event.description && (
           <div>
@@ -316,14 +310,16 @@ export default function EventDetail() {
           */}
 
           {/* Future Volunteer CTA — shown to all visitors */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowVolunteerForm(true)}
-            className="w-full border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
-          >
-            <HeartOutline color="rgb(var(--color-primary))" size={20} />
-            Apply as Future Volunteer
-          </motion.button>
+          {!isExternal && (
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowVolunteerForm(true)}
+              className="w-full border border-primary text-primary font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
+            >
+              <HeartOutline color="rgb(var(--color-primary))" size={20} />
+              Apply as Future Volunteer
+            </motion.button>
+          )}
         </div>
       </div>
 

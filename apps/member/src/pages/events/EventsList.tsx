@@ -159,7 +159,7 @@ export default function EventsList() {
       case 'devcon_only':
         return events.filter((e) => !e.is_external && (!e.devcon_category || e.devcon_category === 'devcon'))
       case 'featured':
-        return events.filter((e) => e.is_featured)
+        return events.filter((e) => e.is_featured || (e.is_external && e.visibility === 'public'))
       default:
         return events
     }
@@ -484,11 +484,7 @@ export default function EventsList() {
                         )}
 
                         <div className="flex items-center gap-2">
-                          {isExternal ? (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-[100px]">
-                              External
-                            </span>
-                          ) : (
+                          {!isExternal && (
                             <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-[100px]">
                               +{event.points_value} pts
                             </span>
