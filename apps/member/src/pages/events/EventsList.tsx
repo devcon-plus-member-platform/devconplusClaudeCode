@@ -144,8 +144,18 @@ export default function EventsList() {
   const typeFilteredEvents = useMemo(() => {
     switch (eventFilter) {
       case 'near_you':
-        if (regionChapterIds.size > 0) return events.filter((e) => e.chapter_id && regionChapterIds.has(e.chapter_id))
-        return user?.chapter_id ? events.filter((e) => e.chapter_id === user.chapter_id) : events
+        if (regionChapterIds.size > 0) {
+          return events.filter((e) =>
+            (e.is_external && e.visibility === 'public') ||
+            (e.chapter_id && regionChapterIds.has(e.chapter_id))
+          )
+        }
+        return user?.chapter_id
+          ? events.filter((e) =>
+              (e.is_external && e.visibility === 'public') ||
+              e.chapter_id === user.chapter_id
+            )
+          : events
       case 'devcon_only':
         return events.filter((e) => !e.is_external && (!e.devcon_category || e.devcon_category === 'devcon'))
       case 'featured':

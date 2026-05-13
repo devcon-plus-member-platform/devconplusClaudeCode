@@ -18,7 +18,10 @@ export function OrgEventsList() {
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
-  const chapterEvents  = events.filter((e) => e.chapter_id === (user?.chapter_id ?? null))
+  const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
+  const chapterEvents  = isAdmin
+    ? events
+    : events.filter((e) => e.chapter_id === (user?.chapter_id ?? null))
   const upcomingEvents = chapterEvents.filter((e) => !isEventArchived(e))
   const pastEvents     = chapterEvents.filter((e) => isEventArchived(e))
   const displayEvents  = activeTab === 'upcoming' ? upcomingEvents : pastEvents
