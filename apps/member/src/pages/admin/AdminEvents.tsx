@@ -311,6 +311,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     if (isExternal) {
       setValue('points_value', 0)
       setValue('requires_approval', false)
+      setValue('visibility', 'public')
       setValue('url_is_tba', urlIsTba)
       if (urlIsTba) {
         setValue('external_registration_url', '')
@@ -334,6 +335,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         end_date: data.end_date ?? null,
         capacity: data.capacity ?? null,
         external_registration_url: isExternalEvent ? externalUrl : null,
+        visibility: isExternalEvent ? 'public' : data.visibility,
         points_value: isExternalEvent ? 0 : data.points_value,
         requires_approval: isExternalEvent ? false : data.requires_approval,
         custom_form_schema: isExternalEvent ? null : schema,
@@ -595,31 +597,33 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         </div>
 
         {/* ── Visibility ── */}
-        <div className="border-t border-slate-100 pt-4 mt-4">
-          <label className={labelClass}>Visibility</label>
-          <Controller
-            control={control}
-            name="visibility"
-            render={({ field }) => (
-              <div className="flex rounded-xl border border-slate-200 overflow-hidden">
-                {VISIBILITY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => field.onChange(opt.value)}
-                    className={`flex-1 py-2 text-md3-label-md font-semibold transition-colors ${
-                      field.value === opt.value
-                        ? 'bg-blue text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          />
-        </div>
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <label className={labelClass}>Visibility</label>
+            <Controller
+              control={control}
+              name="visibility"
+              render={({ field }) => (
+                <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                  {VISIBILITY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => field.onChange(opt.value)}
+                      className={`flex-1 py-2 text-md3-label-md font-semibold transition-colors ${
+                        field.value === opt.value
+                          ? 'bg-blue text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+          </div>
+        )}
 
         {/* ── Requires Approval ── */}
         {!isExternal && (
@@ -743,23 +747,6 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             )}
             <p className="text-md3-label-md text-slate-400 mt-1">
               Members earn this many XP when checked in at the event.
-            </p>
-          </div>
-        )}
-
-        {isExternal && (
-          <div className="border-t border-slate-100 pt-4 mt-4">
-            <label className={labelClass}>XP Points Value</label>
-            <input
-              value="0"
-              readOnly
-              className={`${inputClass} bg-slate-100 text-slate-500`}
-            />
-            {errors.points_value && (
-              <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
-            )}
-            <p className="text-md3-label-md text-slate-400 mt-1">
-              External events do not award XP.
             </p>
           </div>
         )}
