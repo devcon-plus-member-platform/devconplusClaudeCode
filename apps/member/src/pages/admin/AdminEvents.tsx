@@ -69,7 +69,12 @@ const eventSchema = z
       'networking',
     ]),
     is_external: z.boolean().default(false),
-    external_registration_url: z.string().url('Enter a valid URL').optional().or(z.literal('')),
+    external_registration_url: z
+      .string()
+      .url('Enter a valid URL')
+      .optional()
+      .or(z.literal('')),
+    url_is_tba: z.boolean().default(false),
     visibility: z.enum(['public', 'unlisted', 'draft']).default('public'),
     is_free: z.boolean().default(true),
     ticket_price_php: z.number({ coerce: true }).int().min(0).default(0),
@@ -92,7 +97,7 @@ const eventSchema = z
       })
     }
     if (data.is_external) {
-      if (!data.external_registration_url) {
+      if (!data.url_is_tba && (!data.external_registration_url || data.external_registration_url === '')) {
         ctx.addIssue({
           code: 'custom',
           path: ['external_registration_url'],
@@ -116,6 +121,8 @@ const eventSchema = z
   })
 
 type EventFormData = z.infer<typeof eventSchema>
+
+const normalizeExternalUrl = (value?: string | null) => (value === 'tba' ? '' : (value ?? ''))
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -272,7 +279,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           end_date:          event.end_date?.slice(0, 16) ?? '',
           category:          event.category ?? 'tech_talk',
           is_external:       event.is_external ?? false,
-          external_registration_url: event.external_registration_url ?? '',
+          external_registration_url: normalizeExternalUrl(event.external_registration_url),
+          url_is_tba:        normalizeExternalUrl(event.external_registration_url) === '',
           visibility:        event.visibility ?? 'public',
           is_free:           event.is_free ?? true,
           ticket_price_php:  event.ticket_price_php ?? 0,
@@ -287,28 +295,42 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           ticket_price_php:  0,
           is_external:       false,
           external_registration_url: '',
+          url_is_tba:        true,
           visibility:        'public',
         },
   })
 
   const isFree = watch('is_free')
   const isExternal = watch('is_external')
+  const [urlIsTba, setUrlIsTba] = useState<boolean>(() => {
+    const existing = normalizeExternalUrl(event?.external_registration_url)
+    return existing === ''
+  })
 
   useEffect(() => {
     if (isExternal) {
       setValue('points_value', 0)
       setValue('requires_approval', false)
+      setValue('url_is_tba', urlIsTba)
+      if (urlIsTba) {
+        setValue('external_registration_url', '')
+      }
+    } else {
+      setValue('external_registration_url', '')
+      setValue('url_is_tba', true)
+      setUrlIsTba(true)
     }
-  }, [isExternal, setValue])
+  }, [isExternal, setValue, urlIsTba])
 
   const onSubmit = async (data: EventFormData) => {
     setSubmitError(null)
     try {
       const schema = customFields.length > 0 ? customFields : null
       const isExternalEvent = data.is_external === true
-      const externalUrl = data.external_registration_url?.trim() || null
+      const externalUrl = data.url_is_tba ? null : (data.external_registration_url?.trim() || null)
+      const { url_is_tba: _urlIsTba, ...rest } = data
       const payload = {
-        ...data,
+        ...rest,
         end_date: data.end_date ?? null,
         capacity: data.capacity ?? null,
         external_registration_url: isExternalEvent ? externalUrl : null,
@@ -443,15 +465,65 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           </div>
 
           {isExternal && (
-            <div className="mt-3">
-              <label className={labelClass}>External Registration URL</label>
-              <input
-                {...register('external_registration_url')}
-                className={inputClass}
-                placeholder="https://..."
-              />
-              {errors.external_registration_url && (
-                <p className="text-md3-label-md text-red mt-1">{errors.external_registration_url.message}</p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className={labelClass}>External Registration URL</label>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUrlIsTba(true)
+                      setValue('external_registration_url', '', { shouldValidate: true })
+                      setValue('url_is_tba', true, { shouldValidate: false })
+                    }}
+                    className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                      urlIsTba
+                        ? 'bg-blue text-white border-blue'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                    }`}
+                  >
+                    TBA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUrlIsTba(false)
+                      setValue('url_is_tba', false, { shouldValidate: false })
+                    }}
+                    className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                      !urlIsTba
+                        ? 'bg-blue text-white border-blue'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                    }`}
+                  >
+                    Has URL
+                  </button>
+                </div>
+              </div>
+
+              {urlIsTba ? (
+                <div className="space-y-2">
+                  <input
+                    disabled
+                    className={`${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed`}
+                    value="TBA"
+                    aria-label="External registration URL is TBA"
+                  />
+                  <p className="text-md3-label-md text-slate-400">
+                    Members will see a "Coming Soon" button until you add the registration link.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    {...register('external_registration_url')}
+                    className={inputClass}
+                    placeholder="https://..."
+                  />
+                  {errors.external_registration_url && (
+                    <p className="text-md3-label-md text-red mt-1">{errors.external_registration_url.message}</p>
+                  )}
+                </div>
               )}
             </div>
           )}
