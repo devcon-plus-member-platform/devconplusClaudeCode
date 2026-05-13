@@ -482,7 +482,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
                     }`}
                   >
-                    TBA
+                    To Be Announced
                   </button>
                   <button
                     type="button"
@@ -496,23 +496,15 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
                     }`}
                   >
-                    Has URL
+                    Provide URL
                   </button>
                 </div>
               </div>
 
               {urlIsTba ? (
-                <div className="space-y-2">
-                  <input
-                    disabled
-                    className={`${inputClass} bg-slate-100 text-slate-500 cursor-not-allowed`}
-                    value="TBA"
-                    aria-label="External registration URL is TBA"
-                  />
-                  <p className="text-md3-label-md text-slate-400">
-                    Members will see a "Coming Soon" button until you add the registration link.
-                  </p>
-                </div>
+                <p className="text-md3-label-md text-slate-400">
+                  The registration link will be shown once it is available.
+                </p>
               ) : (
                 <div>
                   <input
