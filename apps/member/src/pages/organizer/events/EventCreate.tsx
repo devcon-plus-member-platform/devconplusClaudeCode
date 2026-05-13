@@ -39,6 +39,7 @@ type EventCreateDraft = FormData & {
   customFields: CustomFormField[]
   is_external: boolean
   external_registration_url: string
+  url_is_tba: boolean
 }
 
 export function OrgEventCreate() {
@@ -87,8 +88,11 @@ export function OrgEventCreate() {
   const [isExternal, setIsExternal] = useState<boolean>(
     (draft.is_external as boolean) ?? false,
   )
+  // "tba" sentinel means external but URL not yet known
+  const savedUrl = (draft.external_registration_url as string) ?? ''
+  const [urlIsTba, setUrlIsTba] = useState<boolean>(savedUrl === 'tba' || savedUrl === '')
   const [externalUrl, setExternalUrl] = useState<string>(
-    (draft.external_registration_url as string) ?? '',
+    savedUrl === 'tba' ? '' : savedUrl,
   )
   const [externalUrlError, setExternalUrlError] = useState<string | null>(null)
 
@@ -138,16 +142,16 @@ export function OrgEventCreate() {
   // Save RHF fields → draft whenever any field changes
   useEffect(() => {
     const { unsubscribe } = watch((values) => {
-      saveDraft({ ...(values as Partial<FormData>), tags, visibility, customFields, is_external: isExternal, external_registration_url: externalUrl })
+      saveDraft({ ...(values as Partial<FormData>), tags, visibility, customFields, is_external: isExternal, external_registration_url: urlIsTba ? 'tba' : externalUrl, url_is_tba: urlIsTba })
     })
     return unsubscribe
-  }, [watch, saveDraft, tags, visibility, customFields, isExternal, externalUrl])
+  }, [watch, saveDraft, tags, visibility, customFields, isExternal, externalUrl, urlIsTba])
 
   // Save outside-RHF state → draft whenever tags/visibility/customFields/external change
   useEffect(() => {
-    saveDraft({ ...getValues(), tags, visibility, customFields, is_external: isExternal, external_registration_url: externalUrl })
+    saveDraft({ ...getValues(), tags, visibility, customFields, is_external: isExternal, external_registration_url: urlIsTba ? 'tba' : externalUrl, url_is_tba: urlIsTba })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tags, visibility, customFields, isExternal, externalUrl])
+  }, [tags, visibility, customFields, isExternal, externalUrl, urlIsTba])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -224,9 +228,9 @@ export function OrgEventCreate() {
       setSubmitError('Your account is not linked to a chapter. Contact an admin.')
       return
     }
-    if (isExternal) {
+    if (isExternal && !urlIsTba) {
       if (!externalUrl.trim()) {
-        setExternalUrlError('External registration URL is required.')
+        setExternalUrlError('Enter a valid URL or switch to TBA.')
         return
       }
       try {
@@ -279,7 +283,7 @@ export function OrgEventCreate() {
         requires_approval:           data.requires_approval,
         is_chapter_locked:           data.is_chapter_locked,
         is_external:                 isExternal,
-        external_registration_url:   isExternal ? (externalUrl.trim() || null) : null,
+        external_registration_url:   isExternal ? (urlIsTba ? 'tba' : externalUrl.trim()) : null,
         cover_image_url,
         chapter_id:                  chapterId,
         created_by:                  user.id,
@@ -641,30 +645,57 @@ export function OrgEventCreate() {
               </div>
             </div>
 
-            {/* External URL + coming-soon option */}
+            {/* External URL — TBA toggle + URL input */}
             {isExternal && (
-              <div className="space-y-2">
-                <label className={labelClass}>
-                  Registration URL{' '}
-                  <span className="text-slate-300 normal-case font-normal">leave blank to show Coming Soon</span>
-                </label>
-                <input
-                  type="url"
-                  value={externalUrl}
-                  onChange={(e) => {
-                    setExternalUrl(e.target.value)
-                    if (externalUrlError) setExternalUrlError(null)
-                  }}
-                  className={inputClass}
-                  placeholder="https://example.com/register (optional)"
-                />
-                {externalUrlError && (
-                  <p className="text-md3-label-md text-red mt-1">{externalUrlError}</p>
-                )}
-                {!externalUrl.trim() && (
-                  <p className="text-md3-label-md text-slate-400 mt-1">
-                    No URL entered — members will see a "Coming Soon" message when they tap Register.
+              <div className="space-y-3">
+                <div>
+                  <label className={labelClass}>Registration URL</label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { setUrlIsTba(true); setExternalUrl(''); setExternalUrlError(null) }}
+                      className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                        urlIsTba
+                          ? 'bg-blue text-white border-blue'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                      }`}
+                    >
+                      TBA
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUrlIsTba(false)}
+                      className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                        !urlIsTba
+                          ? 'bg-blue text-white border-blue'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                      }`}
+                    >
+                      Has URL
+                    </button>
+                  </div>
+                </div>
+
+                {urlIsTba ? (
+                  <p className="text-md3-label-md text-slate-400">
+                    Members will see a "Coming Soon" button until you add the registration link.
                   </p>
+                ) : (
+                  <div>
+                    <input
+                      type="url"
+                      value={externalUrl}
+                      onChange={(e) => {
+                        setExternalUrl(e.target.value)
+                        if (externalUrlError) setExternalUrlError(null)
+                      }}
+                      className={inputClass}
+                      placeholder="https://example.com/register"
+                    />
+                    {externalUrlError && (
+                      <p className="text-md3-label-md text-red mt-1">{externalUrlError}</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}

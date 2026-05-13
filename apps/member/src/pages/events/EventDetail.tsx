@@ -7,7 +7,6 @@ import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase } from '../../lib/supabase'
 import NotFound from '../NotFound'
-import ComingSoonModal from '../../components/ComingSoonModal'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
 
@@ -65,7 +64,6 @@ export default function EventDetail() {
   const isExternal = event?.is_external === true
 
   const [shareToast, setShareToast] = useState(false)
-  const [comingSoonOpen, setComingSoonOpen] = useState(false)
   const [eventChapterName, setEventChapterName] = useState<string | null>(null)
   useEffect(() => {
     if (isChapterLocked && event?.chapter_id) {
@@ -116,8 +114,10 @@ export default function EventDetail() {
   const registerPath = `/events/${slug}/register`
   const externalUrl = event.external_registration_url ?? ''
 
+  const externalIsTba = externalUrl === 'tba' || externalUrl === ''
+
   const handleExternalRegistration = () => {
-    if (!externalUrl) return
+    if (externalIsTba) return
     window.open(externalUrl, '_blank', 'noopener,noreferrer')
   }
 
@@ -219,19 +219,19 @@ export default function EventDetail() {
         {/* CTA based on auth + registration state */}
         <div className="pt-2 space-y-3">
           {isExternal ? (
-            externalUrl ? (
+            externalIsTba ? (
+              <button
+                disabled
+                className="w-full bg-slate-200 text-slate-400 font-bold py-4 rounded-2xl cursor-not-allowed"
+              >
+                Registration Coming Soon
+              </button>
+            ) : (
               <button
                 onClick={handleExternalRegistration}
                 className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
               >
                 Open Registration
-              </button>
-            ) : (
-              <button
-                onClick={() => setComingSoonOpen(true)}
-                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
-              >
-                Register — Coming Soon
               </button>
             )
           ) : !user ? (
@@ -374,13 +374,6 @@ export default function EventDetail() {
           </>
         )}
       </AnimatePresence>
-
-      {comingSoonOpen && (
-        <ComingSoonModal
-          onClose={() => setComingSoonOpen(false)}
-          feature="External registration for this event"
-        />
-      )}
     </motion.div>
   )
 }

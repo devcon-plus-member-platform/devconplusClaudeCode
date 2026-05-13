@@ -156,7 +156,7 @@ export default function EventRegister() {
   useEffect(() => {
     if (!event || !user) return
     if (event.is_external) {
-      if (externalUrl) {
+      if (externalUrl && externalUrl !== 'tba') {
         window.open(externalUrl, '_blank', 'noopener,noreferrer')
       }
       navigate(`/events/${slug}`, { replace: true })
