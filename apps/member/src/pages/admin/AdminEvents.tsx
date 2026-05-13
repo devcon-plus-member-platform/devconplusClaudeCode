@@ -327,7 +327,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     try {
       const schema = customFields.length > 0 ? customFields : null
       const isExternalEvent = data.is_external === true
-      const externalUrl = data.url_is_tba ? null : (data.external_registration_url?.trim() || null)
+      const externalUrl = data.url_is_tba ? 'tba' : (data.external_registration_url?.trim() || null)
       const { url_is_tba: _urlIsTba, ...rest } = data
       const payload = {
         ...rest,
