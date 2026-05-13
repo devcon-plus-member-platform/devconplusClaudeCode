@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline } from 'solar-icon-set'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -222,6 +222,7 @@ interface SlideOverFormProps {
 
 function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOverFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
   // ── Custom form fields state ─────────────────────────────────────────────────
   const [customFields, setCustomFields] = useState<CustomFormField[]>(() => {
@@ -229,6 +230,18 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     return Array.isArray(raw) ? (raw as CustomFormField[]) : []
   })
   const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({})
+
+  // ── Cover image ──────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(event?.cover_image_url ?? null)
+  const coverObjectUrlRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (coverObjectUrlRef.current) URL.revokeObjectURL(coverObjectUrlRef.current)
+    }
+  }, [])
 
   const addField = () =>
     setCustomFields(prev => [...prev, {
@@ -258,6 +271,39 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     const field = customFields.find(f => f.id === fieldId)
     if (!field) return
     updateField(fieldId, { options: field.options.filter((_, i) => i !== index) })
+  }
+
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setCoverUploadError('Only JPG, PNG, or WebP images are allowed.')
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setCoverUploadError('Image must be under 5 MB.')
+      return
+    }
+    if (coverObjectUrlRef.current) URL.revokeObjectURL(coverObjectUrlRef.current)
+    setCoverFile(file)
+    setCoverUploadError(null)
+    const url = URL.createObjectURL(file)
+    coverObjectUrlRef.current = url
+    setCoverPreview(url)
+  }
+
+  const removeCover = () => {
+    if (coverObjectUrlRef.current) {
+      URL.revokeObjectURL(coverObjectUrlRef.current)
+      coverObjectUrlRef.current = null
+    }
+    setCoverFile(null)
+    setCoverPreview(null)
+    setCoverUploadError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const {
@@ -325,11 +371,36 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
   const onSubmit = async (data: EventFormData) => {
     setSubmitError(null)
+    setCoverUploadError(null)
     try {
       const schema = customFields.length > 0 ? customFields : null
       const isExternalEvent = data.is_external === true
       const externalUrl = data.url_is_tba ? 'tba' : (data.external_registration_url?.trim() || null)
       const { url_is_tba: _urlIsTba, ...rest } = data
+
+      let cover_image_url: string | null = coverPreview
+        ? (coverFile ? null : (event?.cover_image_url ?? null))
+        : null
+
+      if (coverFile) {
+        const { data: authData } = await supabase.auth.getUser()
+        const userId = authData.user?.id ?? 'admin'
+        const safeName = coverFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100)
+        const path = `${userId}/${Date.now()}-${safeName}`
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('event-covers')
+          .upload(path, coverFile)
+        if (uploadError) {
+          setCoverUploadError('Cover image upload failed — saving without image change.')
+          cover_image_url = event?.cover_image_url ?? null
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('event-covers')
+            .getPublicUrl(uploadData.path)
+          cover_image_url = urlData.publicUrl
+        }
+      }
+
       const payload = {
         ...rest,
         end_date: data.end_date ?? null,
@@ -339,6 +410,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         points_value: isExternalEvent ? 0 : data.points_value,
         requires_approval: isExternalEvent ? false : data.requires_approval,
         custom_form_schema: isExternalEvent ? null : schema,
+        cover_image_url,
       }
       if (mode === 'create') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
@@ -348,7 +420,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             ...payload,
             status:             'upcoming',
             tags:               [],
-            cover_image_url:    null,
+            cover_image_url,
             created_by:         null,
             is_featured:        false,
             is_promoted:        false,
@@ -442,6 +514,48 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               <p className="text-md3-label-md text-red mt-1">{errors.description.message}</p>
             )}
           </div>
+        </div>
+
+        {/* ── Cover Image ── */}
+        <div className="border-t border-slate-100 pt-4 mt-4">
+          <label className={labelClass}>
+            Cover Image <span className="text-slate-300 normal-case font-normal">optional</span>
+          </label>
+
+          {coverPreview ? (
+            <div className="relative rounded-xl overflow-hidden mb-3 border border-slate-200">
+              <img
+                src={coverPreview}
+                alt="Cover preview"
+                className="w-full h-44 object-cover"
+              />
+              <button
+                type="button"
+                onClick={removeCover}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center"
+              >
+                <CloseCircleLineDuotone className="w-4 h-4" color="#EF4444" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full h-36 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-blue hover:text-blue transition-colors"
+            >
+              <GalleryAddOutline className="w-6 h-6" />
+              <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
+              <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
+            </button>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
         </div>
 
         {/* ── External Event Toggle ── */}
@@ -897,6 +1011,12 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         {submitError && (
           <p className="text-md3-label-md text-red bg-red/5 border border-red/20 rounded-xl px-3 py-2">
             {submitError}
+          </p>
+        )}
+
+        {coverUploadError && (
+          <p className="text-md3-label-md text-red bg-red/5 border border-red/20 rounded-xl px-3 py-2">
+            {coverUploadError}
           </p>
         )}
 
