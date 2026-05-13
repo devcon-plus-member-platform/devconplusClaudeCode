@@ -7,6 +7,7 @@ import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase } from '../../lib/supabase'
 import NotFound from '../NotFound'
+import ComingSoonModal from '../../components/ComingSoonModal'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
 
@@ -64,6 +65,7 @@ export default function EventDetail() {
   const isExternal = event?.is_external === true
 
   const [shareToast, setShareToast] = useState(false)
+  const [comingSoonOpen, setComingSoonOpen] = useState(false)
   const [eventChapterName, setEventChapterName] = useState<string | null>(null)
   useEffect(() => {
     if (isChapterLocked && event?.chapter_id) {
@@ -217,13 +219,21 @@ export default function EventDetail() {
         {/* CTA based on auth + registration state */}
         <div className="pt-2 space-y-3">
           {isExternal ? (
-            <button
-              onClick={handleExternalRegistration}
-              disabled={!externalUrl}
-              className="w-full bg-primary text-white font-bold py-4 rounded-2xl disabled:opacity-50"
-            >
-              Open Registration
-            </button>
+            externalUrl ? (
+              <button
+                onClick={handleExternalRegistration}
+                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+              >
+                Open Registration
+              </button>
+            ) : (
+              <button
+                onClick={() => setComingSoonOpen(true)}
+                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+              >
+                Register — Coming Soon
+              </button>
+            )
           ) : !user ? (
             /* Public / unauthenticated view */
             <div className="space-y-2">
@@ -364,6 +374,13 @@ export default function EventDetail() {
           </>
         )}
       </AnimatePresence>
+
+      {comingSoonOpen && (
+        <ComingSoonModal
+          onClose={() => setComingSoonOpen(false)}
+          feature="External registration for this event"
+        />
+      )}
     </motion.div>
   )
 }

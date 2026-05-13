@@ -37,6 +37,8 @@ type EventCreateDraft = FormData & {
   tags: string[]
   visibility: 'public' | 'unlisted' | 'draft'
   customFields: CustomFormField[]
+  is_external: boolean
+  external_registration_url: string
 }
 
 export function OrgEventCreate() {
@@ -80,6 +82,15 @@ export function OrgEventCreate() {
   const [customFields, setCustomFields] = useState<CustomFormField[]>(
     (draft.customFields as CustomFormField[]) ?? [],
   )
+
+  // External event
+  const [isExternal, setIsExternal] = useState<boolean>(
+    (draft.is_external as boolean) ?? false,
+  )
+  const [externalUrl, setExternalUrl] = useState<string>(
+    (draft.external_registration_url as string) ?? '',
+  )
+  const [externalUrlError, setExternalUrlError] = useState<string | null>(null)
 
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -127,16 +138,16 @@ export function OrgEventCreate() {
   // Save RHF fields → draft whenever any field changes
   useEffect(() => {
     const { unsubscribe } = watch((values) => {
-      saveDraft({ ...(values as Partial<FormData>), tags, visibility, customFields })
+      saveDraft({ ...(values as Partial<FormData>), tags, visibility, customFields, is_external: isExternal, external_registration_url: externalUrl })
     })
     return unsubscribe
-  }, [watch, saveDraft, tags, visibility, customFields])
+  }, [watch, saveDraft, tags, visibility, customFields, isExternal, externalUrl])
 
-  // Save outside-RHF state → draft whenever tags/visibility/customFields change
+  // Save outside-RHF state → draft whenever tags/visibility/customFields/external change
   useEffect(() => {
-    saveDraft({ ...getValues(), tags, visibility, customFields })
+    saveDraft({ ...getValues(), tags, visibility, customFields, is_external: isExternal, external_registration_url: externalUrl })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tags, visibility, customFields])
+  }, [tags, visibility, customFields, isExternal, externalUrl])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -213,7 +224,20 @@ export function OrgEventCreate() {
       setSubmitError('Your account is not linked to a chapter. Contact an admin.')
       return
     }
+    if (isExternal) {
+      if (!externalUrl.trim()) {
+        setExternalUrlError('External registration URL is required.')
+        return
+      }
+      try {
+        new URL(externalUrl.trim())
+      } catch {
+        setExternalUrlError('Please enter a valid URL (e.g. https://example.com).')
+        return
+      }
+    }
     setSubmitError(null)
+    setExternalUrlError(null)
     setCoverUploadError(null)
 
     // Upload cover image (non-blocking on failure)
@@ -238,26 +262,28 @@ export function OrgEventCreate() {
 
     try {
       await createEvent({
-        title:               data.title,
-        description:         data.description,
-        location:            data.location,
-        event_date:          data.event_date,
-        end_date:            data.end_date ?? null,
-        category:            data.category,
-        devcon_category:     data.devcon_category,
+        title:                       data.title,
+        description:                 data.description,
+        location:                    data.location,
+        event_date:                  data.event_date,
+        end_date:                    data.end_date ?? null,
+        category:                    data.category,
+        devcon_category:             data.devcon_category,
         tags,
-        visibility,
-        is_free:             data.is_free,
-        ticket_price_php:    data.is_free ? 0 : data.ticket_price_php,
-        capacity:            data.capacity ?? null,
-        points_value:        data.points_value,
-        volunteer_points:    data.volunteer_points,
-        requires_approval:   data.requires_approval,
-        is_chapter_locked:   data.is_chapter_locked,
+        visibility:                  isExternal ? 'public' : visibility,
+        is_free:                     isExternal ? true : data.is_free,
+        ticket_price_php:            isExternal ? 0 : (data.is_free ? 0 : data.ticket_price_php),
+        capacity:                    isExternal ? null : (data.capacity ?? null),
+        points_value:                isExternal ? 0 : data.points_value,
+        volunteer_points:            isExternal ? 0 : data.volunteer_points,
+        requires_approval:           data.requires_approval,
+        is_chapter_locked:           data.is_chapter_locked,
+        is_external:                 isExternal,
+        external_registration_url:   isExternal ? (externalUrl.trim() || null) : null,
         cover_image_url,
-        chapter_id:          chapterId,
-        created_by:          user.id,
-        custom_form_schema:  customFields.length > 0 ? customFields as unknown as Json : null,
+        chapter_id:                  chapterId,
+        created_by:                  user.id,
+        custom_form_schema:          customFields.length > 0 ? customFields as unknown as Json : null,
       })
       clearDraft()
       navigate('/organizer/events')
@@ -586,26 +612,85 @@ export function OrgEventCreate() {
         <motion.div variants={fadeUp}>
           <SectionHeader title="Access Settings" />
           <div className="space-y-4">
-            {/* Visibility segmented control */}
-            <div>
-              <label className={labelClass}>Visibility</label>
-              <div className="flex rounded-xl border border-slate-200 overflow-hidden">
-                {VISIBILITY_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setVisibility(opt.value)}
-                    className={`flex-1 py-2 text-md3-label-md font-semibold transition-colors ${
-                      visibility === opt.value
-                        ? 'bg-blue text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+
+            {/* External event toggle */}
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <input
+                type="checkbox"
+                id="is_external"
+                checked={isExternal}
+                onChange={(e) => {
+                  setIsExternal(e.target.checked)
+                  if (!e.target.checked) {
+                    setExternalUrl('')
+                    setExternalUrlError(null)
+                  }
+                }}
+                className="w-4 h-4 accent-blue rounded"
+              />
+              <div>
+                <label
+                  htmlFor="is_external"
+                  className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+                >
+                  External Registration
+                </label>
+                <p className="text-md3-label-md text-slate-400 mt-0.5">
+                  Members will be redirected to an external site to register. Ticket price, capacity, and XP are managed there.
+                </p>
               </div>
             </div>
+
+            {/* External URL + coming-soon option */}
+            {isExternal && (
+              <div className="space-y-2">
+                <label className={labelClass}>
+                  Registration URL{' '}
+                  <span className="text-slate-300 normal-case font-normal">leave blank to show Coming Soon</span>
+                </label>
+                <input
+                  type="url"
+                  value={externalUrl}
+                  onChange={(e) => {
+                    setExternalUrl(e.target.value)
+                    if (externalUrlError) setExternalUrlError(null)
+                  }}
+                  className={inputClass}
+                  placeholder="https://example.com/register (optional)"
+                />
+                {externalUrlError && (
+                  <p className="text-md3-label-md text-red mt-1">{externalUrlError}</p>
+                )}
+                {!externalUrl.trim() && (
+                  <p className="text-md3-label-md text-slate-400 mt-1">
+                    No URL entered — members will see a "Coming Soon" message when they tap Register.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Visibility segmented control — hidden for external events */}
+            {!isExternal && (
+              <div>
+                <label className={labelClass}>Visibility</label>
+                <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                  {VISIBILITY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setVisibility(opt.value)}
+                      className={`flex-1 py-2 text-md3-label-md font-semibold transition-colors ${
+                        visibility === opt.value
+                          ? 'bg-blue text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Requires approval toggle */}
             <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
@@ -649,126 +734,132 @@ export function OrgEventCreate() {
               </div>
             </div>
 
-            {/* TicketOutline price toggle */}
-            <div>
-              <label className={labelClass}>Ticket Price</label>
-              <div className="flex gap-3">
-                <Controller
-                  control={control}
-                  name="is_free"
-                  render={({ field }) => (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => field.onChange(true)}
-                        className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                          field.value
-                            ? 'bg-blue text-white border-blue'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                        }`}
-                      >
-                        Free
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => field.onChange(false)}
-                        className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                          !field.value
-                            ? 'bg-blue text-white border-blue'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                        }`}
-                      >
-                        Paid
-                      </button>
-                    </>
-                  )}
+            {/* Ticket price — hidden for external events */}
+            {!isExternal && (
+              <div>
+                <label className={labelClass}>Ticket Price</label>
+                <div className="flex gap-3">
+                  <Controller
+                    control={control}
+                    name="is_free"
+                    render={({ field }) => (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(true)}
+                          className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                            field.value
+                              ? 'bg-blue text-white border-blue'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                          }`}
+                        >
+                          Free
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(false)}
+                          className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                            !field.value
+                              ? 'bg-blue text-white border-blue'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                          }`}
+                        >
+                          Paid
+                        </button>
+                      </>
+                    )}
+                  />
+                </div>
+
+                {!isFree && (
+                  <div className="mt-3">
+                    <label className={labelClass}>Price (PHP)</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
+                        ₱
+                      </span>
+                      <input
+                        {...register('ticket_price_php')}
+                        type="number"
+                        min={1}
+                        step={1}
+                        className={`${inputClass} pl-8`}
+                        placeholder="0"
+                      />
+                    </div>
+                    {errors.ticket_price_php && (
+                      <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Capacity — hidden for external events */}
+            {!isExternal && (
+              <div>
+                <label className={labelClass}>
+                  Capacity <span className="text-slate-300 normal-case font-normal">optional</span>
+                </label>
+                <input
+                  {...register('capacity')}
+                  type="number"
+                  min={1}
+                  step={1}
+                  className={inputClass}
+                  placeholder="Unlimited"
                 />
+                {errors.capacity && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* ── ENGAGEMENT — hidden for external events ── */}
+        {!isExternal && (
+          <motion.div variants={fadeUp}>
+            <SectionHeader title="Engagement" />
+            <div className="space-y-4">
+              <div>
+                <label className={labelClass}>Attendance XP</label>
+                <input
+                  {...register('points_value')}
+                  type="number"
+                  className={inputClass}
+                  min={1}
+                  max={1000}
+                  step={1}
+                />
+                {errors.points_value && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
+                )}
+                <p className="text-md3-label-md text-slate-400 mt-1">
+                  Auto-set based on category — Tech Talk/Social/Networking = 5 pts, Workshop/Brown Bag/Hackathon = 150 pts.
+                </p>
               </div>
 
-              {!isFree && (
-                <div className="mt-3">
-                  <label className={labelClass}>Price (PHP)</label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
-                      ₱
-                    </span>
-                    <input
-                      {...register('ticket_price_php')}
-                      type="number"
-                      min={1}
-                      step={1}
-                      className={`${inputClass} pl-8`}
-                      placeholder="0"
-                    />
-                  </div>
-                  {errors.ticket_price_php && (
-                    <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
-                  )}
-                </div>
-              )}
+              <div>
+                <label className={labelClass}>Volunteer XP</label>
+                <input
+                  {...register('volunteer_points')}
+                  type="number"
+                  className={inputClass}
+                  min={0}
+                  max={1000}
+                  step={1}
+                />
+                {errors.volunteer_points && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.volunteer_points.message}</p>
+                )}
+                <p className="text-md3-label-md text-slate-400 mt-1">
+                  XP awarded on top of attendance XP for members who volunteer at this event. Default: 500 pts.
+                </p>
+              </div>
             </div>
-
-            {/* Capacity */}
-            <div>
-              <label className={labelClass}>
-                Capacity <span className="text-slate-300 normal-case font-normal">optional</span>
-              </label>
-              <input
-                {...register('capacity')}
-                type="number"
-                min={1}
-                step={1}
-                className={inputClass}
-                placeholder="Unlimited"
-              />
-              {errors.capacity && (
-                <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>
-              )}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ── ENGAGEMENT ── */}
-        <motion.div variants={fadeUp}>
-          <SectionHeader title="Engagement" />
-          <div className="space-y-4">
-            <div>
-              <label className={labelClass}>Attendance XP</label>
-              <input
-                {...register('points_value')}
-                type="number"
-                className={inputClass}
-                min={1}
-                max={1000}
-                step={1}
-              />
-              {errors.points_value && (
-                <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
-              )}
-              <p className="text-md3-label-md text-slate-400 mt-1">
-                Auto-set based on category — Tech Talk/Social/Networking = 5 pts, Workshop/Brown Bag/Hackathon = 150 pts.
-              </p>
-            </div>
-
-            <div>
-              <label className={labelClass}>Volunteer XP</label>
-              <input
-                {...register('volunteer_points')}
-                type="number"
-                className={inputClass}
-                min={0}
-                max={1000}
-                step={1}
-              />
-              {errors.volunteer_points && (
-                <p className="text-md3-label-md text-red mt-1">{errors.volunteer_points.message}</p>
-              )}
-              <p className="text-md3-label-md text-slate-400 mt-1">
-                XP awarded on top of attendance XP for members who volunteer at this event. Default: 500 pts.
-              </p>
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
         {/* ── REGISTRATION QUESTIONS ── */}
         <motion.div variants={fadeUp}>
