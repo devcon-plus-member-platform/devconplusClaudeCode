@@ -128,6 +128,8 @@ export interface Event {
   is_promoted: boolean
   slug: string
   is_chapter_locked: boolean | null
+  is_external: boolean | null
+  external_registration_url: string | null
   cover_image_url: string | null
   created_by: string
   created_at: string

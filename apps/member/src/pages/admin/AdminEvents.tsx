@@ -68,6 +68,8 @@ const eventSchema = z
       'social',
       'networking',
     ]),
+    is_external: z.boolean().default(false),
+    external_registration_url: z.string().url('Enter a valid URL').optional().or(z.literal('')),
     visibility: z.enum(['public', 'unlisted', 'draft']).default('public'),
     is_free: z.boolean().default(true),
     ticket_price_php: z.number({ coerce: true }).int().min(0).default(0),
@@ -77,7 +79,7 @@ const eventSchema = z
     ),
     points_value: z
       .number({ coerce: true })
-      .min(50, 'Minimum 50 XP')
+      .min(0, 'Minimum 0 XP')
       .max(1000, 'Maximum 1000 XP'),
     requires_approval: z.boolean(),
   })
@@ -87,6 +89,28 @@ const eventSchema = z
         code: 'custom',
         path: ['end_date'],
         message: 'End time must be after start time',
+      })
+    }
+    if (data.is_external) {
+      if (!data.external_registration_url) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['external_registration_url'],
+          message: 'External registration URL is required',
+        })
+      }
+      if (data.points_value !== 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['points_value'],
+          message: 'External events must be set to 0 XP',
+        })
+      }
+    } else if (data.points_value < 50) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['points_value'],
+        message: 'Minimum 50 XP',
       })
     }
   })
@@ -234,6 +258,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     handleSubmit,
     watch,
     control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -246,6 +271,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           event_date:        event.event_date?.slice(0, 16) ?? '',
           end_date:          event.end_date?.slice(0, 16) ?? '',
           category:          event.category ?? 'tech_talk',
+          is_external:       event.is_external ?? false,
+          external_registration_url: event.external_registration_url ?? '',
           visibility:        event.visibility ?? 'public',
           is_free:           event.is_free ?? true,
           ticket_price_php:  event.ticket_price_php ?? 0,
@@ -258,31 +285,49 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           requires_approval: false,
           is_free:           true,
           ticket_price_php:  0,
+          is_external:       false,
+          external_registration_url: '',
           visibility:        'public',
         },
   })
 
   const isFree = watch('is_free')
+  const isExternal = watch('is_external')
+
+  useEffect(() => {
+    if (isExternal) {
+      setValue('points_value', 0)
+      setValue('requires_approval', false)
+    }
+  }, [isExternal, setValue])
 
   const onSubmit = async (data: EventFormData) => {
     setSubmitError(null)
     try {
       const schema = customFields.length > 0 ? customFields : null
+      const isExternalEvent = data.is_external === true
+      const externalUrl = data.external_registration_url?.trim() || null
+      const payload = {
+        ...data,
+        end_date: data.end_date ?? null,
+        capacity: data.capacity ?? null,
+        external_registration_url: isExternalEvent ? externalUrl : null,
+        points_value: isExternalEvent ? 0 : data.points_value,
+        requires_approval: isExternalEvent ? false : data.requires_approval,
+        custom_form_schema: isExternalEvent ? null : schema,
+      }
       if (mode === 'create') {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
         const { data: result, error: dbErr } = await (supabase as any)
           .from('events')
           .insert({
-            ...data,
-            end_date:           data.end_date ?? null,
-            capacity:           data.capacity ?? null,
+            ...payload,
             status:             'upcoming',
             tags:               [],
             cover_image_url:    null,
             created_by:         null,
             is_featured:        false,
             is_promoted:        false,
-            custom_form_schema: schema,
           })
           .select('*, chapters(name)')
           .single()
@@ -293,10 +338,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         const { data: result, error: dbErr } = await (supabase as any)
           .from('events')
           .update({
-            ...data,
-            end_date:           data.end_date ?? null,
-            capacity:           data.capacity ?? null,
-            custom_form_schema: schema,
+            ...payload,
           })
           .eq('id', event!.id)
           .select('*, chapters(name)')
@@ -376,6 +418,43 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               <p className="text-md3-label-md text-red mt-1">{errors.description.message}</p>
             )}
           </div>
+        </div>
+
+        {/* ── External Event Toggle ── */}
+        <div className="border-t border-slate-100 pt-4 mt-4">
+          <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+            <input
+              {...register('is_external')}
+              type="checkbox"
+              id="is_external_admin"
+              className="w-4 h-4 accent-blue rounded"
+            />
+            <div>
+              <label
+                htmlFor="is_external_admin"
+                className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+              >
+                External Tech Community Event
+              </label>
+              <p className="text-md3-label-md text-slate-400 mt-0.5">
+                Redirects to an external registration page and awards no XP.
+              </p>
+            </div>
+          </div>
+
+          {isExternal && (
+            <div className="mt-3">
+              <label className={labelClass}>External Registration URL</label>
+              <input
+                {...register('external_registration_url')}
+                className={inputClass}
+                placeholder="https://..."
+              />
+              {errors.external_registration_url && (
+                <p className="text-md3-label-md text-red mt-1">{errors.external_registration_url.message}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Category ── */}
@@ -479,86 +558,90 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         </div>
 
         {/* ── Requires Approval ── */}
-        <div className="border-t border-slate-100 pt-4 mt-4">
-          <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
-            <input
-              {...register('requires_approval')}
-              type="checkbox"
-              id="requires_approval_admin"
-              className="w-4 h-4 accent-blue rounded"
-            />
-            <div>
-              <label
-                htmlFor="requires_approval_admin"
-                className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
-              >
-                Require Registration Approval
-              </label>
-              <p className="text-md3-label-md text-slate-400 mt-0.5">
-                Manually approve each registration before members receive their QR ticket.
-              </p>
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <input
+                {...register('requires_approval')}
+                type="checkbox"
+                id="requires_approval_admin"
+                className="w-4 h-4 accent-blue rounded"
+              />
+              <div>
+                <label
+                  htmlFor="requires_approval_admin"
+                  className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+                >
+                  Require Registration Approval
+                </label>
+                <p className="text-md3-label-md text-slate-400 mt-0.5">
+                  Manually approve each registration before members receive their QR ticket.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── TicketOutline Price ── */}
-        <div className="border-t border-slate-100 pt-4 mt-4">
-          <label className={labelClass}>Ticket Price</label>
-          <div className="flex gap-3">
-            <Controller
-              control={control}
-              name="is_free"
-              render={({ field }) => (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => field.onChange(true)}
-                    className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                      field.value
-                        ? 'bg-blue text-white border-blue'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                    }`}
-                  >
-                    Free
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => field.onChange(false)}
-                    className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                      !field.value
-                        ? 'bg-blue text-white border-blue'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                    }`}
-                  >
-                    Paid
-                  </button>
-                </>
-              )}
-            />
-          </div>
-
-          {!isFree && (
-            <div className="mt-3">
-              <label className={labelClass}>Price (PHP)</label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
-                  ₱
-                </span>
-                <input
-                  {...register('ticket_price_php')}
-                  type="number"
-                  min={1}
-                  step={1}
-                  className={`${inputClass} pl-8`}
-                  placeholder="0"
-                />
-              </div>
-              {errors.ticket_price_php && (
-                <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
-              )}
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <label className={labelClass}>Ticket Price</label>
+            <div className="flex gap-3">
+              <Controller
+                control={control}
+                name="is_free"
+                render={({ field }) => (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(true)}
+                      className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                        field.value
+                          ? 'bg-blue text-white border-blue'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                      }`}
+                    >
+                      Free
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => field.onChange(false)}
+                      className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                        !field.value
+                          ? 'bg-blue text-white border-blue'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                      }`}
+                    >
+                      Paid
+                    </button>
+                  </>
+                )}
+              />
             </div>
-          )}
-        </div>
+
+            {!isFree && (
+              <div className="mt-3">
+                <label className={labelClass}>Price (PHP)</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
+                    ₱
+                  </span>
+                  <input
+                    {...register('ticket_price_php')}
+                    type="number"
+                    min={1}
+                    step={1}
+                    className={`${inputClass} pl-8`}
+                    placeholder="0"
+                  />
+                </div>
+                {errors.ticket_price_php && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Capacity ── */}
         <div className="border-t border-slate-100 pt-4 mt-4">
@@ -580,163 +663,184 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         </div>
 
         {/* ── XP Points Value ── */}
-        <div className="border-t border-slate-100 pt-4 mt-4">
-          <label className={labelClass}>XP Points Value</label>
-          <input
-            {...register('points_value')}
-            type="number"
-            className={inputClass}
-            min={50}
-            max={1000}
-            step={50}
-          />
-          {errors.points_value && (
-            <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
-          )}
-          <p className="text-md3-label-md text-slate-400 mt-1">
-            Members earn this many XP when checked in at the event.
-          </p>
-        </div>
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <label className={labelClass}>XP Points Value</label>
+            <input
+              {...register('points_value')}
+              type="number"
+              className={inputClass}
+              min={50}
+              max={1000}
+              step={50}
+            />
+            {errors.points_value && (
+              <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
+            )}
+            <p className="text-md3-label-md text-slate-400 mt-1">
+              Members earn this many XP when checked in at the event.
+            </p>
+          </div>
+        )}
+
+        {isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <label className={labelClass}>XP Points Value</label>
+            <input
+              value="0"
+              readOnly
+              className={`${inputClass} bg-slate-100 text-slate-500`}
+            />
+            {errors.points_value && (
+              <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
+            )}
+            <p className="text-md3-label-md text-slate-400 mt-1">
+              External events do not award XP.
+            </p>
+          </div>
+        )}
 
         {/* ── Registration Questions (form builder) ── */}
-        <div className="border-t border-slate-100 pt-4 mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <p className={labelClass}>Registration Questions</p>
-              <p className="text-md3-label-md text-slate-400 -mt-1 mb-2">
-                Extra fields shown on the member registration form.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={addField}
-              className="flex items-center gap-1.5 text-md3-label-md font-bold text-blue bg-blue/10 hover:bg-blue/20 px-3 py-1.5 rounded-xl transition-colors shrink-0"
-            >
-              <AddCircleOutline className="w-3.5 h-3.5" />
-              Add Question
-            </button>
-          </div>
-
-          {customFields.length === 0 && (
-            <p className="text-md3-label-md text-slate-300 italic text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-              No extra questions — only name, email, and school/company will be collected.
-            </p>
-          )}
-
-          <div className="space-y-3">
-            {customFields.map((field, index) => (
-              <div key={field.id} className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <p className="text-md3-label-md font-bold text-slate-400 uppercase tracking-wide">
-                    Question {index + 1}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeField(field.id)}
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                  >
-                    <TrashBinTrashOutline className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Label */}
-                <div>
-                  <label className={labelClass}>
-                    Label <span className="text-red normal-case">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={field.label}
-                    onChange={e => updateField(field.id, { label: e.target.value })}
-                    placeholder="e.g. What is your shirt size?"
-                    className={inputClass}
-                  />
-                </div>
-
-                {/* Type + Required */}
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <label className={labelClass}>Type</label>
-                    <select
-                      value={field.type}
-                      onChange={e =>
-                        updateField(field.id, {
-                          type:    e.target.value as CustomFieldType,
-                          options: [],
-                        })
-                      }
-                      className={inputClass}
-                    >
-                      <option value="text">Short Text</option>
-                      <option value="textarea">Long Text</option>
-                      <option value="select">Dropdown</option>
-                      <option value="radio">Multiple Choice</option>
-                      <option value="checkbox">Checkboxes</option>
-                    </select>
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer pb-2.5 shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={field.required}
-                      onChange={e => updateField(field.id, { required: e.target.checked })}
-                      className="w-4 h-4 accent-blue"
-                    />
-                    <span className="text-md3-label-md font-semibold text-slate-600">Required</span>
-                  </label>
-                </div>
-
-                {/* Options — only for select / radio / checkbox */}
-                {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
-                  <div>
-                    <label className={labelClass}>Options</label>
-                    <div className="flex flex-wrap gap-1.5 mb-2 min-h-[26px]">
-                      {field.options.map((opt, i) => (
-                        <span
-                          key={i}
-                          className="flex items-center gap-1 bg-white border border-slate-200 text-slate-700 text-md3-label-md px-2 py-0.5 rounded-full"
-                        >
-                          {opt}
-                          <button
-                            type="button"
-                            onClick={() => removeOption(field.id, i)}
-                            className="text-slate-400 hover:text-red transition-colors"
-                          >
-                            <CloseCircleLineDuotone className="w-2.5 h-2.5" color="#EF4444" />
-                          </button>
-                        </span>
-                      ))}
-                      {field.options.length === 0 && (
-                        <span className="text-md3-label-md text-slate-300 italic">No options yet</span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={optionDrafts[field.id] ?? ''}
-                        onChange={e =>
-                          setOptionDrafts(prev => ({ ...prev, [field.id]: e.target.value }))
-                        }
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') { e.preventDefault(); addOption(field.id) }
-                        }}
-                        placeholder="Add option…"
-                        className={inputClass}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => addOption(field.id)}
-                        className="px-3 py-2 bg-blue text-white text-md3-label-md font-bold rounded-xl hover:bg-blue-dark transition-colors shrink-0"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                )}
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className={labelClass}>Registration Questions</p>
+                <p className="text-md3-label-md text-slate-400 -mt-1 mb-2">
+                  Extra fields shown on the member registration form.
+                </p>
               </div>
-            ))}
+              <button
+                type="button"
+                onClick={addField}
+                className="flex items-center gap-1.5 text-md3-label-md font-bold text-blue bg-blue/10 hover:bg-blue/20 px-3 py-1.5 rounded-xl transition-colors shrink-0"
+              >
+                <AddCircleOutline className="w-3.5 h-3.5" />
+                Add Question
+              </button>
+            </div>
+
+            {customFields.length === 0 && (
+              <p className="text-md3-label-md text-slate-300 italic text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                No extra questions — only name, email, and school/company will be collected.
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {customFields.map((field, index) => (
+                <div key={field.id} className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-md3-label-md font-bold text-slate-400 uppercase tracking-wide">
+                      Question {index + 1}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => removeField(field.id)}
+                      className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
+                    >
+                      <TrashBinTrashOutline className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Label */}
+                  <div>
+                    <label className={labelClass}>
+                      Label <span className="text-red normal-case">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={field.label}
+                      onChange={e => updateField(field.id, { label: e.target.value })}
+                      placeholder="e.g. What is your shirt size?"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  {/* Type + Required */}
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1">
+                      <label className={labelClass}>Type</label>
+                      <select
+                        value={field.type}
+                        onChange={e =>
+                          updateField(field.id, {
+                            type:    e.target.value as CustomFieldType,
+                            options: [],
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        <option value="text">Short Text</option>
+                        <option value="textarea">Long Text</option>
+                        <option value="select">Dropdown</option>
+                        <option value="radio">Multiple Choice</option>
+                        <option value="checkbox">Checkboxes</option>
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer pb-2.5 shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={field.required}
+                        onChange={e => updateField(field.id, { required: e.target.checked })}
+                        className="w-4 h-4 accent-blue"
+                      />
+                      <span className="text-md3-label-md font-semibold text-slate-600">Required</span>
+                    </label>
+                  </div>
+
+                  {/* Options — only for select / radio / checkbox */}
+                  {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
+                    <div>
+                      <label className={labelClass}>Options</label>
+                      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[26px]">
+                        {field.options.map((opt, i) => (
+                          <span
+                            key={i}
+                            className="flex items-center gap-1 bg-white border border-slate-200 text-slate-700 text-md3-label-md px-2 py-0.5 rounded-full"
+                          >
+                            {opt}
+                            <button
+                              type="button"
+                              onClick={() => removeOption(field.id, i)}
+                              className="text-slate-400 hover:text-red transition-colors"
+                            >
+                              <CloseCircleLineDuotone className="w-2.5 h-2.5" color="#EF4444" />
+                            </button>
+                          </span>
+                        ))}
+                        {field.options.length === 0 && (
+                          <span className="text-md3-label-md text-slate-300 italic">No options yet</span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={optionDrafts[field.id] ?? ''}
+                          onChange={e =>
+                            setOptionDrafts(prev => ({ ...prev, [field.id]: e.target.value }))
+                          }
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); addOption(field.id) }
+                          }}
+                          placeholder="Add option…"
+                          className={inputClass}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addOption(field.id)}
+                          className="px-3 py-2 bg-blue text-white text-md3-label-md font-bold rounded-xl hover:bg-blue-dark transition-colors shrink-0"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Submit error */}
         {submitError && (
@@ -866,7 +970,7 @@ export default function AdminEvents() {
     try {
       let query = supabase
         .from('events')
-        .select('end_date, location, category, visibility, status, is_free, ticket_price_php, capacity, points_value, requires_approval, created_at, chapters(name)')
+        .select('end_date, location, category, visibility, status, is_free, ticket_price_php, capacity, points_value, requires_approval, is_external, external_registration_url, created_at, chapters(name)')
         .order('event_date', { ascending: false })
 
       if (scope === 'event' && eventId) query = query.eq('id', eventId)
@@ -886,6 +990,8 @@ export default function AdminEvents() {
         capacity: event.capacity ?? '',
         points_value: event.points_value ?? '',
         requires_approval: event.requires_approval ?? false,
+        is_external: event.is_external ?? false,
+        external_registration_url: event.external_registration_url ?? '',
         created_at: event.created_at ?? '',
       }))
 
@@ -901,6 +1007,8 @@ export default function AdminEvents() {
         'capacity',
         'points_value',
         'requires_approval',
+        'is_external',
+        'external_registration_url',
         'created_at',
       ]
 
@@ -1081,6 +1189,11 @@ export default function AdminEvents() {
                 <tr key={event.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-900">{event.title}</p>
+                    {event.is_external && (
+                      <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">
+                        External
+                      </span>
+                    )}
                     {event.location && (
                       <p className="text-md3-label-md text-slate-400 flex items-center gap-1 mt-0.5">
                         <MapPointOutline className="w-3 h-3 shrink-0" />
@@ -1095,10 +1208,16 @@ export default function AdminEvents() {
                       : 'TBA'}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 text-md3-label-md font-semibold text-blue/80 bg-blue/10 px-2 py-0.5 rounded-full">
-                      <BoltOutline className="w-3 h-3" />
-                      {event.points_value}
-                    </span>
+                    {event.is_external ? (
+                      <span className="inline-flex items-center text-md3-label-md font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                        External
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-md3-label-md font-semibold text-blue/80 bg-blue/10 px-2 py-0.5 rounded-full">
+                        <BoltOutline className="w-3 h-3" />
+                        {event.points_value}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${

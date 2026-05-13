@@ -61,6 +61,7 @@ export default function EventDetail() {
   // const volunteerApp = user && eventId ? getApplicationByEventId(eventId) : undefined // disabled: volunteer-for-event feature
 
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== user?.chapter_id
+  const isExternal = event?.is_external === true
 
   const [shareToast, setShareToast] = useState(false)
   const [eventChapterName, setEventChapterName] = useState<string | null>(null)
@@ -111,6 +112,12 @@ export default function EventDetail() {
     : 'Date TBA'
 
   const registerPath = `/events/${slug}/register`
+  const externalUrl = event.external_registration_url ?? ''
+
+  const handleExternalRegistration = () => {
+    if (!externalUrl) return
+    window.open(externalUrl, '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <motion.div
@@ -180,16 +187,25 @@ export default function EventDetail() {
           )}
         </div>
 
-        <div className="flex gap-3">
-          <div className="bg-primary/10 rounded-xl px-3 py-2 flex-1 text-center">
-            <p className="text-primary text-md3-label-md font-medium">Points Value</p>
-            <p className="text-primary font-bold">+{event.points_value} pts</p>
+        {!isExternal && (
+          <div className="flex gap-3">
+            <div className="bg-primary/10 rounded-xl px-3 py-2 flex-1 text-center">
+              <p className="text-primary text-md3-label-md font-medium">Points Value</p>
+              <p className="text-primary font-bold">+{event.points_value} pts</p>
+            </div>
+            <div className="bg-slate-100 rounded-xl px-3 py-2 flex-1 text-center">
+              <p className="text-slate-500 text-md3-label-md font-medium">Status</p>
+              <p className="text-slate-700 font-bold capitalize">{event.status}</p>
+            </div>
           </div>
-          <div className="bg-slate-100 rounded-xl px-3 py-2 flex-1 text-center">
-            <p className="text-slate-500 text-md3-label-md font-medium">Status</p>
-            <p className="text-slate-700 font-bold capitalize">{event.status}</p>
+        )}
+
+        {isExternal && (
+          <div className="bg-slate-100 rounded-xl px-3 py-2 text-center">
+            <p className="text-slate-500 text-md3-label-md font-medium">Registration</p>
+            <p className="text-slate-700 font-bold">Hosted externally</p>
           </div>
-        </div>
+        )}
 
         {event.description && (
           <div>
@@ -200,7 +216,15 @@ export default function EventDetail() {
 
         {/* CTA based on auth + registration state */}
         <div className="pt-2 space-y-3">
-          {!user ? (
+          {isExternal ? (
+            <button
+              onClick={handleExternalRegistration}
+              disabled={!externalUrl}
+              className="w-full bg-primary text-white font-bold py-4 rounded-2xl disabled:opacity-50"
+            >
+              Open Registration
+            </button>
+          ) : !user ? (
             /* Public / unauthenticated view */
             <div className="space-y-2">
               <button

@@ -28,6 +28,7 @@ function EventCard({
   className?: string;
 }) {
   const navigate = useNavigate()
+  const isExternal = event.is_external === true
   const isArchived = isEventArchived(event)
   const dateStr = event.event_date
     ? formatDate.compact(event.event_date)
@@ -79,19 +80,27 @@ function EventCard({
           <div className="flex flex-wrap gap-2">
             <StatusPill status={event.status as any} />
             {event.is_promoted && <PromotedBadge />}
-            <div className="backdrop-blur-[16px] bg-[rgba(254,248,209,0.9)] flex gap-1 items-center justify-center px-2 py-0.5 rounded-[100px] shrink-0">
-              <StarOutline className="w-[6px] h-[6px]" color="#F8C630" />
-              <span className="font-proxima font-semibold text-[#d2ad19] text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
-                {event.points_value} EXP
-              </span>
-            </div>
+            {isExternal ? (
+              <div className="backdrop-blur-[16px] bg-white/80 flex gap-1 items-center justify-center px-2 py-0.5 rounded-[100px] shrink-0">
+                <span className="font-proxima font-semibold text-slate-500 text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
+                  External
+                </span>
+              </div>
+            ) : (
+              <div className="backdrop-blur-[16px] bg-[rgba(254,248,209,0.9)] flex gap-1 items-center justify-center px-2 py-0.5 rounded-[100px] shrink-0">
+                <StarOutline className="w-[6px] h-[6px]" color="#F8C630" />
+                <span className="font-proxima font-semibold text-[#d2ad19] text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
+                  {event.points_value} EXP
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between gap-3">
           <div className="bg-primary text-white text-[12px] font-semibold px-[18px] py-[12px] rounded-[24px] flex items-center justify-center shrink-0 leading-none shadow-sm">
-            Register Now
+            {isExternal ? 'Open Registration' : 'Register Now'}
           </div>
 
           {/* Attendee Summary */}

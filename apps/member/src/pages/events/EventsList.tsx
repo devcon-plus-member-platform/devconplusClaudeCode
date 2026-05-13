@@ -147,7 +147,7 @@ export default function EventsList() {
         if (regionChapterIds.size > 0) return events.filter((e) => e.chapter_id && regionChapterIds.has(e.chapter_id))
         return user?.chapter_id ? events.filter((e) => e.chapter_id === user.chapter_id) : events
       case 'devcon_only':
-        return events.filter((e) => !e.devcon_category || e.devcon_category === 'devcon')
+        return events.filter((e) => !e.is_external && (!e.devcon_category || e.devcon_category === 'devcon'))
       case 'featured':
         return events.filter((e) => e.is_featured)
       default:
@@ -405,6 +405,7 @@ export default function EventsList() {
                 {displayEvents.map((event) => {
                   const dateParts = event.event_date ? formatEventDate(event.event_date) : null
                   const isArchived = isEventArchived(event)
+                  const isExternal = event.is_external === true
                   return (
                     <motion.button
                       key={event.id}
@@ -473,9 +474,15 @@ export default function EventsList() {
                         )}
 
                         <div className="flex items-center gap-2">
-                          <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-[100px]">
-                            +{event.points_value} pts
-                          </span>
+                          {isExternal ? (
+                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-[100px]">
+                              External
+                            </span>
+                          ) : (
+                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-[100px]">
+                              +{event.points_value} pts
+                            </span>
+                          )}
                           {attendeeCounts[event.id] && (
                             <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
                               <UsersGroupRoundedOutline className="w-3 h-3" color="#64748B" />

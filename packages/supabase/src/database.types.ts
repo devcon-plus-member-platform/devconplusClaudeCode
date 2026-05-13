@@ -145,10 +145,12 @@ export type Database = {
           event_date: string | null
           id: string
           is_chapter_locked: boolean | null
+          is_external: boolean | null
           is_featured: boolean | null
           is_free: boolean | null
           is_promoted: boolean | null
           location: string | null
+          external_registration_url: string | null
           points_value: number | null
           privacy_status: string | null
           requires_approval: boolean | null
@@ -176,10 +178,12 @@ export type Database = {
           event_date?: string | null
           id?: string
           is_chapter_locked?: boolean | null
+          is_external?: boolean | null
           is_featured?: boolean | null
           is_free?: boolean | null
           is_promoted?: boolean | null
           location?: string | null
+          external_registration_url?: string | null
           points_value?: number | null
           privacy_status?: string | null
           requires_approval?: boolean | null
@@ -207,10 +211,12 @@ export type Database = {
           event_date?: string | null
           id?: string
           is_chapter_locked?: boolean | null
+          is_external?: boolean | null
           is_featured?: boolean | null
           is_free?: boolean | null
           is_promoted?: boolean | null
           location?: string | null
+          external_registration_url?: string | null
           points_value?: number | null
           privacy_status?: string | null
           requires_approval?: boolean | null

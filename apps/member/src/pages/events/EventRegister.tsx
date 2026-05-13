@@ -148,11 +148,20 @@ export default function EventRegister() {
     : []
 
   const existingReg = registrations.find((r) => r.event_id === eventId)
+  const isExternal = event?.is_external === true
+  const externalUrl = event?.external_registration_url ?? ''
 
   const isChapterBlocked = !!(event && user && event.is_chapter_locked === true && event.chapter_id !== user.chapter_id)
 
   useEffect(() => {
     if (!event || !user) return
+    if (event.is_external) {
+      if (externalUrl) {
+        window.open(externalUrl, '_blank', 'noopener,noreferrer')
+      }
+      navigate(`/events/${slug}`, { replace: true })
+      return
+    }
     if (isChapterBlocked) {
       navigate(`/events/${slug}`, { replace: true })
       return
@@ -165,10 +174,10 @@ export default function EventRegister() {
           : `/events/${slug}/pending`
       navigate(destination, { replace: true })
     }
-  }, [isChapterBlocked, existingReg, event, user, slug, navigate])
+  }, [isChapterBlocked, existingReg, event, user, slug, navigate, externalUrl])
 
   if (!event || !user) return null
-  if (isChapterBlocked || existingReg) return null
+  if (isExternal || isChapterBlocked || existingReg) return null
 
   const setResponse = (fieldId: string, value: string | string[]) => {
     const next = { ...formResponses, [fieldId]: value }
@@ -191,6 +200,7 @@ export default function EventRegister() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isExternal) return
     if (!agreed) return
     if (!validateCustomFields()) return
 

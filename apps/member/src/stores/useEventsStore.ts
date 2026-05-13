@@ -39,6 +39,8 @@ interface CreateEventPayload {
   requires_approval: boolean
   is_chapter_locked: boolean
   cover_image_url: string | null
+  is_external?: boolean
+  external_registration_url?: string | null
   chapter_id: string
   created_by: string
   /** JSONB: array of CustomFormField objects */
@@ -63,6 +65,8 @@ export interface UpdateEventPayload {
   requires_approval?: boolean
   is_chapter_locked?: boolean
   cover_image_url?: string | null
+  is_external?: boolean
+  external_registration_url?: string | null
   /** JSONB: array of CustomFormField objects */
   custom_form_schema?: Json | null
 }
@@ -202,6 +206,10 @@ export const useEventsStore = create<EventsState>((set) => ({
   },
 
   register: async (eventId, userId) => {
+    const event = useEventsStore.getState().events.find((e) => e.id === eventId)
+    if (event?.is_external) {
+      throw new Error('This event uses external registration.')
+    }
     const cancelled = useEventsStore.getState().registrations.find(
       (r) => r.event_id === eventId && r.status === 'cancelled'
     )
