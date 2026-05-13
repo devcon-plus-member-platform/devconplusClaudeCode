@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom'
 import MemberLayout from './components/MemberLayout'
 import OrganizerLayout from './components/OrganizerLayout'
 import AdminLayout from './components/AdminLayout'
+import { RouteErrorBoundary } from './components/RouteErrorBoundary'
 
 // Auth pages (no tab nav)
 import SplashScreen from './pages/auth/SplashScreen'
@@ -85,6 +86,7 @@ export const router = createBrowserRouter([
   // Member routes — wrapped in MemberLayout with bottom tab nav
   {
     element: <MemberLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/home',                       element: <Dashboard /> },
       { path: '/events',                    element: <EventsList /> },
@@ -110,6 +112,7 @@ export const router = createBrowserRouter([
   // Admin routes — all lazy-loaded, only super_admin or hq_admin users ever land here
   {
     element: <AdminLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: '/admin',
@@ -145,6 +148,7 @@ export const router = createBrowserRouter([
   // Organizer routes — wrapped in OrganizerLayout (guards on isOrganizerSession)
   {
     element: <OrganizerLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/organizer',                              element: <OrgDashboard /> },
       { path: '/organizer/events',                       element: <OrgEventManagement /> },
