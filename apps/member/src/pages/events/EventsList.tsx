@@ -60,6 +60,7 @@ export default function EventsList() {
 
   // Chapter filter state
   const [chapters, setChapters] = useState<Chapter[]>([])
+  const [regionChapterIds, setRegionChapterIds] = useState<Set<string>>(new Set())
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [showChapterSheet, setShowChapterSheet] = useState(false)
   const [attendeeCounts, setAttendeeCounts] = useState<Record<string, number>>({})
@@ -107,6 +108,28 @@ export default function EventsList() {
       })
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const chapterId = user?.chapter_id
+    if (!chapterId) return
+
+    void (async () => {
+      const { data: ownChapter } = await supabase
+        .from('chapters')
+        .select('region')
+        .eq('id', chapterId)
+        .single()
+      if (!ownChapter?.region) return
+
+      const { data: siblings } = await supabase
+        .from('chapters')
+        .select('id')
+        .eq('region', ownChapter.region)
+      if (siblings) {
+        setRegionChapterIds(new Set(siblings.map((c) => c.id)))
+      }
+    })()
+  }, [user?.chapter_id])
+
   const toggleSearch = () => {
     setIsSearchVisible(!isSearchVisible)
     if (isSearchVisible) {
@@ -121,6 +144,7 @@ export default function EventsList() {
   const typeFilteredEvents = useMemo(() => {
     switch (eventFilter) {
       case 'near_you':
+        if (regionChapterIds.size > 0) return events.filter((e) => e.chapter_id && regionChapterIds.has(e.chapter_id))
         return user?.chapter_id ? events.filter((e) => e.chapter_id === user.chapter_id) : events
       case 'devcon_only':
         return events.filter((e) => !e.devcon_category || e.devcon_category === 'devcon')
@@ -129,7 +153,7 @@ export default function EventsList() {
       default:
         return events
     }
-  }, [events, eventFilter, user?.chapter_id])
+  }, [events, eventFilter, user?.chapter_id, regionChapterIds])
 
   // Stage 2: chapter sheet filter stacked on top
   const { chapterFilteredEvents, activeEvents } = useMemo(() => {
