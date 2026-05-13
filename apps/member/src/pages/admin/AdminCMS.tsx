@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline, LockKeyholeMinimalisticOutline, LockKeyholeUnlockedOutline } from 'solar-icon-set'
+import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../stores/useAuthStore'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
@@ -1184,11 +1184,11 @@ function MissionsTab() {
 
   const handleToggleStatus = async (m: MissionRow) => {
     setTogglingStatusId(m.id)
-    const nextStatus = m.status === 'claimed' ? 'available' : 'claimed'
+    const nextActive = !m.is_active
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: err } = await (supabase as any).from('missions').update({ status: nextStatus }).eq('id', m.id)
+    const { error: err } = await (supabase as any).from('missions').update({ is_active: nextActive }).eq('id', m.id)
     if (err) setError(err.message)
-    else setRows((prev) => prev.map((r) => (r.id === m.id ? { ...r, status: nextStatus } : r)))
+    else setRows((prev) => prev.map((r) => (r.id === m.id ? { ...r, is_active: nextActive } : r)))
     setTogglingStatusId(null)
   }
 
@@ -1275,28 +1275,17 @@ function MissionsTab() {
                         claimed
                       </span>
                     )}
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${m.is_active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'}`}>
+                    <button
+                      onClick={() => void handleToggleStatus(m)}
+                      disabled={togglingStatusId === m.id}
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full transition-colors disabled:opacity-40 ${m.is_active ? 'bg-green/10 text-green hover:bg-green/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                    >
                       {m.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    </button>
                   </div>
                   <p className="text-md3-label-md text-slate-400 mt-0.5">+{m.xp_reward} XP</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => void handleToggleStatus(m)}
-                    disabled={togglingStatusId === m.id}
-                    title={m.status === 'claimed' ? 'Reopen mission' : 'Close mission (no more winners)'}
-                    className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${
-                      m.status === 'claimed'
-                        ? 'hover:bg-green/10 text-slate-400 hover:text-green'
-                        : 'hover:bg-amber-50 text-slate-400 hover:text-amber-600'
-                    }`}
-                  >
-                    {m.status === 'claimed'
-                      ? <LockKeyholeUnlockedOutline className="w-3.5 h-3.5" />
-                      : <LockKeyholeMinimalisticOutline className="w-3.5 h-3.5" />
-                    }
-                  </button>
                   <button onClick={() => openEdit(m)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
                     <PenOutline className="w-3.5 h-3.5" />
                   </button>
