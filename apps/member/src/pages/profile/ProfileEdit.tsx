@@ -590,11 +590,19 @@ export default function ProfileEdit() {
           description={`Switch to ${chapters.find((c) => c.id === pendingChapterId)?.name ?? 'selected chapter'}? This may affect organizer code eligibility. Enter your password to confirm.`}
           confirmLabel="Change Chapter"
           onConfirm={async (password) => {
+            // Always use the live auth session email — profile.email may be stale
+            const { data: sessionData } = await supabase.auth.getSession()
+            const authEmail = sessionData.session?.user.email ?? user?.email ?? ''
             const { error } = await supabase.auth.signInWithPassword({
-              email: user?.email ?? '',
+              email: authEmail,
               password,
             })
-            if (error) throw new Error('Incorrect password')
+            if (error) {
+              if (error.status === 429 || error.message.toLowerCase().includes('rate')) {
+                throw new Error('Too many attempts. Please wait a moment and try again.')
+              }
+              throw new Error('Incorrect password')
+            }
             await updateProfile({ chapter_id: pendingChapterId || undefined })
             setChapterSuccess(true)
           }}
