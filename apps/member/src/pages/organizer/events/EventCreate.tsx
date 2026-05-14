@@ -98,30 +98,6 @@ export function OrgEventCreate() {
 
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Stall detection: if the tab was backgrounded mid-submit, the browser throttles
-  // setTimeout (used by fetchWithTimeout's abort timer), so the 15s abort may fire
-  // very late or not at all on iOS Safari — leaving isSubmitting stuck at true.
-  // When the tab becomes visible again and elapsed > 35s, show a recovery prompt.
-  const submitStartRef = useRef<number | null>(null)
-  const [submitStalled, setSubmitStalled] = useState(false)
-  // SUBMIT_STALL_MS ≈ FETCH_TIMEOUT_MS (15s) × 2 attempts + 5s buffer
-  const SUBMIT_STALL_MS = 35_000
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        isSubmitting &&
-        submitStartRef.current !== null &&
-        Date.now() - submitStartRef.current > SUBMIT_STALL_MS
-      ) {
-        setSubmitStalled(true)
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibility)
-    return () => document.removeEventListener('visibilitychange', handleVisibility)
-  }, [isSubmitting])
-
   const {
     register,
     handleSubmit,
@@ -155,6 +131,26 @@ export function OrgEventCreate() {
 
   const isFree     = watch('is_free')
   const category   = watch('category')
+
+  const submitStartRef = useRef<number | null>(null)
+  const [submitStalled, setSubmitStalled] = useState(false)
+  // SUBMIT_STALL_MS ≈ FETCH_TIMEOUT_MS (15s) × 2 attempts + 5s buffer
+  const SUBMIT_STALL_MS = 35_000
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        isSubmitting &&
+        submitStartRef.current !== null &&
+        Date.now() - submitStartRef.current > SUBMIT_STALL_MS
+      ) {
+        setSubmitStalled(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [isSubmitting])
 
   // Auto-set attendance points when the organizer picks a category
   const prevCategoryRef = useRef<string | undefined>(undefined)
