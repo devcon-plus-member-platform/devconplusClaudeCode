@@ -1,6 +1,6 @@
 # DEVCON+ — Claude Code Master Context File
-> Last Updated: May 11, 2026
-> Version: MVP 1.6
+> Last Updated: May 14, 2026
+> Version: MVP 1.7
 > Team: 3 interns + Claude Code
 > Hard Deadline: April 30, 2026 (Cohort 3 Graduation)
 > Live App: https://devconplusbeta-v1.vercel.app
@@ -192,6 +192,8 @@ CREATE TABLE events (
   is_featured boolean DEFAULT false,
   is_promoted boolean DEFAULT false,
   cover_image_url text,
+  is_external boolean DEFAULT false,           -- if true, registration is handled outside the platform
+  external_registration_url text,              -- URL to external form/site; use 'tba' when URL is not yet known
   created_by uuid REFERENCES profiles(id),
   created_at timestamptz DEFAULT now()
 );
@@ -287,6 +289,7 @@ CREATE TABLE jobs (
   work_type text CHECK (work_type IN ('remote', 'onsite', 'hybrid', 'full_time', 'part_time')),
   description text,
   apply_url text,
+  logo_url text,                               -- optional company logo URL for display in job cards
   is_promoted boolean DEFAULT false,
   is_active boolean DEFAULT true,
   posted_at timestamptz DEFAULT now()
@@ -322,6 +325,19 @@ CREATE TABLE programs (
 
 ### `xp_tiers`
 XP tier milestone definitions (e.g. "Bronze", "Silver", "Gold"). Seeded manually.
+
+### `missions`
+Gamified missions/challenges that members can complete to earn points. Managed via AdminCMS.
+
+Key columns (partial — full definition in migration files):
+```
+submission_type text CHECK (submission_type IN ('proof_upload', 'link', 'self_attest')) DEFAULT 'self_attest'
+  -- proof_upload: member submits a proof link; admin reviews and approves
+  -- link:         member opens a URL; participation tracked, no submission queue
+  -- self_attest:  member clicks "Mark as Done"; creates a pending submission for admin review
+is_active boolean DEFAULT true   -- togglable from AdminCMS; inactive missions are hidden from members
+```
+> Migration: `supabase/migrations/20260513_missions_submission_type.sql`
 
 ### `volunteer_applications`
 ```sql
@@ -732,6 +748,8 @@ Nav item:             whileTap={{ scale: 0.88 }}, type: 'spring', stiffness: 400
 ### Core Components (built — reuse everywhere)
 ```
 <MemberLayout />             responsive layout: floating pill nav (mobile) + sidebar (desktop), auth guard
+                             Guest access: unauthenticated users may browse GUEST_PATHS (currently ['/events'])
+                             without being redirected to sign-in. All other member routes still require auth.
 <OrganizerLayout />          responsive layout: floating pill nav (mobile) + sidebar (desktop), organizer guard
 <AdminLayout />              desktop-only sidebar nav, hq_admin/super_admin guard, recovery remount
 <DesktopGuard />             pass-through no-op — renders children directly (responsive handled in layouts)
@@ -754,6 +772,7 @@ Nav item:             whileTap={{ scale: 0.88 }}, type: 'spring', stiffness: 400
 <PasswordStrengthMeter />    password strength indicator (used in SignUp / ProfileEdit)
 <LegalModal />               inline bottom sheet for Terms & Conditions / Privacy Policy (used in SignUp, EventRegister)
 <Skeleton />                 loading skeleton placeholder
+<RouteErrorBoundary />       React error boundary wrapping all route trees — catches unhandled errors, renders a branded fallback with navigation options
 <KonamiCodeWrapper />        Easter egg wrapper (to be removed before production — see DEVCON_PLUS.md L1)
 <KonamiModal />              Easter egg modal dialog
 ```
@@ -1035,12 +1054,31 @@ npm run typecheck                     # tsc --noEmit across all packages
 - [x] Event detail publicly accessible without auth (unauthenticated users can view event info)
 - [x] Admin CSV export enhanced: date range inputs, attendance status filter, improved filename generation with event labels + Philippine date format
 
+**May 2026 additions (MVP 1.7):**
+- [x] External event registration — `is_external` + `external_registration_url` fields on `events` table; EventCreate/EventEdit/AdminEvents support setting external URL or 'tba' placeholder; EventDetail/EventCard/EventsList redirect to external link instead of in-app registration flow
+- [x] Admin cover image upload — organizers can upload a cover image directly from AdminEvents (with validation and preview before save)
+- [x] `<RouteErrorBoundary />` — React error boundary wrapping all three route trees; renders branded fallback on unhandled render errors
+- [x] Region-based chapter filtering on EventsList — members can filter events by region (Luzon / Visayas / Mindanao)
+- [x] Event-type chip filter on EventsList — filter by category (Tech Talk, Workshop, Hackathon, etc.)
+- [x] Event share — native share sheet / clipboard fallback on EventDetail
+- [x] Guest / unauthenticated access to EventsList — `MemberLayout` now allows browsing `/events` without sign-in; `GUEST_PATHS = ['/events']` constant controls which paths are open
+- [x] Browse Events button added to Onboarding final slide for unauthenticated entry
+- [x] Conditional Sign Up CTA on EventsList for unauthenticated users
+- [x] Missions — `submission_type` column added (`proof_upload` / `link` / `self_attest`); migration `20260513_missions_submission_type.sql`
+- [x] Missions — `is_active` flag; AdminCMS toggle to activate/deactivate individual missions
+- [x] Jobs — `logo_url` field added to `jobs` table; logo rendered in job cards and admin job forms
+- [x] Jobs board header updated to "AI & Dev Jobs"
+- [x] Safe Space & Event Risk Consent section added to Terms & Conditions and `<LegalModal />`
+- [x] OrganizerCodeGate navigation temporarily disabled (post-sign-up routing goes directly to member home)
+- [x] Organizer events list — chapter-scoped filtering so officers only see their chapter's events
+
 ### Remaining / Ongoing
 - [ ] Remove test accounts + Easter eggs (KonamiCodeWrapper / KonamiModal) per L1 checklist
 - [ ] PROMOTED badge audit (verify 2nd job + 2nd Tech news post are `is_promoted = true` in live data)
 - [ ] Google OAuth callback URL + Edge Function CORS update for production domain (`plus-beta.devcon.ph`)
 - [ ] Transactional email end-to-end test after DNS verification
 - [ ] Final QA on all flows on real mobile device (iPhone Safari + Android Chrome)
+- [ ] Re-enable OrganizerCodeGate routing once the gate flow is confirmed stable post sign-up refactor
 
 ---
 

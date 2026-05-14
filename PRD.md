@@ -1,5 +1,5 @@
 # DEVCON+ — Product Requirements & Developer Handover
-> Version: 1.0 | Last Updated: April 15, 2026
+> Version: 1.3 | Last Updated: May 14, 2026 | Updated by: Clayton
 > Live App: https://devconplusbeta-v1.vercel.app
 > Repository: `devcon-plus/` (monorepo)
 
@@ -25,23 +25,27 @@ It is built and currently maintained by a two-person intern team (Kenshin and Ki
 
 ## 2. Current Status
 
-*As of April 15, 2026.*
+*As of May 14, 2026.*
 
 | Area | Status | Notes |
 |------|--------|-------|
 | Member app (full flow) | Live | Sign up, events, QR ticket, points, rewards, jobs, profile |
 | Organizer flow | Live | Event creation, registrant approval, QR scanner, announcements |
-| Admin panel | Live | User management, org codes, chapter management, upgrade reviews |
+| Admin panel | Live | User management, org codes, chapter management, upgrade reviews, CSV export |
 | Authentication | Live | Email/password + Google OAuth via Supabase |
 | QR check-in system | Live | Atomic check-in, double-award prevention, door approval flow |
 | Points & rewards | Live | Earn points on attendance, view history, browse rewards catalog |
 | PWA (add to home screen) | Live | Icons, shortcuts, apple-touch-icon configured |
+| External event registration | Live | Events can link to an external registration URL (or mark as TBA) |
+| Guest / unauthenticated browsing | Live | Events list accessible without sign-in; event detail publicly viewable |
+| Missions system | Live | Gamified missions with submission types (proof_upload / link / self_attest) |
+| Route error recovery | Live | `<RouteErrorBoundary />` wraps all route trees |
 | Custom domain (`plus-beta.devcon.ph`) | Pending | DNS records ready — awaiting DEVCON HQ DNS admin action |
 | Transactional email (`no-reply-plus@devcon.ph`) | Pending | Resend configured — awaiting domain DNS verification |
 | Google OAuth on production domain | Pending | Redirect URI needs updating in Google Cloud Console |
 | Test data cleanup | In Progress | Test accounts and seeded Easter egg code need removal |
 | Security audit (OWASP Top 10) | In Progress | 25 CVEs cleared; pen test pass still needed |
-| Final QA (all flows end-to-end) | Not Started | Required before May 15 preview |
+| Final QA (all flows end-to-end) | Not Started | Required before public preview |
 
 ---
 
@@ -55,6 +59,9 @@ It is built and currently maintained by a two-person intern team (Kenshin and Ki
 | April 15, 2026 | MD3 type scale applied across all UI; domain + email setup guide written |
 | **April 26, 2026** | **Claude Code subscription ends — last AI-assisted development day** |
 | April 30, 2026 | Dev freeze — no new features after this date |
+| May 1–12, 2026 | Post-freeze hardening: Turnstile on email resend, `fetchWithTimeout` network resilience, realtime recovery +5 s/+15 s follow-ups, safe return URL handling, creative 404 page, chapter sorting fix, Safe Space & Event Risk Consent in T&C |
+| May 13, 2026 | External event registration shipped; missions `submission_type` migration; jobs `logo_url`; `<RouteErrorBoundary />`; region + event-type filters on EventsList; AdminCMS mission toggle |
+| May 14, 2026 | Guest unauthenticated access to EventsList; event share; admin cover image upload; organizer chapter-scoped event filtering |
 
 
 ---
@@ -167,6 +174,10 @@ The app has three distinct user experiences that share one React app:
 
 Never mix components between these route trees. They share utility components (`<ComingSoonModal />`, `<Skeleton />`, `<StatusPill />`, etc.) but not layout components.
 
+Each route tree is wrapped with `<RouteErrorBoundary />` — an error boundary that catches unhandled render errors and shows a branded fallback instead of a blank screen.
+
+**Guest access:** `MemberLayout` allows unauthenticated users to browse paths listed in `GUEST_PATHS` (currently `/events`). All other member routes redirect to sign-in.
+
 ### Design system summary
 
 - **Primary color** is a CSS custom property (`rgb(var(--color-primary))`) — always use Tailwind tokens `text-primary`, `bg-primary`, never hardcode hex.
@@ -221,9 +232,9 @@ Full step-by-step setup is in [`.claude/docs/DOMAIN_AND_EMAIL_SETUP.md`](.claude
 
 ## 8. Unfinished Work
 
-*These are the items that must be completed before May 15. Sorted by priority.*
+*As of May 14, 2026. Sorted by priority.*
 
-### L1 — Must complete before April 30
+### L1 — Must complete before public launch
 
 | Item | Why it matters | Notes |
 |------|---------------|-------|
@@ -232,24 +243,26 @@ Full step-by-step setup is in [`.claude/docs/DOMAIN_AND_EMAIL_SETUP.md`](.claude
 | Transactional email (`no-reply-plus@devcon.ph`) | Auth emails (confirm, reset) currently send from Supabase's generic domain. | Blocked on Resend domain DNS verification. Steps in `DOMAIN_AND_EMAIL_SETUP.md`. |
 | Remove test accounts | Test accounts in the live DB could appear in officer/admin views. | Manual cleanup in Supabase Dashboard → Authentication → Users. |
 | Remove Easter egg code | `<KonamiCodeWrapper />` and `<KonamiModal />` must be removed before public preview. | Currently restricted to `hq_admin/super_admin` (commit `c8d926d`) but should be fully removed. |
-| OWASP Top 10 pen test pass | Security requirement before public launch. | Work through OWASP Top 10 checklist. Log all findings. Fix critical + high before April 26. |
+| OWASP Top 10 pen test pass | Security requirement before public launch. | 25 CVEs already cleared. Complete the checklist and log findings. |
 | PROMOTED badge audit | 2nd job listing (Sui Foundation) and 2nd Tech news post must always show orange PROMOTED badge. | Verify `is_promoted = true` in live Supabase data. |
-| Final QA (all flows end-to-end) | Catch regressions before the public sees the app. | Test member, organizer, and admin flows on a real mobile device. |
+| Final QA (all flows end-to-end) | Catch regressions before the public sees the app. | Test member, organizer, and admin flows on a real mobile device (iPhone Safari + Android Chrome). Include guest browsing flow and external registration flow. |
+| Re-enable OrganizerCodeGate routing | Organizer code gate is temporarily bypassed — new organizers bypass the code entry step. | Investigate the routing issue that caused the disable (commit `2529d3d`). |
 
 ### L2 — Complete if bandwidth allows
 
-| Item | Scope | Owner |
+| Item | Scope | Notes |
 |------|-------|-------|
-| Announcements broadcast | `<SendAnnouncementSheet />` is built. Verify it creates `event_announcements` rows and members see them in notifications. | Kien |
-| Missions system | Basic gamified missions flow is scaffolded. Needs end-to-end verification. | Kien |
-| Boosted / Promoted Events | Flag and surface promoted events in the events list. | Kien |
-| Custom event fields | Modular form schema is built. Needs end-to-end test with organizer creating a field and member filling it on registration. | Kien |
-| Auto-apply chapter theme | When a member's chapter is set, auto-apply the matching program theme on login. Currently the user selects it manually. | Kenshin |
+| Announcements broadcast | `<SendAnnouncementSheet />` is built. Verify it creates `event_announcements` rows and members see them in notifications. | Needs end-to-end test. |
+| Missions end-to-end verification | Missions flow + `submission_type` logic is built. Needs full end-to-end test: create mission → member completes → admin reviews submission. | `submission_type = 'proof_upload'` is the most complex path. |
+| Boosted / Promoted Events | `is_promoted` flag exists on events. Surface promoted events with a visual indicator in the events list. | Design decision needed on badge style (reuse orange PROMOTED badge?). |
+| Custom event fields | Modular form schema is built. Needs end-to-end test with organizer creating a field and member filling it on registration. | |
+| Auto-apply chapter theme | When a member's chapter is set, auto-apply the matching program theme on login. Currently the user selects it manually. | |
 
 ### Known issues
 
-- **Supabase WebSocket resilience on mobile Safari** — The two-layer recovery pattern (`visibilitychange` + `online` + 5-min poll) handles most cases, but aggressive background tab killing on mobile Safari can still result in stale data. Full fix is deferred to Phase 2. See `.claude/rules/db-connection-resilience.md` for the spec.
+- **Supabase WebSocket resilience on mobile Safari** — The two-layer recovery pattern (`visibilitychange` + `online` + 90-second poll + +5 s/+15 s follow-ups) handles most cases, but aggressive background tab killing on mobile Safari can still result in stale data. Full fix is deferred to Phase 2. See `.claude/rules/db-connection-resilience.md` for the spec.
 - **Email SMTP not yet end-to-end tested** — The edge function and templates are deployed (Apr 6) but end-to-end delivery hasn't been verified because the domain isn't live yet. Test immediately after the domain is set up.
+- **OrganizerCodeGate disabled** — Post-sign-up routing skips the organizer code gate (commit `2529d3d`). New organizers cannot self-onboard via code entry until this is re-enabled.
 
 ---
 
