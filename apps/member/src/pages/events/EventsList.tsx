@@ -23,8 +23,8 @@ const REGIONS = ['Luzon', 'Visayas', 'Mindanao'] as const
 type EventFilter = 'all' | 'near_you' | 'devcon_only' | 'featured'
 
 const EVENT_FILTERS: { id: EventFilter; label: string }[] = [
-  { id: 'near_you', label: 'Near You' },
   { id: 'all', label: 'All Events' },
+  { id: 'near_you', label: 'Near You' },
   { id: 'devcon_only', label: 'DEVCON' },
   { id: 'featured', label: 'Featured' },
 ]
@@ -56,7 +56,7 @@ export default function EventsList() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Event type filter (chip bar)
-  const [eventFilter, setEventFilter] = useState<EventFilter>('near_you')
+  const [eventFilter, setEventFilter] = useState<EventFilter>('all')
 
   // Chapter filter state
   const [chapters, setChapters] = useState<Chapter[]>([])
