@@ -95,6 +95,12 @@ export function OrgEventEdit() {
   // ── Submit state ─────────────────────────────────────────────────────────
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // Stall detection (same pattern as EventCreate): browser timer throttling when
+  // backgrounded can freeze fetchWithTimeout's abort, leaving isSubmitting stuck.
+  const submitStartRef = useRef<number | null>(null)
+  const [submitStalled, setSubmitStalled] = useState(false)
+  const SUBMIT_STALL_MS = 35_000
+
   // ── Status locking ───────────────────────────────────────────────────────
   const isLocked = event?.status === 'ongoing' || event?.status === 'past'
 
@@ -172,6 +178,22 @@ export function OrgEventEdit() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tags, visibility, customFields])
 
+  // Stall detection: tab backgrounded mid-submit throttles browser timers
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        isSubmitting &&
+        submitStartRef.current !== null &&
+        Date.now() - submitStartRef.current > SUBMIT_STALL_MS
+      ) {
+        setSubmitStalled(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [isSubmitting])
+
   // ── Cover image handlers ────────────────────────────────────────────────
   const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
   const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
@@ -233,6 +255,8 @@ export function OrgEventEdit() {
     if (!event) return
     setSubmitError(null)
     setCoverUploadError(null)
+    setSubmitStalled(false)
+    submitStartRef.current = Date.now()
 
     // Determine cover image URL
     let cover_image_url: string | null = coverPreview
@@ -283,9 +307,11 @@ export function OrgEventEdit() {
         cover_image_url,
         custom_form_schema: customFields.length > 0 ? customFields as unknown as Json : null,
       })
+      submitStartRef.current = null
       clearDraft()
       navigate(`/organizer/events/${event.id}`)
     } catch (err) {
+      submitStartRef.current = null
       setSubmitError(err instanceof Error ? err.message : 'Failed to save event. Please try again.')
     }
   }
@@ -739,6 +765,26 @@ export function OrgEventEdit() {
           </motion.p>
         )}
 
+        {/* Stall recovery */}
+        {submitStalled && (
+          <motion.div
+            variants={fadeUp}
+            className="p-4 bg-amber-50 border border-amber-200 rounded-xl"
+          >
+            <p className="text-md3-body-sm font-semibold text-amber-900">Taking longer than expected</p>
+            <p className="text-md3-label-md text-amber-700 mt-1">
+              Your form data is saved. Reload the page and try again — nothing will be lost.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-2 text-md3-label-md font-semibold text-blue underline-offset-2 underline"
+            >
+              Reload page →
+            </button>
+          </motion.div>
+        )}
+
         {/* ── ACTIONS ── */}
         <motion.div variants={fadeUp} className="flex gap-3 pt-2">
           <motion.button
@@ -755,7 +801,9 @@ export function OrgEventEdit() {
             whileTap={{ scale: 0.95 }}
             className="flex-1 py-3 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors disabled:opacity-60"
           >
-            {isSubmitting ? 'Saving…' : 'Save Changes'}
+            {isSubmitting
+              ? submitStalled ? 'Connection lost…' : 'Saving…'
+              : 'Save Changes'}
           </motion.button>
         </motion.div>
 

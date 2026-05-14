@@ -98,6 +98,30 @@ export function OrgEventCreate() {
 
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // Stall detection: if the tab was backgrounded mid-submit, the browser throttles
+  // setTimeout (used by fetchWithTimeout's abort timer), so the 15s abort may fire
+  // very late or not at all on iOS Safari — leaving isSubmitting stuck at true.
+  // When the tab becomes visible again and elapsed > 35s, show a recovery prompt.
+  const submitStartRef = useRef<number | null>(null)
+  const [submitStalled, setSubmitStalled] = useState(false)
+  // SUBMIT_STALL_MS ≈ FETCH_TIMEOUT_MS (15s) × 2 attempts + 5s buffer
+  const SUBMIT_STALL_MS = 35_000
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        isSubmitting &&
+        submitStartRef.current !== null &&
+        Date.now() - submitStartRef.current > SUBMIT_STALL_MS
+      ) {
+        setSubmitStalled(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [isSubmitting])
+
   const {
     register,
     handleSubmit,
@@ -243,6 +267,8 @@ export function OrgEventCreate() {
     setSubmitError(null)
     setExternalUrlError(null)
     setCoverUploadError(null)
+    setSubmitStalled(false)
+    submitStartRef.current = Date.now()
 
     // Upload cover image (non-blocking on failure)
     let cover_image_url: string | null = null
@@ -289,9 +315,11 @@ export function OrgEventCreate() {
         created_by:                  user.id,
         custom_form_schema:          customFields.length > 0 ? customFields as unknown as Json : null,
       })
+      submitStartRef.current = null
       clearDraft()
       navigate('/organizer/events')
     } catch (err) {
+      submitStartRef.current = null
       setSubmitError(err instanceof Error ? err.message : 'Failed to create event. Please try again.')
     }
   }
@@ -914,6 +942,27 @@ export function OrgEventCreate() {
           </motion.p>
         )}
 
+        {/* Stall recovery: shown when the tab was backgrounded mid-submit and the
+            browser timer throttling caused fetchWithTimeout's abort to fire late */}
+        {submitStalled && (
+          <motion.div
+            variants={fadeUp}
+            className="p-4 bg-amber-50 border border-amber-200 rounded-xl"
+          >
+            <p className="text-md3-body-sm font-semibold text-amber-900">Taking longer than expected</p>
+            <p className="text-md3-label-md text-amber-700 mt-1">
+              Your form data is saved. Reload the page and try again — nothing will be lost.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-2 text-md3-label-md font-semibold text-blue underline-offset-2 underline"
+            >
+              Reload page →
+            </button>
+          </motion.div>
+        )}
+
         {/* Actions */}
         <motion.div variants={fadeUp} className="flex gap-3 pt-2">
           <button
@@ -928,7 +977,9 @@ export function OrgEventCreate() {
             disabled={isSubmitting}
             className="flex-1 py-3 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors disabled:opacity-60"
           >
-            {isSubmitting ? 'Creating…' : 'Create Event'}
+            {isSubmitting
+              ? submitStalled ? 'Connection lost…' : 'Creating…'
+              : 'Create Event'}
           </button>
         </motion.div>
       </motion.form>

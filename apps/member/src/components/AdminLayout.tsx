@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -21,6 +21,7 @@ export default function AdminLayout() {
   const { user, signOut } = useAuthStore()
   const navigate = useNavigate()
   const [recoveryKey, setRecoveryKey] = useState(0)
+  const lastHiddenRef = useRef(0)
 
   useEffect(() => {
     if (!user) {
@@ -30,21 +31,30 @@ export default function AdminLayout() {
     }
   }, [user, navigate])
 
-  // Recovery: when tab regains visibility after idle, bump key to remount child
-  // pages so their useEffect hooks re-fetch data from Supabase.
+  // Recovery: remount child pages to re-fetch data from Supabase.
+  // Only fires on visibility change if the tab was away for > 2 minutes —
+  // quick tab switches (copy-paste, check another tab) should not cause a full
+  // reload and blank loading state.
   const handleRecover = useCallback(() => setRecoveryKey((k) => k + 1), [])
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') handleRecover()
+      if (document.visibilityState === 'hidden') {
+        lastHiddenRef.current = Date.now()
+      } else if (document.visibilityState === 'visible') {
+        if (Date.now() - lastHiddenRef.current >= 2 * 60 * 1000) {
+          handleRecover()
+        }
+      }
     }
     document.addEventListener('visibilitychange', handleVisibility)
+    // Always recover on network restore — connection just came back.
     window.addEventListener('online', handleRecover)
-    const poll = setInterval(handleRecover, 5 * 60 * 1000)
+    // No periodic poll: admin pages don't use realtime subscriptions, so
+    // polling would just reset scroll position and disrupt editing every few minutes.
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleRecover)
-      clearInterval(poll)
     }
   }, [handleRecover])
 
