@@ -75,6 +75,7 @@ export default function OrganizerLayout() {
 
   useEffect(() => {
     const recover = () => {
+      void supabase.auth.getSession()
       void fetchEvents()
       void fetchAllRewards()
       void fetchAllRedemptions()

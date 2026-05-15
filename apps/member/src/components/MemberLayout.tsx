@@ -106,6 +106,9 @@ export default function MemberLayout() {
     if (!user) return
 
     const recover = () => {
+      // Probe session to trigger auto-refresh if the access token expired while
+      // the tab was backgrounded and intensive timer throttling delayed the refresh.
+      void supabase.auth.getSession()
       // Primary HTTP fetches — critical for dashboard/events
       void fetchEvents()
       void loadTotalPoints()
