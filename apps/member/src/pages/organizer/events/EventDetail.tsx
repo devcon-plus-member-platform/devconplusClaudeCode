@@ -6,6 +6,7 @@ import { useEventsStore } from '../../../stores/useEventsStore'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
 import { MarkdownContent } from '../../../components/MarkdownContent'
+import { supabase } from '../../../lib/supabase'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -16,10 +17,28 @@ export function OrgEventDetail() {
   const navigate = useNavigate()
   const { events, fetchEvents } = useEventsStore()
   const [showAnnounce, setShowAnnounce] = useState(false)
+  const [statsTotal, setStatsTotal]       = useState(0)
+  const [statsPending, setStatsPending]   = useState(0)
+  const [statsCheckedIn, setStatsCheckedIn] = useState(0)
 
   useEffect(() => {
     if (events.length === 0) void fetchEvents()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!id) return
+    void (async () => {
+      const { data } = await supabase
+        .from('event_registrations')
+        .select('status, checked_in')
+        .eq('event_id', id)
+        .neq('status', 'cancelled')
+      if (!data) return
+      setStatsTotal(data.length)
+      setStatsPending(data.filter((r) => r.status === 'pending').length)
+      setStatsCheckedIn(data.filter((r) => r.checked_in).length)
+    })()
+  }, [id])
 
   const event = events.find((e) => e.id === id)
   if (!event) {
@@ -93,9 +112,9 @@ export function OrgEventDetail() {
         {/* Stats row */}
         <motion.div variants={staggerContainer} className="grid grid-cols-3 gap-4 mb-6">
           {[
-            { label: 'Registrations', value: 0, color: 'text-blue' },
-            { label: 'Pending',       value: 0, color: 'text-yellow-500' },
-            { label: 'Checked In',    value: 0, color: 'text-green' },
+            { label: 'Registrations', value: statsTotal,     color: 'text-blue' },
+            { label: 'Pending',       value: statsPending,  color: 'text-yellow-500' },
+            { label: 'Checked In',    value: statsCheckedIn, color: 'text-green' },
           ].map(({ label, value, color }) => (
             <motion.div
               key={label}
