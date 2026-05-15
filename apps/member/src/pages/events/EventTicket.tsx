@@ -165,36 +165,78 @@ export default function EventTicket() {
     }
   }, [reg?.id, retryKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check-in detection — initial fetch + Realtime subscription
+  // Check-in detection — Realtime channel with recovery on visibility/network events
   useEffect(() => {
     if (!reg || event?.status === 'past') return
 
-    // Live: organizer scans → checked_in flips to true
     const regId = reg.id
-    const channel = supabase
-      .channel(`checkin-${regId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'event_registrations', filter: `id=eq.${regId}` },
-        (payload) => {
-          if ((payload.new as { checked_in: boolean | null }).checked_in) setCheckedIn(true)
-        }
-      )
-      .subscribe((status) => {
-        // Re-check once subscribed — catches any scan that happened in the
-        // ~200ms window between component mount and subscription confirmation
-        if (status === 'SUBSCRIBED') {
-          void supabase
-            .from('event_registrations')
-            .select('checked_in')
-            .eq('id', regId)
-            .single()
-            .then(({ data }) => { if (data?.checked_in) setCheckedIn(true) })
-        }
-      })
+    let channel: ReturnType<typeof supabase.channel> | null = null
 
-    return () => { void supabase.removeChannel(channel) }
+    function subscribe() {
+      if (channel) void supabase.removeChannel(channel)
+
+      // Unique channel name per subscription prevents Supabase reusing a stale channel state
+      channel = supabase
+        .channel(`checkin-${regId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'event_registrations', filter: `id=eq.${regId}` },
+          (payload) => {
+            if ((payload.new as { checked_in: boolean | null }).checked_in) setCheckedIn(true)
+          }
+        )
+        .subscribe((status) => {
+          // Re-check once subscribed — catches any scan that happened in the
+          // ~200ms window between component mount and subscription confirmation,
+          // and catches scans that arrived while the channel was being rebuilt
+          if (status === 'SUBSCRIBED') {
+            void supabase
+              .from('event_registrations')
+              .select('checked_in')
+              .eq('id', regId)
+              .single()
+              .then(({ data }) => { if (data?.checked_in) setCheckedIn(true) })
+          }
+        })
+    }
+
+    subscribe()
+
+    // Rebuild the channel when the tab regains visibility or the network reconnects.
+    // Mobile browsers close WebSockets aggressively on screen lock / app background,
+    // so a channel that was alive on mount may be CLOSED by the time the organizer scans.
+    const handleVisibility = () => { if (document.visibilityState === 'visible') subscribe() }
+    const handleOnline = () => subscribe()
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('online', handleOnline)
+      if (channel) void supabase.removeChannel(channel)
+    }
   }, [reg?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling fallback: re-fetch checked_in every 10 s while waiting for scan.
+  // Handles cases where the Realtime channel is dead and no recovery event fires
+  // (e.g. the device was offline the entire time and just reconnected silently).
+  // The interval clears itself automatically once checkedIn becomes true.
+  useEffect(() => {
+    if (!reg || checkedIn || event?.status === 'past') return
+
+    const regId = reg.id
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('event_registrations')
+        .select('checked_in')
+        .eq('id', regId)
+        .single()
+      if (data?.checked_in) setCheckedIn(true)
+    }, 10_000)
+
+    return () => clearInterval(interval)
+  }, [reg?.id, checkedIn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!event || !reg || reg.status !== 'approved') {
     return (
