@@ -82,6 +82,7 @@ export function OrgQRScanner() {
 
   const initCamera = async (el: HTMLVideoElement, deviceId?: string): Promise<void> => {
     const { BrowserQRCodeReader } = await import('@zxing/browser')
+    const { DecodeHintType } = await import('@zxing/library')
 
     // Race camera init against a 10-second timeout
     const timeout = new Promise<never>((_, reject) =>
@@ -96,9 +97,24 @@ export function OrgQRScanner() {
       const activeId = deviceId ?? selectedDeviceId ?? allDevices[0].deviceId
       if (!selectedDeviceId) setSelectedDeviceId(allDevices[0].deviceId)
 
-      const reader = new BrowserQRCodeReader()
-      const controls = await reader.decodeFromVideoDevice(
-        activeId || allDevices[0].deviceId,
+      // TRY_HARDER runs more decode passes per frame — helps on soft/low-res feeds
+      const hints = new Map<import('@zxing/library').DecodeHintType, unknown>()
+      hints.set(DecodeHintType.TRY_HARDER, true)
+
+      const reader = new BrowserQRCodeReader(hints)
+
+      // Request the highest resolution the camera supports.
+      // decodeFromConstraints passes these directly to getUserMedia instead of
+      // the browser's default (usually 640×480 for USB webcams).
+      const videoConstraints: MediaTrackConstraints = {
+        width: { ideal: 1920, max: 3840 },
+        height: { ideal: 1080, max: 2160 },
+        frameRate: { ideal: 30, min: 15 },
+      }
+      if (activeId) videoConstraints.deviceId = { exact: activeId }
+
+      const controls = await reader.decodeFromConstraints(
+        { video: videoConstraints },
         el,
         (res) => {
           if (res) void handleScannedToken(res.getText())
@@ -351,10 +367,11 @@ export function OrgQRScanner() {
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
 
-      {/* Live camera feed */}
+      {/* Live camera feed — contrast boost sharpens QR module edges on low-res cameras */}
       <video
         ref={videoCallbackRef}
         className="absolute inset-0 w-full h-full object-cover"
+        style={{ filter: 'contrast(1.15) brightness(1.05)' }}
         playsInline
         muted
       />
