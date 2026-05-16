@@ -17,6 +17,99 @@ function isChunkError(error: unknown): boolean {
   )
 }
 
+function isOverloadError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase()
+    if (
+      msg.includes('503') ||
+      msg.includes('504') ||
+      msg.includes('429') ||
+      msg.includes('service unavailable') ||
+      msg.includes('gateway timeout') ||
+      msg.includes('too many requests') ||
+      msg.includes('resource exhausted') ||
+      msg.includes('exhausting multiple resources')
+    ) return true
+  }
+  const typed = error as { status?: number; statusCode?: number } | null
+  const status = typed?.status ?? typed?.statusCode
+  return status === 503 || status === 504 || status === 429
+}
+
+function ServiceOverloadedScreen() {
+  const navigate = useNavigate()
+
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6 text-center relative overflow-hidden"
+      style={{ backgroundColor: 'rgb(var(--color-primary))' }}
+    >
+      <div
+        className="absolute inset-0 z-0 pointer-events-none"
+        style={{ backgroundImage: PATTERN_BG, backgroundSize: '60px 60px', backgroundRepeat: 'repeat', opacity: 0.4 }}
+      />
+
+      <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+          className="mb-6"
+        >
+          <div className="w-20 h-20 rounded-3xl bg-white/15 border border-white/20 flex items-center justify-center backdrop-blur-md">
+            {/* People / crowd icon */}
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"
+                fill="rgba(255,255,255,0.9)"
+              />
+            </svg>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="mb-8"
+        >
+          <h1 className="text-md3-headline-sm font-bold text-white mb-3 leading-snug">
+            High Traffic Right Now
+          </h1>
+          <p className="text-white/80 text-md3-body-md leading-relaxed mb-2">
+            There are currently a lot of members using DEVCON+ and the servers are catching up.
+          </p>
+          <p className="text-white/60 text-md3-body-sm leading-relaxed">
+            Our team is on it — please wait a moment and try again shortly.
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+          className="flex flex-col gap-3 w-full"
+        >
+          <motion.button
+            onClick={() => window.location.reload()}
+            className="w-full bg-white text-primary font-bold text-md3-label-lg py-4 rounded-full shadow-xl"
+            whileTap={{ scale: 0.96, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+          >
+            Try Again
+          </motion.button>
+          <motion.button
+            onClick={() => navigate('/home')}
+            className="w-full bg-white/12 border border-white/20 text-white font-semibold text-md3-label-lg py-4 rounded-full backdrop-blur-md"
+            whileTap={{ scale: 0.96, transition: { type: 'spring', stiffness: 400, damping: 25 } }}
+          >
+            Back to Dashboard
+          </motion.button>
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+
 function ChunkErrorScreen() {
   const navigate = useNavigate()
   const alreadyTried = sessionStorage.getItem(CHUNK_RELOAD_KEY) === '1'
@@ -169,5 +262,7 @@ function GenericErrorScreen() {
 
 export function RouteErrorBoundary() {
   const error = useRouteError()
-  return isChunkError(error) ? <ChunkErrorScreen /> : <GenericErrorScreen />
+  if (isChunkError(error)) return <ChunkErrorScreen />
+  if (isOverloadError(error)) return <ServiceOverloadedScreen />
+  return <GenericErrorScreen />
 }

@@ -16,6 +16,24 @@ function isSafeReturnTo(url: string | null): url is string {
   return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
 }
 
+function isOverloadError(err: unknown): boolean {
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase()
+    if (
+      msg.includes('503') ||
+      msg.includes('504') ||
+      msg.includes('429') ||
+      msg.includes('service unavailable') ||
+      msg.includes('gateway timeout') ||
+      msg.includes('too many requests') ||
+      msg.includes('resource exhausted')
+    ) return true
+  }
+  const typed = err as { status?: number; statusCode?: number } | null
+  const status = typed?.status ?? typed?.statusCode
+  return status === 503 || status === 504 || status === 429
+}
+
 /** Map raw Supabase/GoTrue errors to user-friendly messages. */
 function friendlyAuthError(msg: string): string {
   const lower = msg.toLowerCase()
@@ -29,6 +47,9 @@ function friendlyAuthError(msg: string): string {
     return 'Unable to reach our servers. Please check your internet connection and try again.'
   return msg
 }
+
+const HIGH_TRAFFIC_MESSAGE =
+  'There are currently a lot of members using DEVCON+ and the servers are catching up. Our team is on it \u2014 please wait a moment and try again.'
 
 const schema = z.object({
   email:    z.string().email('Invalid email'),
@@ -61,6 +82,7 @@ export default function SignIn() {
 
   const [googleLoading, setGoogleLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [isHighTraffic, setIsHighTraffic] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
   const turnstileRef = useRef<TurnstileInstance>(null)
@@ -91,6 +113,7 @@ export default function SignIn() {
     }
 
     setFormError(null)
+    setIsHighTraffic(false)
     try {
       await signIn(data.email, data.password, turnstileToken ?? undefined)
       failedAttempts.current = 0
@@ -99,6 +122,11 @@ export default function SignIn() {
     } catch (err) {
       turnstileRef.current?.reset()
       setTurnstileToken(null)
+      if (isOverloadError(err)) {
+        setIsHighTraffic(true)
+        setFormError(HIGH_TRAFFIC_MESSAGE)
+        return
+      }
       const serverSecs = (err as { retryAfterSeconds?: number }).retryAfterSeconds
       if (serverSecs) {
         failedAttempts.current = 0
@@ -159,10 +187,22 @@ export default function SignIn() {
           disabled={googleLoading}
           onClick={async () => {
             setGoogleLoading(true)
+            setFormError(null)
+            setIsHighTraffic(false)
             if (isSafeReturnTo(returnTo)) {
               sessionStorage.setItem('devcon_returnTo', returnTo)
             }
-            try { await signInWithGoogle() } catch { setGoogleLoading(false) }
+            try {
+              await signInWithGoogle()
+            } catch (err) {
+              setGoogleLoading(false)
+              if (isOverloadError(err)) {
+                setIsHighTraffic(true)
+                setFormError(HIGH_TRAFFIC_MESSAGE)
+              } else {
+                setFormError('Unable to connect to Google Sign-In. Please try again or use email.')
+              }
+            }
           }}
           className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white border border-slate-200 rounded-xl text-md3-body-md font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-5 shadow-card disabled:opacity-60"
         >
@@ -214,7 +254,13 @@ export default function SignIn() {
             {errors.password && <p className="text-red text-md3-label-md mt-1">{errors.password.message}</p>}
           </div>
 
-          {formError && (
+          {formError && isHighTraffic && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-amber-800 text-md3-body-sm font-semibold mb-0.5">High Traffic Right Now</p>
+              <p className="text-amber-700 text-md3-label-md leading-relaxed">{formError}</p>
+            </div>
+          )}
+          {formError && !isHighTraffic && (
             <p className="text-red text-md3-label-md bg-red/5 border border-red/20 rounded-lg px-3 py-2">
               {formError}
             </p>
