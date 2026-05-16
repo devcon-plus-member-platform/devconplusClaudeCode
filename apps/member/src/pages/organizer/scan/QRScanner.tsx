@@ -96,38 +96,15 @@ export function OrgQRScanner() {
       const activeId = deviceId ?? selectedDeviceId ?? allDevices[0].deviceId
       if (!selectedDeviceId) setSelectedDeviceId(allDevices[0].deviceId)
 
-      // Request high resolution and prefer the rear camera.
-      // Using decodeFromConstraints (the lower-level method) instead of
-      // decodeFromVideoDevice so we can pass full MediaStreamConstraints.
-      const videoConstraints: MediaTrackConstraints = activeId
-        ? { deviceId: { exact: activeId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-        : { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-
       const reader = new BrowserQRCodeReader()
-      const controls = await reader.decodeFromConstraints(
-        { video: videoConstraints },
+      const controls = await reader.decodeFromVideoDevice(
+        activeId || allDevices[0].deviceId,
         el,
         (res) => {
           if (res) void handleScannedToken(res.getText())
         }
       )
       controlsRef.current = controls
-
-      // Apply continuous autofocus on the live track.
-      // focusMode is an ImageCapture API extension — pass via `advanced` so
-      // unsupported browsers/devices silently ignore it instead of throwing.
-      const stream = el.srcObject as MediaStream | null
-      const videoTrack = stream?.getVideoTracks()[0]
-      if (videoTrack) {
-        try {
-          type ExtendedConstraintSet = MediaTrackConstraintSet & { focusMode?: string }
-          await videoTrack.applyConstraints({
-            advanced: [{ focusMode: 'continuous' } as ExtendedConstraintSet],
-          })
-        } catch {
-          // Device does not support focusMode — no-op
-        }
-      }
     }
 
     await Promise.race([start(), timeout])
