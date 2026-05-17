@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Mission, MissionParticipant, MissionSubmission } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
+import { useAuthStore } from './useAuthStore'
 
 let _chanSeq = 0
 const nextChan = (base: string) => `${base}-${++_chanSeq}`
@@ -29,17 +30,21 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
 
   fetchAll: async (force = false) => {
     const { isLoading, lastFetched, missions } = get()
-    
+
     // Cache-first: if already loading, or if we have data and it's fresh (< 5 mins), skip
     const isFresh = lastFetched && (Date.now() - lastFetched < 300000)
     if (isLoading || (isFresh && missions.length > 0 && !force)) return
 
+    // Only fetch user-specific rows when authenticated (MemberLayout guards for !user)
+    const userId = useAuthStore.getState().user?.id
+    if (!userId) return
+
     set({ isLoading: true, error: null })
     try {
       const [mRes, pRes, sRes] = await Promise.all([
-        supabase.from('missions').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-        supabase.from('mission_participants').select('*'),
-        supabase.from('mission_submissions').select('*'),
+        supabase.from('missions').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(50),
+        supabase.from('mission_participants').select('*').eq('user_id', userId).limit(100),
+        supabase.from('mission_submissions').select('*').eq('user_id', userId).limit(100),
       ])
       if (mRes.error) throw mRes.error
       set({
@@ -100,9 +105,12 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
   },
 
   subscribeToChanges: () => {
+    const userId = useAuthStore.getState().user?.id
+    const userFilter = userId ? { filter: `user_id=eq.${userId}` } : {}
     const channel = supabase
       .channel(nextChan('missions-realtime'))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mission_participants' },
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'mission_participants', ...userFilter },
         (payload: { new: MissionParticipant }) => {
           const row = payload.new
           set((s) => ({
@@ -114,7 +122,8 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
           }))
         }
       )
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mission_participants' },
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'mission_participants', ...userFilter },
         (payload: { old: Partial<MissionParticipant> }) => {
           const row = payload.old
           set((s) => ({
@@ -124,7 +133,8 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
           }))
         }
       )
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mission_submissions' },
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'mission_submissions', ...userFilter },
         (payload: { new: MissionSubmission }) => {
           const row = payload.new
           set((s) => ({
@@ -134,7 +144,8 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
           }))
         }
       )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mission_submissions' },
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'mission_submissions', ...userFilter },
         (payload: { new: MissionSubmission }) => {
           const row = payload.new
           set((s) => ({
@@ -142,6 +153,7 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
           }))
         }
       )
+      // missions table UPDATE is unfiltered — watches for admin activation changes (small table)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'missions' },
         (payload: { new: Mission }) => {
           const row = payload.new

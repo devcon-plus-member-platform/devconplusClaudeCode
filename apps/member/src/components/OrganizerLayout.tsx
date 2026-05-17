@@ -116,8 +116,10 @@ export default function OrganizerLayout() {
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
     const unregisterDisconnect = onRealtimeDisconnect(() => runRecovery())
-    // Polling fallback: refetch + re-subscribe every 90 s (exempt from debounce)
-    const pollInterval = setInterval(() => { recover(); resubscribe() }, 90_000)
+    // Polling fallback: refetch + re-subscribe every 300 s (exempt from debounce).
+    // 300s is 3× less IO than the previous 90s while still covering silent channel death.
+    // Fast recovery is handled by visibilitychange + online events above.
+    const pollInterval = setInterval(() => { recover(); resubscribe() }, 300_000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)

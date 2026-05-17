@@ -104,6 +104,7 @@ export const useEventsStore = create<EventsState>((set) => ({
         .from('events')
         .select('*')
         .order('event_date', { ascending: true })
+        .limit(100)
       if (error) throw error
       set({ events: sortByEventDate((data ?? []) as Event[]) })
     } catch (err) {

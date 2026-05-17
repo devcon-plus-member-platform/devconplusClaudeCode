@@ -70,6 +70,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
         .select('*')
         .eq('is_active', true)
         .order('points_cost', { ascending: true })
+        .limit(50)
       if (error) throw error
       set({ rewards: (data ?? []) as Reward[] })
     } catch (err) {
@@ -87,6 +88,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
         .from('rewards')
         .select('*')
         .order('points_cost', { ascending: true })
+        .limit(100)
       if (error) throw error
       set({ allRewards: (data ?? []) as Reward[] })
     } catch (err) {
@@ -240,6 +242,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
           rewards!reward_redemptions_reward_id_fkey (name, image_url, points_cost)
         `)
         .order('redeemed_at', { ascending: false })
+        .limit(200)
       if (error) throw error
       const mapped: RewardRedemptionWithDetails[] = (data ?? []).map((row) => {
         const profile = row.profiles as { full_name: string; email: string } | null
@@ -323,6 +326,9 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
 
   // ── Realtime redemption subscriptions ────────────────────────────────────
   subscribeToRedemptions: () => {
+    // Debounce timer: coalesces rapid back-to-back inserts into one bulk refetch
+    // instead of firing one per-row SELECT+JOIN per insert (N+1).
+    let refetchTimer: number | null = null
     const channel = supabase
       .channel(nextChan('reward-redemptions-realtime'))
       .on(
@@ -330,43 +336,13 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
         { event: 'INSERT', schema: 'public', table: 'reward_redemptions' },
         (payload) => {
           const row = payload.new as RewardRedemption
-          void supabase
-            .from('reward_redemptions')
-            .select(`
-              *,
-              profiles!reward_redemptions_user_id_fkey (full_name, email),
-              rewards!reward_redemptions_reward_id_fkey (name, image_url, points_cost)
-            `)
-            .eq('id', row.id)
-            .single()
-            .then(({ data }) => {
-              if (!data) return
-              const profile = data.profiles as { full_name: string; email: string } | null
-              const reward = data.rewards as { name: string; image_url: string | null; points_cost: number } | null
-              const enriched: RewardRedemptionWithDetails = {
-                id: data.id,
-                user_id: data.user_id ?? '',
-                reward_id: data.reward_id ?? '',
-                status: (data.status ?? 'pending') as RewardRedemption['status'],
-                redeemed_at: data.redeemed_at ?? '',
-                claimed_at: data.claimed_at,
-                reviewed_by: (data as Record<string, unknown>).reviewed_by as string | null ?? null,
-                reviewed_at: (data as Record<string, unknown>).reviewed_at as string | null ?? null,
-                claim_pin: (data as Record<string, unknown>).claim_pin as string | null ?? null,
-                member_name: profile?.full_name ?? 'Unknown',
-                member_email: profile?.email ?? '',
-                reward_name: reward?.name ?? 'Unknown Reward',
-                reward_image_url: reward?.image_url ?? null,
-                reward_points_cost: reward?.points_cost ?? 0,
-              }
-              set((s) => ({
-                allRedemptions: [enriched, ...s.allRedemptions],
-                unseenClaimCount: s.unseenClaimCount + 1,
-              }))
-              toast.info(
-                `New reward claim — ${enriched.member_name} requested: ${enriched.reward_name} (${enriched.reward_points_cost.toLocaleString()} pts)`
-              )
-            })
+          const reward = get().allRewards.find((r) => r.id === row.reward_id)
+          toast.info(`New reward claim — ${reward?.name ?? 'Unknown Reward'}`)
+          if (refetchTimer !== null) window.clearTimeout(refetchTimer)
+          refetchTimer = window.setTimeout(() => {
+            refetchTimer = null
+            void get().fetchAllRedemptions()
+          }, 500)
         }
       )
       .subscribe((status, err) => {
@@ -376,6 +352,9 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
           console.warn('[reward-redemptions-realtime] timed out — Supabase will retry')
         }
       })
-    return () => { void supabase.removeChannel(channel) }
+    return () => {
+      if (refetchTimer !== null) window.clearTimeout(refetchTimer)
+      void supabase.removeChannel(channel)
+    }
   },
 }))

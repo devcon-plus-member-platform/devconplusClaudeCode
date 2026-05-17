@@ -32,6 +32,7 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         .select('*')
         .eq('is_active', true)
         .order('posted_at', { ascending: true })
+        .limit(50)
       if (error) throw error
       set({ jobs: (data ?? []) as Job[] })
     } catch (err) {
@@ -48,6 +49,7 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         .from('jobs')
         .select('*')
         .order('posted_at', { ascending: false })
+        .limit(200)
       if (error) throw error
       set({ allJobs: (data ?? []) as Job[] })
     } catch (err) {

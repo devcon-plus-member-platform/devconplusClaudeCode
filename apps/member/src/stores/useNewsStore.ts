@@ -22,6 +22,7 @@ export const useNewsStore = create<NewsState>((set) => ({
         .from('news_posts')
         .select('*')
         .order('created_at', { ascending: false })
+        .limit(50)
       if (error) throw error
       set({ posts: (data ?? []) as NewsPost[] })
     } catch (err) {
