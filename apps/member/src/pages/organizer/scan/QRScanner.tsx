@@ -105,13 +105,18 @@ export function OrgQRScanner() {
 
       // Request the highest resolution the camera supports.
       // decodeFromConstraints passes these directly to getUserMedia instead of
-      // the browser's default (usually 640×480 for USB webcams).
+      // the browser's default (often 640x480 on Android).
       const videoConstraints: MediaTrackConstraints = {
         width: { ideal: 1920, max: 3840 },
         height: { ideal: 1080, max: 2160 },
         frameRate: { ideal: 30, min: 15 },
       }
-      if (activeId) videoConstraints.deviceId = { exact: activeId }
+      if (activeId) {
+        videoConstraints.deviceId = { exact: activeId }
+      } else {
+        // Prefer the back camera when possible.
+        videoConstraints.facingMode = { ideal: 'environment' }
+      }
 
       const controls = await reader.decodeFromConstraints(
         { video: videoConstraints },
@@ -121,6 +126,30 @@ export function OrgQRScanner() {
         }
       )
       controlsRef.current = controls
+
+      const stream = el.srcObject as MediaStream | null
+      const track = stream?.getVideoTracks?.()[0]
+      if (track) {
+        // Hint to the browser this stream is for fast motion/scan usage.
+        track.contentHint = 'motion'
+
+        // On some Android devices, advanced constraints are required to escape 640x480.
+        try {
+          const capabilities = track.getCapabilities?.()
+          const advanced: MediaTrackConstraintSet = {}
+          if (capabilities?.focusMode?.includes('continuous')) {
+            advanced.focusMode = 'continuous'
+          }
+          if (capabilities?.zoom && typeof capabilities.zoom.max === 'number') {
+            advanced.zoom = Math.min(1.5, capabilities.zoom.max)
+          }
+          if (Object.keys(advanced).length > 0) {
+            await track.applyConstraints({ advanced: [advanced] })
+          }
+        } catch {
+          // Best-effort only. Some browsers reject advanced constraints.
+        }
+      }
     }
 
     await Promise.race([start(), timeout])
@@ -438,7 +467,7 @@ export function OrgQRScanner() {
       {/* ── Active scanning UI ───────────────────────────────────────────────── */}
       {cameraStatus === 'active' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="relative w-60 h-60">
+          <div className="relative w-72 h-72">
             <CornerBrackets />
           </div>
           <p className="text-white/80 text-md3-body-md font-medium tracking-wide">
