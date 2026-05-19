@@ -135,16 +135,19 @@ export function OrgQRScanner() {
 
         // On some Android devices, advanced constraints are required to escape 640x480.
         try {
-          const capabilities = track.getCapabilities?.()
-          const advanced: MediaTrackConstraintSet = {}
-          if (capabilities?.focusMode?.includes('continuous')) {
+          const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined
+          const advanced: Record<string, unknown> = {}
+          const focusModes = capabilities?.focusMode as string[] | undefined
+          const zoomCaps = capabilities?.zoom as { max?: number } | undefined
+
+          if (focusModes?.includes('continuous')) {
             advanced.focusMode = 'continuous'
           }
-          if (capabilities?.zoom && typeof capabilities.zoom.max === 'number') {
-            advanced.zoom = Math.min(1.5, capabilities.zoom.max)
+          if (typeof zoomCaps?.max === 'number') {
+            advanced.zoom = Math.min(1.5, zoomCaps.max)
           }
           if (Object.keys(advanced).length > 0) {
-            await track.applyConstraints({ advanced: [advanced] })
+            await track.applyConstraints({ advanced: [advanced] } as MediaTrackConstraints)
           }
         } catch {
           // Best-effort only. Some browsers reject advanced constraints.
