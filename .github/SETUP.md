@@ -1,6 +1,41 @@
 # GitHub Actions & Branch Protection Setup
 
+## Branching Strategy (Waterfall)
+
+```
+feature/xyz ──PR──→ develop ──PR──→ master (production)
+                       │                    │
+                  Vercel preview        Vercel prod
+                  (staging / QA)        devconplusbeta-v1.vercel.app
+```
+
+| Branch | Purpose | Who merges here | Deploys to |
+|--------|---------|-----------------|------------|
+| `feature/*` | Individual work | Developer creates PR → `develop` | Vercel preview per PR |
+| `develop` | Integration + QA | Team merges features during implementation phase | Vercel auto-preview (staging URL) |
+| `master` | Production | Team lead PRs `develop` → `master` at release | Vercel prod (with approval gate) |
+
+### Waterfall phase mapping
+
+| Phase | Branch activity |
+|-------|----------------|
+| **Implementation** | Feature branches PR into `develop` |
+| **Integration testing** | Test on the `develop` Vercel preview URL |
+| **Release** | PR `develop` → `master`, requires 1 approval |
+| **Production** | Merge triggers deploy with manual approval gate |
+
+### Rules
+
+- **Never push directly to `master` or `develop`** — always use PRs
+- **Feature branches branch off `develop`**, not `master`
+- **Only `develop` merges into `master`** — no feature branches directly to `master`
+- **Keep `develop` in sync**: after a release merge, pull `master` back into `develop`
+
+---
+
 ## 1. Branch Protection Rules (one-time setup)
+
+### For `master` (production)
 
 Go to **Settings > Branches > Add branch ruleset** for `master`:
 
@@ -11,6 +46,16 @@ Go to **Settings > Branches > Add branch ruleset** for `master`:
   - Required checks: `Typecheck`, `Lint`, `Test`, `Build`
 - [x] Require branches to be up to date before merging
 - [x] Do not allow bypassing the above settings
+
+### For `develop` (integration)
+
+Add another branch ruleset for `develop`:
+
+- [x] Require a pull request before merging
+  - Required approvals: **1**
+- [x] Require status checks to pass before merging
+  - Required checks: `Typecheck`, `Lint`, `Test`, `Build`
+- [ ] Require branches to be up to date before merging *(optional — can skip for velocity)*
 
 ## 2. GitHub Environments (one-time setup)
 
@@ -38,14 +83,11 @@ cat .vercel/project.json
 
 ## 4. Disable Vercel Auto-Deploy for Production
 
-Since we're deploying via GitHub Actions with approval gates, disable Vercel's
-auto-deploy for the production branch:
+Since we deploy production via GitHub Actions with an approval gate, disable
+Vercel's auto-deploy for `master` only. Preview deploys for PRs and the
+`develop` branch stay enabled (Vercel handles these via Git integration).
 
-1. Go to your Vercel project > Settings > Git
-2. Under "Production Branch", keep `master`
-3. Under "Ignored Build Step", you can leave as-is (preview deploys for PRs will still work via Vercel Git integration)
-
-Alternatively, if you want full control, add to `vercel.json`:
+Add to `vercel.json`:
 ```json
 {
   "git": {
@@ -56,14 +98,12 @@ Alternatively, if you want full control, add to `vercel.json`:
 }
 ```
 
-This keeps preview deploys on PRs but routes production deploys through the
-GitHub Actions approval workflow.
-
 ## 5. Workflow Summary
 
 | Trigger | Workflow | What happens |
 |---------|----------|-------------|
-| PR opened/updated | `ci.yml` | Typecheck → Lint → Test → Build (parallel, then build) |
-| PR merged to master | `deploy-production.yml` | Validate build → **manual approval** → `vercel --prod` |
+| PR to `develop` or `master` | `ci.yml` | Typecheck → Lint → Test → Build (parallel, then build) |
+| Push to `develop` | Vercel Git integration | Auto-deploys preview URL (staging) |
+| PR merged to `master` | `deploy-production.yml` | Validate build → **manual approval** → `vercel --prod` |
 | Daily 4:00 AM PHT | `nightly.yml` | Full validation; opens issue on failure |
 | Manual | `nightly.yml` | Can be triggered via Actions > Nightly > Run workflow |
