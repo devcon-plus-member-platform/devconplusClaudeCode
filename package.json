@@ -9,7 +9,10 @@
     "dev:member": "turbo run dev --filter=@devcon-plus/member",
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:ci": "turbo run test:ci"
   },
   "devDependencies": {
     "supabase": "^2.76.15",

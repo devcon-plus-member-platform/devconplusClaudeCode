@@ -187,7 +187,7 @@ export default function ProfileEdit() {
   const handleUpgradeSubmit = async () => {
     const trimmed = upgradeCode.trim()
     if (!trimmed) return
-    const ORGANIZER_CODE_RE = /^[A-Z0-9\-]{6,20}$/
+    const ORGANIZER_CODE_RE = /^[A-Z0-9-]{6,20}$/
     if (!ORGANIZER_CODE_RE.test(trimmed)) {
       setUpgradeStatus('invalid_code')
       return
