@@ -1,5 +1,5 @@
 {
-  "name": "@devcon-plus/member",
+  "name": "@devcon-plus/web",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -7,23 +7,28 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b --noEmit",
     "lint": "eslint src",
     "test": "vitest",
     "test:ci": "vitest run"
   },
+  "overrides": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
   "dependencies": {
-    "@devcon-plus/supabase": "*",
-    "@hookform/resolvers": "^3.10.0",
+"@hookform/resolvers": "^3.10.0",
     "@marsidev/react-turnstile": "^1.5.0",
     "@supabase/supabase-js": "^2.49.1",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "framer-motion": "^12.34.3",
     "html-to-image": "^1.11.13",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.56.1",
+    "react-is": "^19.2.4",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.6.2",
     "recharts": "^3.8.0",
