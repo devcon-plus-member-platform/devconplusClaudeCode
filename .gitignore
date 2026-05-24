@@ -20,3 +20,7 @@ remix-of-devcon-connect/
 # AI tool config/cache
 .gemini/
 supabase/migrations/.claude/
+
+# Server build output
+server/dist/
+server/node_modules/
