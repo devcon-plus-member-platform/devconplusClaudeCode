@@ -133,43 +133,17 @@ export function OrgQRScanner() {
         // Hint to the browser this stream is for fast motion/scan usage.
         track.contentHint = 'motion'
 
-        const settings = track.getSettings?.()
-        if (settings) {
-          console.info('[qr-scanner] camera settings', settings)
-        }
-
         // On some Android devices, advanced constraints are required to escape 640x480.
         try {
           const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined
           const advanced: Record<string, unknown> = {}
           const focusModes = capabilities?.focusMode as string[] | undefined
-          const zoomRange = capabilities?.zoom as { min?: number; max?: number } | undefined
-          const widthRange = capabilities?.width as { max?: number } | undefined
-          const heightRange = capabilities?.height as { max?: number } | undefined
-          const constraintSet: MediaTrackConstraints = {}
 
           if (focusModes?.includes('continuous')) {
             advanced.focusMode = 'continuous'
-          } else if (focusModes?.includes('auto')) {
-            advanced.focusMode = 'auto'
           }
-
-          if (zoomRange?.max && zoomRange.max > 1) {
-            advanced.zoom = Math.min(zoomRange.max, 2)
-          }
-
-          if (widthRange?.max) {
-            constraintSet.width = { ideal: widthRange.max }
-          }
-          if (heightRange?.max) {
-            constraintSet.height = { ideal: heightRange.max }
-          }
-
-          if (Object.keys(constraintSet).length > 0 || Object.keys(advanced).length > 0) {
-            await track.applyConstraints({
-              ...constraintSet,
-              ...(Object.keys(advanced).length > 0 ? { advanced: [advanced] } : {}),
-            } as MediaTrackConstraints)
+          if (Object.keys(advanced).length > 0) {
+            await track.applyConstraints({ advanced: [advanced] } as MediaTrackConstraints)
           }
         } catch {
           // Best-effort only. Some browsers reject advanced constraints.
@@ -492,7 +466,7 @@ export function OrgQRScanner() {
       {/* ── Active scanning UI ───────────────────────────────────────────────── */}
       {cameraStatus === 'active' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="relative w-70 h-70">
+          <div className="relative w-[min(85vw,360px)] h-[min(85vw,360px)]">
             <CornerBrackets />
           </div>
           <p className="text-white/80 text-md3-body-md font-medium tracking-wide">
