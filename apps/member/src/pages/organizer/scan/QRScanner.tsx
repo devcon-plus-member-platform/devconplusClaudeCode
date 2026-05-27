@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeftOutline, CameraRotateOutline, CheckCircleOutline, InfoCircleOutline, CloseCircleOutline, BoltOutline, ClockCircleOutline, UserCheckOutline, UserCrossOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CameraRotateOutline, CheckCircleOutline, InfoCircleOutline, CloseCircleOutline, BoltOutline, ClockCircleOutline, UserCheckOutline, UserCrossOutline, FlipHorizontalOutline, TargetOutline } from 'solar-icon-set'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +55,11 @@ export function OrgQRScanner() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [isSwitching, setIsSwitching] = useState(false)
+
+  // Mirror + focus
+  const [isMirrored, setIsMirrored] = useState(false)
+  const [isFocusing, setIsFocusing] = useState(false)
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Result overlay — null = nothing showing, non-null = slide-up sheet visible
   const [overlayEntry, setOverlayEntry] = useState<{ data: ResultOverlay; key: number } | null>(null)
@@ -187,6 +192,31 @@ export function OrgQRScanner() {
       }
     }
   }
+
+  const triggerAutoFocus = useCallback(async () => {
+    const stream = videoEl?.srcObject as MediaStream | null
+    const track = stream?.getVideoTracks?.()[0]
+    if (!track) return
+
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current)
+    setIsFocusing(true)
+
+    try {
+      const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined
+      const focusModes = capabilities?.focusMode as string[] | undefined
+
+      if (focusModes?.includes('continuous')) {
+        // Cycle manual→continuous to force a refocus pass on browsers that support it
+        await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] } as MediaTrackConstraints)
+        await new Promise((r) => setTimeout(r, 80))
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as MediaTrackConstraints)
+      }
+    } catch {
+      // Best-effort — not all browsers support focus constraints
+    }
+
+    focusTimerRef.current = setTimeout(() => setIsFocusing(false), 800)
+  }, [videoEl])
 
   const dismissOverlay = () => {
     if (overlayTimerRef.current) {
@@ -389,6 +419,7 @@ export function OrgQRScanner() {
       cameraAbortRef.current = true
       stopCamera()
       if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current)
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current)
     }
   }, [videoEl]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -399,7 +430,11 @@ export function OrgQRScanner() {
       <video
         ref={videoCallbackRef}
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ filter: 'contrast(1.15) brightness(1.05)' }}
+        style={{
+          filter: 'contrast(1.15) brightness(1.05)',
+          transform: isMirrored ? 'scaleX(-1)' : undefined,
+        }}
+        onClick={() => { void triggerAutoFocus() }}
         playsInline
         muted
       />
@@ -468,6 +503,18 @@ export function OrgQRScanner() {
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
           <div className="relative w-[min(85vw,360px)] h-[min(85vw,360px)]">
             <CornerBrackets />
+            <AnimatePresence>
+              {isFocusing && (
+                <motion.div
+                  key="focus-ring"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 rounded-xl border-2 border-yellow-300/80 pointer-events-none"
+                />
+              )}
+            </AnimatePresence>
           </div>
           <p className="text-white/80 text-md3-body-md font-medium tracking-wide">
             {isSwitching ? 'Switching camera…' : 'Align QR to scan'}
@@ -487,19 +534,47 @@ export function OrgQRScanner() {
           <ArrowLeftOutline className="w-5 h-5" color="white" />
         </motion.button>
 
-        {devices.length >= 2 && (
+        <div className="flex items-center gap-2">
+          {/* Tap-to-focus button */}
           <motion.button
             type="button"
-            aria-label="Switch camera lens"
+            aria-label="Auto focus"
             whileTap={{ scale: 0.9 }}
-            onClick={cycleCamera}
+            onClick={() => { void triggerAutoFocus() }}
             disabled={isSwitching}
             className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/30 disabled:opacity-40 shadow-lg transition-colors"
           >
-            <CameraRotateOutline className="w-4 h-4" color="white" />
-            <span className="text-white text-md3-label-md font-medium">Lens</span>
+            <TargetOutline width={16} height={16} color={isFocusing ? '#FCD34D' : 'white'} />
+            <span className="text-white text-md3-label-md font-medium">Focus</span>
           </motion.button>
-        )}
+
+          {/* Mirror toggle */}
+          <motion.button
+            type="button"
+            aria-label="Mirror camera"
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsMirrored((m) => !m)}
+            disabled={isSwitching}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-full backdrop-blur-md border shadow-lg transition-colors disabled:opacity-40 ${isMirrored ? 'bg-white/40 border-white/60' : 'bg-white/20 border-white/30'}`}
+          >
+            <FlipHorizontalOutline width={16} height={16} color="white" />
+            <span className="text-white text-md3-label-md font-medium">Mirror</span>
+          </motion.button>
+
+          {devices.length >= 2 && (
+            <motion.button
+              type="button"
+              aria-label="Switch camera lens"
+              whileTap={{ scale: 0.9 }}
+              onClick={cycleCamera}
+              disabled={isSwitching}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/30 disabled:opacity-40 shadow-lg transition-colors"
+            >
+              <CameraRotateOutline className="w-4 h-4" color="white" />
+              <span className="text-white text-md3-label-md font-medium">Lens</span>
+            </motion.button>
+          )}
+        </div>
       </div>
 
       {/* ── iOS info chip ────────────────────────────────────────────────────── */}
