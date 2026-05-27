@@ -24,14 +24,18 @@ const MAX_ATTEMPTS = 3
 const OVERLAY_DURATION_MS = 3000
 
 // ── Module-level helper component ─────────────────────────────────────────────
-const CornerBrackets = () => (
+const CornerBrackets = ({ detecting }: { detecting: boolean }) => (
   <svg
     viewBox="0 0 240 240"
     className="absolute inset-0 w-full h-full"
     fill="none"
-    stroke="white"
     strokeWidth="3"
     strokeLinecap="round"
+    style={{
+      stroke: detecting ? '#21C45D' : 'rgba(255,255,255,0.9)',
+      filter: detecting ? 'drop-shadow(0 0 8px rgba(33,196,93,0.85))' : 'none',
+      transition: 'stroke 0.2s ease, filter 0.2s ease',
+    }}
   >
     {/* Top-left */}
     <path d="M 0 30 L 0 0 L 30 0" />
@@ -60,6 +64,10 @@ export function OrgQRScanner() {
   const [isMirrored, setIsMirrored] = useState(false)
   const [isFocusing, setIsFocusing] = useState(false)
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // QR detection indicator — true when zxing has a code in frame
+  const [isDetecting, setIsDetecting] = useState(false)
+  const detectingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Result overlay — null = nothing showing, non-null = slide-up sheet visible
   const [overlayEntry, setOverlayEntry] = useState<{ data: ResultOverlay; key: number } | null>(null)
@@ -127,7 +135,19 @@ export function OrgQRScanner() {
         { video: videoConstraints },
         el,
         (res) => {
-          if (res) void handleScannedToken(res.getText())
+          if (res) {
+            // QR code is in frame — light up the corners immediately
+            setIsDetecting(true)
+            if (detectingTimerRef.current) clearTimeout(detectingTimerRef.current)
+            // Keep green for 600 ms after the last positive frame (debounce the off-transition)
+            detectingTimerRef.current = setTimeout(() => {
+              setIsDetecting(false)
+              detectingTimerRef.current = null
+            }, 600)
+            void handleScannedToken(res.getText())
+          } else {
+            // No code in frame — let the debounce above handle the off-transition naturally
+          }
         }
       )
       controlsRef.current = controls
@@ -420,6 +440,7 @@ export function OrgQRScanner() {
       stopCamera()
       if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current)
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current)
+      if (detectingTimerRef.current) clearTimeout(detectingTimerRef.current)
     }
   }, [videoEl]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -502,7 +523,7 @@ export function OrgQRScanner() {
       {cameraStatus === 'active' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
           <div className="relative w-[min(85vw,360px)] h-[min(85vw,360px)]">
-            <CornerBrackets />
+            <CornerBrackets detecting={isDetecting} />
             <AnimatePresence>
               {isFocusing && (
                 <motion.div
@@ -516,8 +537,11 @@ export function OrgQRScanner() {
               )}
             </AnimatePresence>
           </div>
-          <p className="text-white/80 text-md3-body-md font-medium tracking-wide">
-            {isSwitching ? 'Switching camera…' : 'Align QR to scan'}
+          <p
+            className="text-md3-body-md font-medium tracking-wide transition-colors duration-200"
+            style={{ color: isDetecting ? '#21C45D' : 'rgba(255,255,255,0.8)' }}
+          >
+            {isSwitching ? 'Switching camera…' : isDetecting ? 'QR detected — reading…' : 'Align QR to scan'}
           </p>
         </div>
       )}
