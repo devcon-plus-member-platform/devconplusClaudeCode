@@ -13,9 +13,12 @@ import { logger } from '../_shared/logger.ts'
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
   'https://devconplusbeta-v1.vercel.app',
-  'https://devconplusbeta-v1.vercel.app',
-  'https://devconplus-4mvl9r72b-devcon-plus-member-platforms-projects.vercel.app'
 ])
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true
+  return origin.endsWith('.vercel.app')
+}
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') ?? ''
@@ -23,7 +26,7 @@ function getCorsHeaders(req: Request): Record<string, string> {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   }
-  if (ALLOWED_ORIGINS.has(origin)) {
+  if (isAllowedOrigin(origin)) {
     headers['Access-Control-Allow-Origin'] = origin
   }
   return headers
