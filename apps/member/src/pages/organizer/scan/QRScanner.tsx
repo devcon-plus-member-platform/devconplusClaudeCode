@@ -466,7 +466,7 @@ export function OrgQRScanner() {
       {/* ── Active scanning UI ───────────────────────────────────────────────── */}
       {cameraStatus === 'active' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="relative w-85 h-85">
+          <div className="relative w-[min(85vw,360px)] h-[min(85vw,360px)]">
             <CornerBrackets />
           </div>
           <p className="text-white/80 text-md3-body-md font-medium tracking-wide">
