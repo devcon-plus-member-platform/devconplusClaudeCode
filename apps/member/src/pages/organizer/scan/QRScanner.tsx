@@ -138,13 +138,9 @@ export function OrgQRScanner() {
           const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined
           const advanced: Record<string, unknown> = {}
           const focusModes = capabilities?.focusMode as string[] | undefined
-          const zoomCaps = capabilities?.zoom as { max?: number } | undefined
 
           if (focusModes?.includes('continuous')) {
             advanced.focusMode = 'continuous'
-          }
-          if (typeof zoomCaps?.max === 'number') {
-            advanced.zoom = Math.min(1.5, zoomCaps.max)
           }
           if (Object.keys(advanced).length > 0) {
             await track.applyConstraints({ advanced: [advanced] } as MediaTrackConstraints)
@@ -470,7 +466,7 @@ export function OrgQRScanner() {
       {/* ── Active scanning UI ───────────────────────────────────────────────── */}
       {cameraStatus === 'active' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="relative w-72 h-72">
+          <div className="relative w-85 h-85">
             <CornerBrackets />
           </div>
           <p className="text-white/80 text-md3-body-md font-medium tracking-wide">
