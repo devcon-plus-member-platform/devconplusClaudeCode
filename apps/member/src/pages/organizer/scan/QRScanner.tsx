@@ -207,9 +207,9 @@ export function OrgQRScanner() {
 
       if (focusModes?.includes('continuous')) {
         // Cycle manual→continuous to force a refocus pass on browsers that support it
-        await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] } as MediaTrackConstraints)
+        await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] } as unknown as MediaTrackConstraints)
         await new Promise((r) => setTimeout(r, 80))
-        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as MediaTrackConstraints)
+        await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] } as unknown as MediaTrackConstraints)
       }
     } catch {
       // Best-effort — not all browsers support focus constraints
@@ -544,7 +544,7 @@ export function OrgQRScanner() {
             disabled={isSwitching}
             className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/30 disabled:opacity-40 shadow-lg transition-colors"
           >
-            <TargetOutline width={16} height={16} color={isFocusing ? '#FCD34D' : 'white'} />
+            <TargetOutline size={16} color={isFocusing ? '#FCD34D' : 'white'} />
             <span className="text-white text-md3-label-md font-medium">Focus</span>
           </motion.button>
 
@@ -557,7 +557,7 @@ export function OrgQRScanner() {
             disabled={isSwitching}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-full backdrop-blur-md border shadow-lg transition-colors disabled:opacity-40 ${isMirrored ? 'bg-white/40 border-white/60' : 'bg-white/20 border-white/30'}`}
           >
-            <FlipHorizontalOutline width={16} height={16} color="white" />
+            <FlipHorizontalOutline size={16} color="white" />
             <span className="text-white text-md3-label-md font-medium">Mirror</span>
           </motion.button>
 
