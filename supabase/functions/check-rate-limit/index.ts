@@ -14,6 +14,7 @@ const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
   'https://devconplusbeta-v1.vercel.app',
   'https://devconplusbeta-v1.vercel.app',
+  'https://devconplus-4mvl9r72b-devcon-plus-member-platforms-projects.vercel.app'
 ])
 
 function getCorsHeaders(req: Request): Record<string, string> {
