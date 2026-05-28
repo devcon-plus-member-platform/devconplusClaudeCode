@@ -23,5 +23,6 @@
       "@devcon-plus/supabase": ["src/types/index.ts"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"]
 }
