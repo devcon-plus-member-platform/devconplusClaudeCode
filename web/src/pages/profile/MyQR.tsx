@@ -10,7 +10,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { usePointsStore } from '../../stores/usePointsStore'
-import { supabase } from '../../lib/supabase'
+import { supabase, getBridgeToken } from '../../lib/supabase'
 
 // Countdown border geometry — matches EventTicket
 const RECT_SIZE = 220
@@ -49,36 +49,19 @@ export default function MyQR() {
       setIsRefreshing(true)
       setFetchError(false)
 
-      const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled) return
-
-      if (!session) {
+      // In Firebase mode, supabase.auth.getSession() returns null because we bypass
+      // setSession(). Use the bridge token directly — it's kept fresh by onIdTokenChanged.
+      const accessToken = getBridgeToken()
+      if (!accessToken) {
         navigate('/sign-in', { replace: true })
         return
       }
 
-      const invokeWithToken = (accessToken: string) =>
-        supabase.functions.invoke<{ token: string; expires_at: number }>(
-          'generate-user-qr',
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        )
-
-      let { data, error } = await invokeWithToken(session.access_token)
+      const { data, error } = await supabase.functions.invoke<{ token: string; expires_at: number }>(
+        'generate-user-qr',
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
       if (cancelled) return
-
-      // Retry once with a fresh session if first attempt fails
-      if (error || !data?.token) {
-        const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession()
-        if (cancelled) return
-
-        if (refreshErr || !refreshData.session) {
-          navigate('/sign-in', { replace: true })
-          return
-        }
-
-        ;({ data, error } = await invokeWithToken(refreshData.session.access_token))
-        if (cancelled) return
-      }
 
       if (error || !data?.token) {
         setFetchError(true)

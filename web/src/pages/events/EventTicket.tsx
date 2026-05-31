@@ -9,7 +9,7 @@ import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { resolveEventTheme } from '../../lib/eventTheme'
-import { supabase } from '../../lib/supabase'
+import { supabase, getBridgeToken } from '../../lib/supabase'
 
 // Animation variants
 const cardVariants: Variants = {
@@ -100,45 +100,22 @@ export default function EventTicket() {
       setIsRefreshing(true)
       setFetchError(false)
 
-      // Explicitly get the session so we always pass the real user JWT —
-      // supabase.functions.invoke() reads from realtime.accessToken which is
-      // only populated after SIGNED_IN/TOKEN_REFRESHED events, not on the
-      // INITIAL_SESSION restore that fires on page refresh.
-      const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled) return
-
-      if (!session) {
+      // In Firebase mode, supabase.auth.getSession() returns null (setSession bypassed).
+      // Use the bridge token directly — kept fresh by Firebase's onIdTokenChanged.
+      const accessToken = getBridgeToken()
+      if (!accessToken) {
         navigate('/sign-in', { replace: true })
         return
       }
 
-      const invokeWithToken = (accessToken: string) =>
-        supabase.functions.invoke<{ token: string; expires_at: number }>(
-          'generate-qr-token',
-          {
-            body: { registration_id: reg!.id },
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        )
-
-      let { data, error } = await invokeWithToken(session.access_token)
-      if (cancelled) return
-
-      // On failure: force a session refresh and retry once.
-      // Covers the case where the 1-hour access token expired between
-      // getSession() and the actual network call.
-      if (error || !data?.token) {
-        const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession()
-        if (cancelled) return
-
-        if (refreshErr || !refreshData.session) {
-          navigate('/sign-in', { replace: true })
-          return
+      const { data, error } = await supabase.functions.invoke<{ token: string; expires_at: number }>(
+        'generate-qr-token',
+        {
+          body: { registration_id: reg!.id },
+          headers: { Authorization: `Bearer ${accessToken}` },
         }
-
-        ;({ data, error } = await invokeWithToken(refreshData.session.access_token))
-        if (cancelled) return
-      }
+      )
+      if (cancelled) return
 
       if (error || !data?.token) {
         setFetchError(true)

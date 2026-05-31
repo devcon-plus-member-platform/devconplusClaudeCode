@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
-import { supabase } from '../../../lib/supabase'
+import { supabase, getBridgeToken } from '../../../lib/supabase'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
@@ -393,8 +393,8 @@ export function OrgEventRegistrants() {
     )
     const reg = registrants.find((r) => r.id === regId)
     if (reg?.member_email) {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session && event) {
+      const accessToken = getBridgeToken()
+      if (accessToken && event) {
         const eventDate = event.event_date
           ? new Date(event.event_date).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
           : 'Date TBA'
@@ -405,7 +405,7 @@ export function OrgEventRegistrants() {
             subject: `You're approved for ${event.title}!`,
             html: buildApprovedEmail({ memberName: reg.member_name, eventTitle: event.title, eventDate, eventLocation: event.location ?? undefined, pointsValue: event.points_value ?? 100, ticketUrl }),
           },
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          headers: { Authorization: `Bearer ${accessToken}` },
         })
       }
     }

@@ -242,7 +242,7 @@ export function OrgQRScanner() {
     }
 
     // Dynamic imports are cached after first load — no repeated network cost
-    const { supabase } = await import('../../../lib/supabase')
+    const { supabase, getBridgeToken } = await import('../../../lib/supabase')
     const { useAuthStore } = await import('../../../stores/useAuthStore')
     const user = useAuthStore.getState().user
 
@@ -254,28 +254,15 @@ export function OrgQRScanner() {
     isProcessingRef.current = true
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession()
-      let accessToken = sessionData.session?.access_token
+      // In Firebase mode, supabase.auth.getSession() returns null (setSession bypassed).
+      // Bridge token is kept fresh by Firebase's onIdTokenChanged listener.
+      const accessToken = getBridgeToken()
 
       if (!accessToken) {
         showOverlay({ type: 'error', message: 'Session expired. Please sign in again.' })
         isProcessingRef.current = false
         return
       }
-
-      // Proactively force-refresh if token expires within 5 minutes.
-      // getSession() reads from localStorage without a network call, so the stored
-      // token may be expired if the background auto-refresh timer failed silently.
-      const expiresAt = sessionData.session?.expires_at
-      if (!expiresAt || expiresAt - Math.floor(Date.now() / 1000) < 300) {
-        const { data: refreshed } = await supabase.auth.refreshSession()
-        if (refreshed.session?.access_token) {
-          accessToken = refreshed.session.access_token
-        }
-      }
-
-      // Keep the functions client in sync so any retry paths also use the fresh token
-      supabase.functions.setAuth(accessToken)
 
       const { data, error } = await supabase.functions.invoke<{
         success: boolean
@@ -345,7 +332,8 @@ export function OrgQRScanner() {
   }
 
   const handleDoorAction = async (registrationId: string, action: 'approve' | 'reject') => {
-    const { supabase } = await import('../../../lib/supabase')
+    const { supabase, getBridgeToken } = await import('../../../lib/supabase')
+    const accessToken = getBridgeToken() ?? ''
     try {
       const { data, error } = await supabase.functions.invoke<{
         success: boolean
@@ -355,7 +343,10 @@ export function OrgQRScanner() {
         points_awarded?: number
         event_title?: string
         error?: string
-      }>('approve-at-door', { body: { registration_id: registrationId, action } })
+      }>('approve-at-door', {
+        body: { registration_id: registrationId, action },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
 
       if (error || !data?.success) {
         showOverlay({ type: 'error', message: data?.error ?? 'Action failed. Try again.' })

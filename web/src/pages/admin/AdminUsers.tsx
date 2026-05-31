@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
-import { supabase } from '../../lib/supabase'
+import { supabase, getBridgeToken } from '../../lib/supabase'
 import type { Profile, UserRole, PointTransaction } from '@devcon-plus/supabase'
 
 const ROLES: UserRole[] = ['member', 'chapter_officer', 'hq_admin', 'super_admin']
@@ -83,24 +83,15 @@ export default function AdminUsers() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
+    const accessToken = getBridgeToken()
+    if (!accessToken) {
       setError('Session expired. Please sign in again.')
       setDeletingId(null)
       setConfirmDeleteId(null)
       return
     }
 
-    let res = await invokeWithToken(session.access_token)
-
-    // If the call failed, refresh the session once and retry.
-    // Handles the case where the access token expired between getSession() and the call.
-    if (res.error) {
-      const { data: refreshed } = await supabase.auth.refreshSession()
-      if (refreshed.session) {
-        res = await invokeWithToken(refreshed.session.access_token)
-      }
-    }
+    const res = await invokeWithToken(accessToken)
 
     setDeletingId(null)
     setConfirmDeleteId(null)

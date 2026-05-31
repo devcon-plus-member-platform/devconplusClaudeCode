@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeftOutline } from 'solar-icon-set'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
-import { supabase } from '../../lib/supabase'
+import { supabase, getBridgeToken } from '../../lib/supabase'
 import { useFormDraft } from '../../hooks/useFormDraft'
 
 // ── Custom form field types ───────────────────────────────────────────────────
@@ -224,8 +224,8 @@ export default function EventRegister() {
 
       // Fire-and-forget confirmation email for auto-approved registrations
       if (reg?.status === 'approved') {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (session) {
+        const accessToken = getBridgeToken()
+        if (accessToken) {
           const eventDate = event.event_date
             ? new Date(event.event_date).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
             : 'Date TBA'
@@ -236,7 +236,7 @@ export default function EventRegister() {
               subject: `You're registered for ${event.title}!`,
               html: buildConfirmationEmail({ memberName: user.full_name, eventTitle: event.title, eventDate, eventLocation: event.location ?? undefined, pointsValue: event.points_value ?? 100, ticketUrl }),
             },
-            headers: { Authorization: `Bearer ${session.access_token}` },
+            headers: { Authorization: `Bearer ${accessToken}` },
           })
         }
       }
