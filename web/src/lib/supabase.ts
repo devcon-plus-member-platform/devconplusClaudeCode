@@ -3,6 +3,25 @@ import type { Database } from '@devcon-plus/supabase'
 
 const FETCH_TIMEOUT_MS = 15_000
 
+// Bridge token injected by setupSupabaseSession() instead of supabase.auth.setSession().
+// setSession() calls GET /auth/v1/user to validate sub against auth.users — Firebase-only
+// users' profiles.id UUIDs are not in auth.users, so that call returns 403 and the
+// session is never stored. We bypass it entirely by injecting the token here so PostgREST
+// still sees a valid Authorization header and auth.uid() resolves correctly for RLS.
+let _bridgeToken: string | null = null
+
+export function setBridgeToken(token: string | null): void {
+  _bridgeToken = token
+  // Update Realtime auth so WebSocket channels use the bridge JWT.
+  // Called at runtime (after supabase client is initialized), so the forward
+  // reference to `supabase` below is safe — module is fully evaluated by then.
+  if (token) supabase.realtime.setAuth(token)
+}
+
+export function getBridgeToken(): string | null {
+  return _bridgeToken
+}
+
 // H2 connection reuse note: aborting an HTTP/2 stream does not close the
 // underlying TCP connection — the browser reuses the same (dead) socket on
 // retry. We work around this by adding `cache: 'reload'` on the retry, which
@@ -17,6 +36,20 @@ const FETCH_TIMEOUT_MS = 15_000
 const fetchWithTimeout: typeof fetch = async (input, init) => {
   const userSignal = init?.signal ?? null
 
+  // Inject bridge JWT for REST/Storage requests. Skip /auth/v1/* — those paths
+  // validate against auth.users (not our custom JWT), and we don't want to interfere.
+  const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input))
+  const isAuthEndpoint = url.includes('/auth/v1/')
+  let effectiveInit = init
+  if (_bridgeToken && !isAuthEndpoint) {
+    const headers = new Headers(init?.headers)
+    // Always override — supabase-js sets Authorization: Bearer <anon_key> when no
+    // session is stored. Without the override, the anon key reaches PostgREST and
+    // auth.uid() returns null, blocking all RLS-protected reads.
+    headers.set('Authorization', `Bearer ${_bridgeToken}`)
+    effectiveInit = { ...init, headers }
+  }
+
   for (let attempt = 0; attempt < 2; attempt++) {
     if (userSignal?.aborted) throw new DOMException('Aborted', 'AbortError')
 
@@ -26,7 +59,7 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
     userSignal?.addEventListener('abort', onUserAbort, { once: true })
 
     const fetchInit: RequestInit = {
-      ...init,
+      ...effectiveInit,
       signal: timeoutCtrl.signal,
       // On retry, force a fresh connection — bypasses the H2 pool that may
       // still hold the stale dead socket from the first attempt.
