@@ -8,6 +8,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verify } from 'https://deno.land/x/djwt@v3.0.2/mod.ts'
 import { logger } from '../_shared/logger.ts'
+import { verifyCallerJwt } from '../_shared/auth.ts'
 
 // Decode 22-char base64url back to standard UUID string
 function compactToUuid(compact: string): string {
@@ -43,18 +44,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verify caller identity — anon client with user JWT in global headers (correct Supabase pattern)
-    const authHeader = req.headers.get('Authorization')
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: { headers: { Authorization: authHeader ?? '' } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    )
-    const { data: { user: callerUser }, error: authErr } = await supabaseAuth.auth.getUser()
-    if (authErr || !callerUser) {
+    // 1. Verify caller identity via bridge JWT (Phase 4 — replaces supabase.auth.getUser())
+    let callerId: string
+    try {
+      callerId = await verifyCallerJwt(req)
+    } catch {
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized.' }),
         { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -120,7 +114,7 @@ Deno.serve(async (req: Request) => {
     const { data: organizer, error: orgError } = await supabase
       .from('profiles')
       .select('id, role, chapter_id')
-      .eq('id', callerUser.id)
+      .eq('id', callerId)
       .in('role', ['chapter_officer', 'hq_admin', 'super_admin'])
       .single()
 

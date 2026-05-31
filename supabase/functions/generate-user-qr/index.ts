@@ -12,6 +12,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts'
 import { logger } from '../_shared/logger.ts'
+import { verifyCallerJwt } from '../_shared/auth.ts'
 
 // Encode UUID (36 hex chars) → 22-char base64url (128 bits, no hyphens)
 function uuidToCompact(uuid: string): string {
@@ -45,18 +46,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verify caller identity
-    const authHeader = req.headers.get('Authorization')
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: { headers: { Authorization: authHeader ?? '' } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    )
-    const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser()
-    if (authErr || !user) {
+    // 1. Verify caller identity via bridge JWT (Phase 4 — replaces supabase.auth.getUser())
+    let callerId: string
+    try {
+      callerId = await verifyCallerJwt(req)
+    } catch {
       return new Response(
         JSON.stringify({ error: 'Unauthorized.' }),
         { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -72,7 +66,7 @@ Deno.serve(async (req: Request) => {
 
     // 2. Rate limit: 10 requests per user per 60s. Fail closed.
     const { data: rlAllowed, error: rlError } = await supabase.rpc('check_rate_limit', {
-      p_identifier: `user:${user.id}`,
+      p_identifier: `user:${callerId}`,
       p_bucket:     'user_qr_generate',
     })
     if (rlError || !rlAllowed) {
@@ -94,11 +88,11 @@ Deno.serve(async (req: Request) => {
     const expiresAt = getNumericDate(300)
     const token = await create(
       { alg: 'HS256', typ: 'JWT' },
-      { k: 'u', sub: uuidToCompact(user.id), exp: expiresAt },
+      { k: 'u', sub: uuidToCompact(callerId), exp: expiresAt },
       key
     )
 
-    logger.info('user_qr_generated', { user_id: user.id })
+    logger.info('user_qr_generated', { user_id: callerId })
     return new Response(
       JSON.stringify({ token, expires_at: expiresAt }),
       { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }

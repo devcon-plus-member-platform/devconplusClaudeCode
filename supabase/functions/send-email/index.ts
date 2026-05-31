@@ -9,6 +9,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { logger } from '../_shared/logger.ts'
+import { verifyCallerJwt } from '../_shared/auth.ts'
 
 const DEFAULT_FROM = 'DEVCON+ <noreply@devconplus.ph>'
 
@@ -36,18 +37,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verify caller identity — only authenticated users can trigger emails
-    const authHeader = req.headers.get('Authorization')
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: { headers: { Authorization: authHeader ?? '' } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    )
-    const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser()
-    if (authErr || !user) {
+    // 1. Verify caller identity via bridge JWT (Phase 4 — replaces supabase.auth.getUser())
+    let callerId: string
+    try {
+      callerId = await verifyCallerJwt(req)
+    } catch {
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized.' }),
         { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -63,7 +57,7 @@ Deno.serve(async (req: Request) => {
 
     // 2. Rate limit: 30 emails per user per 60s — prevents abuse if called in a loop
     const { data: rlAllowed, error: rlError } = await supabase.rpc('check_rate_limit', {
-      p_identifier: `user:${user.id}`,
+      p_identifier: `user:${callerId}`,
       p_bucket:     'send_email',
     })
     if (rlError || !rlAllowed) {

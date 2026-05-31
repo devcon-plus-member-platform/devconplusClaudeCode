@@ -7,6 +7,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts'
 import { logger } from '../_shared/logger.ts'
+import { verifyCallerJwt } from '../_shared/auth.ts'
 
 // Encode UUID (36 hex chars) → 22-char base64url (128 bits, no hyphens)
 function uuidToCompact(uuid: string): string {
@@ -40,18 +41,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verify caller identity — anon client with user JWT in global headers (correct Supabase pattern)
-    const authHeader = req.headers.get('Authorization')
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: { headers: { Authorization: authHeader ?? '' } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    )
-    const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser()
-    if (authErr || !user) {
+    // 1. Verify caller identity via bridge JWT (Phase 4 — replaces supabase.auth.getUser())
+    let callerId: string
+    try {
+      callerId = await verifyCallerJwt(req)
+    } catch {
       return new Response(
         JSON.stringify({ error: 'Unauthorized.' }),
         { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -70,7 +64,7 @@ Deno.serve(async (req: Request) => {
     // Uses service_role client — check_rate_limit RPC is restricted to service_role.
     // Fail closed — any RPC error returns 429 (protects the points ecosystem).
     const { data: rlAllowed, error: rlError } = await supabase.rpc('check_rate_limit', {
-      p_identifier: `user:${user.id}`,
+      p_identifier: `user:${callerId}`,
       p_bucket:     'qr_generate',
     })
     if (rlError || !rlAllowed) {
@@ -101,7 +95,7 @@ Deno.serve(async (req: Request) => {
       .from('event_registrations')
       .select('id, user_id, event_id, status, events(status)')
       .eq('id', registration_id)
-      .eq('user_id', user.id)
+      .eq('user_id', callerId)
       .eq('status', 'approved')
       .single()
 

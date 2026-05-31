@@ -10,6 +10,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { logger } from '../_shared/logger.ts'
+import { verifyCallerJwt } from '../_shared/auth.ts'
 
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
@@ -36,25 +37,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verify caller identity via their JWT
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Unauthorized.' }),
-        { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: { headers: { Authorization: authHeader } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    )
-    const { data: { user: callerUser }, error: authErr } = await supabaseAuth.auth.getUser()
-    if (authErr || !callerUser) {
+    // 1. Verify caller identity via bridge JWT (Phase 4 — replaces supabase.auth.getUser())
+    let callerId: string
+    try {
+      callerId = await verifyCallerJwt(req)
+    } catch {
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized.' }),
         { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -72,12 +59,12 @@ Deno.serve(async (req: Request) => {
     const { data: callerProfile, error: callerErr } = await supabaseAdmin
       .from('profiles')
       .select('role')
-      .eq('id', callerUser.id)
+      .eq('id', callerId)
       .single()
 
     const allowedRoles = ['super_admin', 'hq_admin']
     if (callerErr || !callerProfile || !allowedRoles.includes(callerProfile.role ?? '')) {
-      logger.warn('delete_user_forbidden', { caller_id: callerUser.id, role: callerProfile?.role })
+      logger.warn('delete_user_forbidden', { caller_id: callerId, role: callerProfile?.role })
       return new Response(
         JSON.stringify({ success: false, error: 'Forbidden: admin access required.' }),
         { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -96,7 +83,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 4. Prevent self-deletion
-    if (user_id === callerUser.id) {
+    if (user_id === callerId) {
       return new Response(
         JSON.stringify({ success: false, error: 'You cannot delete your own account.' }),
         { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
@@ -114,7 +101,7 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    logger.info('delete_user_success', { deleted_user_id: user_id, deleted_by: callerUser.id })
+    logger.info('delete_user_success', { deleted_user_id: user_id, deleted_by: callerId })
 
     return new Response(
       JSON.stringify({ success: true }),
