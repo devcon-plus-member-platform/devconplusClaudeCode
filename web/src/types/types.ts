@@ -74,6 +74,8 @@ export interface Profile {
   interests: number[] | null
   tech_stack: number[] | null
   community_roles: number[] | null
+  is_email_verified: boolean
+  auth_uid: string | null
   created_at: string
 }
 

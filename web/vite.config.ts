@@ -4,7 +4,17 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // Firebase signInWithPopup requires the popup to postMessage the auth result
+    // back to the parent window. Without this header the browser may apply
+    // same-origin COOP (from the Firebase auth page) which severs window.opener
+    // and causes signInWithPopup to hang forever.
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      'Cross-Origin-Embedder-Policy': 'unsafe-none',
+    },
+  },
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {

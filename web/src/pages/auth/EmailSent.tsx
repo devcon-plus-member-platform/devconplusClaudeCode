@@ -3,7 +3,10 @@ import { useLocation, Link } from 'react-router-dom'
 import { LetterOutline, RestartOutline } from 'solar-icon-set'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 interface LocationState {
   email: string
@@ -34,7 +37,14 @@ export default function EmailSent() {
     setResendError(null)
     setResendSuccess(false)
     try {
-      if (type === 'signup') {
+      if (USE_FIREBASE && type === 'signup') {
+        // Firebase path — NestJS sends the email via Gmail SMTP
+        await apiFetch('/auth/email/resend-verification', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        })
+      } else if (type === 'signup') {
+        // Legacy Supabase path
         const { error } = await supabase.auth.resend({
           type: 'signup',
           email,

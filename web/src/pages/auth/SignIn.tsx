@@ -120,6 +120,12 @@ export default function SignIn() {
       clearDraft()
       navigate(isSafeReturnTo(returnTo) ? returnTo : '/home')
     } catch (err) {
+      // Firebase path: user signed up but hasn't clicked the verification link.
+      // Redirect to /email-sent so they can resend — don't count as a failed attempt.
+      if ((err as { code?: string }).code === 'email_not_verified') {
+        navigate('/email-sent', { state: { email: data.email, type: 'signup' } })
+        return
+      }
       turnstileRef.current?.reset()
       setTurnstileToken(null)
       if (isOverloadError(err)) {
@@ -194,6 +200,11 @@ export default function SignIn() {
             }
             try {
               await signInWithGoogle()
+              // signInWithGoogle resolved without throwing — popup completed or was
+              // silently dismissed. Navigate to home if auth succeeded (user is set),
+              // otherwise just reset the button.
+              setGoogleLoading(false)
+              navigate(isSafeReturnTo(returnTo) ? returnTo : '/home')
             } catch (err) {
               setGoogleLoading(false)
               if (isOverloadError(err)) {

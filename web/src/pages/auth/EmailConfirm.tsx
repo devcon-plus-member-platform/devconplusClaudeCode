@@ -13,7 +13,10 @@ export default function EmailConfirm() {
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    const tokenHash = searchParams.get('token_hash')
+    const statusParam = searchParams.get('status')   // 'success' | 'error' (Firebase path)
+    const reasonParam = searchParams.get('reason')   // 'expired' | 'invalid' | undefined
+    const tokenHash   = searchParams.get('token_hash') // Supabase legacy path
+    const rawToken    = searchParams.get('token')    // NestJS bridge JWT (fallback: old email links)
     const type = (searchParams.get('type') ?? 'signup') as 'signup' | 'email'
 
     function onConfirmed() {
@@ -22,7 +25,7 @@ export default function EmailConfirm() {
       if (savedReturnTo) localStorage.removeItem('devcon_returnTo')
       const destination = (typeof savedReturnTo === 'string' && savedReturnTo.startsWith('/') && !savedReturnTo.startsWith('//'))
         ? savedReturnTo
-        : '/home' // was: '/organizer-code-gate' — temporarily disabled
+        : '/home'
       setTimeout(() => navigate(destination), 2000)
     }
 
@@ -31,8 +34,33 @@ export default function EmailConfirm() {
       setStatus('error')
     }
 
+    // ── Firebase custom email verification path ──────────────────────────
+    // NestJS GET /auth/email/verify redirects here with ?status=success|error
+    if (statusParam === 'success') {
+      onConfirmed()
+      return
+    }
+    if (statusParam === 'error') {
+      const msg = reasonParam === 'expired'
+        ? 'This verification link has expired. Please request a new one.'
+        : 'This verification link is invalid. Please sign up again.'
+      onFailed(msg)
+      return
+    }
+
+    // ── NestJS bridge JWT fallback ───────────────────────────────────────
+    // Old email links pointed to APP_URL/email-confirm?token=<JWT> instead of
+    // SERVER_URL/auth/email/verify?token=<JWT>. Redirect to the backend endpoint
+    // so it can verify and redirect back with ?status=success|error.
+    if (rawToken) {
+      const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
+      window.location.replace(`${apiUrl}/auth/email/verify?token=${encodeURIComponent(rawToken)}`)
+      return
+    }
+
+    // ── Legacy Supabase email confirmation path ──────────────────────────
+    // Kept for existing users during the JIT migration window.
     if (tokenHash) {
-      // PKCE / OTP flow — token_hash is a query param, must be verified explicitly
       supabase.auth
         .verifyOtp({ token_hash: tokenHash, type })
         .then(({ error }) => {
@@ -43,7 +71,6 @@ export default function EmailConfirm() {
     }
 
     // Implicit flow — detectSessionInUrl:true has already exchanged the hash fragment.
-    // CheckCircleOutline for an immediate session; otherwise wait for SIGNED_IN event.
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) { onConfirmed(); return }
 

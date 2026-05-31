@@ -17,11 +17,12 @@
     "react-dom": "^19.2.0"
   },
   "dependencies": {
-"@hookform/resolvers": "^3.10.0",
+    "@hookform/resolvers": "^3.10.0",
     "@marsidev/react-turnstile": "^1.5.0",
     "@supabase/supabase-js": "^2.49.1",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "firebase": "^12.14.0",
     "framer-motion": "^12.34.3",
     "html-to-image": "^1.11.13",
     "qrcode.react": "^4.2.0",

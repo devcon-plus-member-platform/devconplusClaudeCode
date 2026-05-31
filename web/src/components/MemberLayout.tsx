@@ -52,6 +52,12 @@ export default function MemberLayout() {
   useEffect(() => {
     if (!user && !GUEST_PATHS.includes(location.pathname)) {
       navigate('/sign-in', { replace: true })
+      return
+    }
+    // DB gate: profiles.is_email_verified is the source of truth.
+    // Catches edge cases where a session exists but email was never verified.
+    if (user && !user.is_email_verified) {
+      navigate('/email-sent', { replace: true, state: { email: user.email, type: 'signup' } })
     }
   }, [user, navigate, location.pathname])
 
