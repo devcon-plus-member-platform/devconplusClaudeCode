@@ -1,6 +1,14 @@
 import { create } from 'zustand'
+import { GoogleAuthProvider, getIdToken as getFirebaseIdToken, onAuthStateChanged, onIdTokenChanged, signInWithPopup } from 'firebase/auth'
 import type { Profile } from '@devcon-plus/supabase'
-import { supabase } from '../lib/supabase'
+import { supabase, getBridgeToken, setBridgeToken } from '../lib/supabase'
+import { firebaseAuth } from '../lib/firebase'
+import { emailSigninViaBridge, exchangeFirebaseToken, refreshViaBridge, setupSupabaseSession } from '../lib/authBridge'
+import { apiFetch } from '../lib/api'
+
+// Feature flag — flip VITE_AUTH_PROVIDER=firebase to enable the Firebase popup
+// path and bridge session flow. Flip back to 'supabase' for instant rollback.
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 // Calls the check-rate-limit edge function.
 // Returns { allowed, retryAfterSeconds? }.
@@ -190,8 +198,9 @@ function toUserMessage(message: string): string {
   return 'Something went wrong. Please try again.'
 }
 
-// Holds the auth listener cleanup so initialize() can safely re-register without leaking.
+// Holds the auth listener cleanups so initialize() can safely re-register without leaking.
 let authUnsubscribe: (() => void) | null = null
+let firebaseUnsubscribe: (() => void) | null = null
 
 const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MIME_TO_EXT: Record<string, string> = {
@@ -216,47 +225,140 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (get().isLoading || get().isInitialized) return
     set({ isLoading: true })
 
+    if (USE_FIREBASE) {
+      // ── Firebase-driven initialization ────────────────────────────────
+      //
+      // Firebase is the source of truth for auth state. We use a one-shot
+      // onAuthStateChanged listener to restore the session on page load (mirrors
+      // what supabase.auth.getSession() did in the Supabase-only path).
+      //
+      // Why one-shot instead of persistent? We only need to block initialization
+      // once. Ongoing auth changes (token refresh, sign-out) are handled by the
+      // persistent onIdTokenChanged listener registered below.
+      await new Promise<void>((resolve) => {
+        const unsubOnce = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
+          unsubOnce() // immediately de-register — persistent listener takes over
+          if (firebaseUser) {
+            try {
+              const idToken = await getFirebaseIdToken(firebaseUser)
+              const session = await exchangeFirebaseToken(idToken)
+              // Apply profile before setSession to avoid the re-entrant auth
+              // lock deadlock (supabase-js awaits onAuthStateChange callbacks
+              // synchronously while holding the storage lock).
+              await applyProfile(session.profile, set)
+              setupSupabaseSession(session)
+              set({ isOAuthOnly: true })
+              // If the user already has a valid session and landed on an auth
+              // page (sign-in / sign-up / splash), redirect them home so they
+              // don't stare at a sign-in form they don't need to fill out.
+              const authOnlyPages = ['/sign-in', '/sign-up', '/onboarding', '/']
+              if (authOnlyPages.includes(window.location.pathname)) {
+                const stored = sessionStorage.getItem('devcon_returnTo')
+                sessionStorage.removeItem('devcon_returnTo')
+                // Validate returnTo is a safe same-origin relative path before
+                // redirecting — prevents open redirect if sessionStorage is
+                // poisoned by XSS or a malicious extension.
+                const safeTarget =
+                  typeof stored === 'string' &&
+                  stored.startsWith('/') &&
+                  !stored.startsWith('//') &&
+                  !stored.startsWith('/\\')
+                    ? stored
+                    : '/home'
+                window.location.replace(safeTarget)
+                return
+              }
+            } catch {
+              // Exchange failed (e.g. NestJS not reachable on cold start) —
+              // user lands on sign-in page; they can try again.
+            }
+          }
+          resolve()
+        })
+      })
+
+      // Persistent Firebase listener — handles token refresh (~1 h) and sign-out.
+      // sign-in is NOT handled here; signInWithGoogle() does it explicitly.
+      if (firebaseUnsubscribe) firebaseUnsubscribe()
+      firebaseUnsubscribe = onIdTokenChanged(firebaseAuth, async (firebaseUser) => {
+        if (!firebaseUser) {
+          // Firebase signed out — clear store, bridge token, and Supabase session
+          setBridgeToken(null)
+          set({ user: null, initials: '', chapterName: null, isOrganizerSession: false, isOAuthOnly: false })
+          await supabase.auth.signOut()
+          return
+        }
+        // Skip if the user is not yet in the store (sign-in flow —
+        // signInWithGoogle handles the first exchange explicitly).
+        if (!get().user) return
+        // Token refresh: get a new bridge JWT without re-fetching the profile.
+        try {
+          const session = await refreshViaBridge(firebaseUser, false)
+          setupSupabaseSession(session)
+        } catch {
+          // Non-fatal — TOKEN_REFRESH_FAILED handler will attempt force-refresh
+        }
+      })
+
+      // Supabase auth listener is now MINIMAL — Firebase owns SIGNED_IN and
+      // TOKEN_REFRESHED. We only keep it for the bridge JWT expiry edge case:
+      // supabase-js tries to use the opaque refresh_token on its /token endpoint,
+      // fails, and emits TOKEN_REFRESH_FAILED. We intercept it and re-issue via
+      // the bridge instead of signing the user out.
+      if (authUnsubscribe) authUnsubscribe()
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+        if ((event as string) !== 'TOKEN_REFRESH_FAILED') return
+        if (firebaseAuth.currentUser) {
+          try {
+            const bridgeSession = await refreshViaBridge(firebaseAuth.currentUser, true)
+            setupSupabaseSession(bridgeSession)
+            return // recovered
+          } catch {
+            // Bridge refresh also failed — fall through to forced sign-out
+          }
+        }
+        await supabase.auth.signOut()
+        set({ user: null, initials: '', chapterName: null, isOrganizerSession: false })
+        window.location.replace('/sign-in')
+      })
+      authUnsubscribe = () => subscription.unsubscribe()
+
+      set({ isLoading: false, isInitialized: true })
+      return
+    }
+
+    // ── Legacy Supabase-only path (VITE_AUTH_PROVIDER=supabase) ──────────
+    //
     // IMPORTANT: call getSession() BEFORE registering onAuthStateChange.
     // Supabase JS v2 awaits all subscriber callbacks inside notifyAllSubscribers().
     // If onAuthStateChange is registered first and the saved token is expired, Supabase
     // fires TOKEN_REFRESHED → our handler calls ensureProfile() → PostgREST calls getSession()
     // internally → getSession() waits for initializePromise → initializePromise waits for
-    // our callback to finish → circular wait (deadlock) → isInitialized never becomes true.
-    // With getSession() first, initializePromise is already resolved before the listener
-    // is registered, so subsequent PostgREST calls inside listener callbacks never block.
-    // TOKEN_REFRESH_FAILED during the initial getSession() surfaces as sessionError below.
+    // our callback to finish → circular wait (deadlock).
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       if (sessionError) {
-        // Stale / corrupt token in storage — clear it and bail to sign-in
         await supabase.auth.signOut()
         set({ isLoading: false, isInitialized: true })
         return
       }
       if (session?.user) {
-        // Detect OAuth-only users (no local password) from the identities array.
-        // Supabase adds an 'email' identity when updateUser({ password }) is called,
-        // so this stays accurate after the user sets a password.
         const identities = session.user.identities ?? []
         const isOAuthOnly = !identities.some(id => id.provider === 'email')
         set({ isOAuthOnly })
-
         const meta = { ...session.user.user_metadata, email: session.user.email ?? null } as Record<string, string | null>
         const profile = await ensureProfile(session.user.id, meta)
         if (profile) await applyProfile(profile, set)
       }
     } catch {
-      // getSession() itself threw (e.g. corrupt storage) — clear and bail
       await supabase.auth.signOut()
       set({ isLoading: false, isInitialized: true })
       return
     }
 
-    // Register the listener AFTER getSession() so initializePromise is already resolved.
     if (authUnsubscribe) authUnsubscribe()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if ((event as string) === 'TOKEN_REFRESH_FAILED') {
-        // Revoked or expired refresh token — clear session and redirect to sign-in.
         await supabase.auth.signOut()
         set({ user: null, initials: '', chapterName: null, isOrganizerSession: false })
         window.location.replace('/sign-in')
@@ -283,8 +385,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signUp: async (email, password, full_name, username, chapter_id, school_or_company, captchaToken, socialLinks) => {
     set({ isLoading: true, error: null })
-    // Advisory rate limit: 3 signups per IP per hour. Cannot block direct GoTrue calls.
-    // Deferred CAPTCHA (Cloudflare Turnstile) will close this gap at infrastructure level.
+
+    // Firebase email/password signup — NestJS creates the Firebase user and
+    // sends the verification email via Gmail SMTP. No Supabase Auth involved.
+    if (USE_FIREBASE) {
+      try {
+        await apiFetch('/auth/email/signup', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company }),
+        })
+        set({ isLoading: false })
+        return { emailConfirmationPending: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
+        set({ isLoading: false, error: msg })
+        throw err
+      }
+    }
+
+    // Legacy Supabase Auth signup path (VITE_AUTH_PROVIDER=supabase)
+    // Advisory rate limit: 3 signups per IP per hour.
     const signupLimit = await callRateLimit('signup')
     if (!signupLimit.allowed) {
       const secs = signupLimit.retryAfterSeconds ?? 3600
@@ -337,7 +457,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signIn: async (email, password, captchaToken) => {
     set({ isLoading: true, error: null })
 
-    // Dual-key rate limit: per-email + per-IP, in parallel for minimal latency.
+    // Firebase email/password sign-in — NestJS verifies credentials against
+    // Firebase REST API and gates on profiles.is_email_verified (DB column).
+    if (USE_FIREBASE) {
+      try {
+        const session = await emailSigninViaBridge(email, password)
+        await applyProfile(session.profile, set)
+        setupSupabaseSession(session)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Sign-in failed'
+        set({ isLoading: false })
+        if (/email (not verified|must be verified)/i.test(msg)) {
+          // User has not clicked their verification link yet.
+          // Throw a typed error so SignIn.tsx can redirect to /email-sent.
+          throw Object.assign(new Error(msg), { code: 'email_not_verified' })
+        }
+        set({ error: toUserMessage(msg) })
+        throw err
+      }
+      set({ isLoading: false })
+      return
+    }
+
+    // Legacy Supabase path — dual-key rate limit: per-email + per-IP.
     // Known trade-off: email key is user-supplied and unverified pre-auth — an attacker
     // could exhaust a victim's login bucket. Mitigated by the IP bucket. Accepted for MVP.
     const [emailLimit, ipLimit] = await Promise.all([
@@ -372,6 +514,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    if (USE_FIREBASE) {
+      // Sign out of Firebase first — triggers onIdTokenChanged(null) which clears the store.
+      // Then clear the Supabase bridge session.
+      await firebaseAuth.signOut()
+      await supabase.auth.signOut()
+      return
+    }
     await supabase.auth.signOut()
     // onAuthStateChange fires SIGNED_OUT → clears user in store
   },
@@ -486,8 +635,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Rate limit: 3 attempts per user per 25h — prevents organizer code brute-forcing.
     // Requires JWT (org_upgrade is a user-keyed bucket in the edge function).
-    const { data: { session } } = await supabase.auth.getSession()
-    const upgradeLimit = await callRateLimit('org_upgrade', { token: session?.access_token })
+    // In Firebase mode, supabase.auth.getSession() returns null (no setSession called),
+    // so we read the bridge token directly.
+    const upgradeLimit = await callRateLimit('org_upgrade', { token: getBridgeToken() ?? undefined })
     if (!upgradeLimit.allowed) {
       const secs = upgradeLimit.retryAfterSeconds ?? 86400
       const hours = Math.ceil(secs / 3600)
@@ -546,6 +696,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signInWithGoogle: async () => {
+    if (USE_FIREBASE) {
+      set({ isLoading: true, error: null })
+      // signInWithPopup MUST be called synchronously from the user gesture.
+      // Any await before this call breaks the browser's popup gesture chain
+      // and results in auth/popup-blocked. Rate limiting for OAuth happens
+      // after the popup resolves — Google's own auth is the primary fraud gate.
+      const provider = new GoogleAuthProvider()
+      let credential
+      try {
+        credential = await signInWithPopup(firebaseAuth, provider)
+      } catch (err) {
+        const code = (err as { code?: string }).code
+        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+          set({ isLoading: false })
+          return
+        }
+        set({ error: 'Google sign-in failed. Please try again.', isLoading: false })
+        return
+      }
+
+      try {
+        const idToken = await getFirebaseIdToken(credential.user)
+        const session = await exchangeFirebaseToken(idToken)
+        await applyProfile(session.profile, set)
+        setupSupabaseSession(session)
+        set({ isOAuthOnly: true })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Google sign-in failed'
+        if (/email (not verified|must be verified)/i.test(msg)) {
+          set({ error: 'Please verify your email first. Check your inbox.' })
+          return
+        }
+        set({ error: msg })
+        throw err
+      } finally {
+        set({ isLoading: false })
+      }
+      return
+    }
+
+    // Legacy Supabase OAuth path: rate limit check is fine here since this
+    // path uses a redirect (no popup), so there's no gesture chain to break.
     const rl = await callRateLimit('oauth_initiate')
     if (!rl.allowed) {
       const wait = rl.retryAfterSeconds ?? 60
@@ -553,6 +745,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return
     }
 
+    // Legacy Supabase OAuth redirect (VITE_AUTH_PROVIDER=supabase)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
