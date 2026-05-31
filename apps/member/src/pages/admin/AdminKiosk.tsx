@@ -49,7 +49,11 @@ export default function AdminKiosk() {
   const startCamera = async () => {
     if (controlsRef.current || processingRef.current) return
     try {
-      const reader = new BrowserQRCodeReader()
+      // Shorten the gap between decode passes (library default is 500 ms → ~2/sec)
+      // so the kiosk reads tickets in well under a second.
+      const reader = new BrowserQRCodeReader(undefined, {
+        delayBetweenScanAttempts: 150,
+      })
       const allDevices = await BrowserQRCodeReader.listVideoInputDevices()
       if (!allDevices.length) {
         toast.error('No camera detected. Please connect a camera and refresh.', { duration: 8000 })

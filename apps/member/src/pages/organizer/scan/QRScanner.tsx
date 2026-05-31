@@ -93,7 +93,6 @@ export function OrgQRScanner() {
 
   const initCamera = async (el: HTMLVideoElement, deviceId?: string): Promise<void> => {
     const { BrowserQRCodeReader } = await import('@zxing/browser')
-    const { DecodeHintType } = await import('@zxing/library')
 
     // Race camera init against a 10-second timeout
     const timeout = new Promise<never>((_, reject) =>
@@ -108,18 +107,22 @@ export function OrgQRScanner() {
       const activeId = deviceId ?? selectedDeviceId ?? allDevices[0].deviceId
       if (!selectedDeviceId) setSelectedDeviceId(allDevices[0].deviceId)
 
-      // TRY_HARDER runs more decode passes per frame — helps on soft/low-res feeds
-      const hints = new Map<import('@zxing/library').DecodeHintType, unknown>()
-      hints.set(DecodeHintType.TRY_HARDER, true)
+      // No TRY_HARDER hint: the app emits crisp, high-contrast QR codes the default
+      // decoder reads instantly. TRY_HARDER runs extra binarization/rotation passes
+      // per frame, multiplying CPU cost — it was the main scan-latency culprit.
+      // delayBetweenScanAttempts drops the gap between decode passes from the 500 ms
+      // library default to 150 ms (~6-7 passes/sec instead of ~2).
+      const reader = new BrowserQRCodeReader(undefined, {
+        delayBetweenScanAttempts: 150,
+      })
 
-      const reader = new BrowserQRCodeReader(hints)
-
-      // Request the highest resolution the camera supports.
-      // decodeFromConstraints passes these directly to getUserMedia instead of
-      // the browser's default (often 640x480 on Android).
+      // Target 720p (1080p ceiling). ZXing sizes its decode canvas to the actual
+      // videoWidth × videoHeight, so each frame is scanned at full resolution.
+      // 720p (~0.9 MP) easily resolves QR modules held at arm's length; 1080p+
+      // quadruples per-frame decode cost for no accuracy gain.
       const videoConstraints: MediaTrackConstraints = {
-        width: { ideal: 1920, max: 3840 },
-        height: { ideal: 1080, max: 2160 },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
         frameRate: { ideal: 30, min: 15 },
       }
       if (activeId) {
