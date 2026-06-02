@@ -199,7 +199,7 @@ export default function AdminChapterOfficers() {
       {/* Filters */}
       {!isLoading && assignments.length > 0 && (
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <FilterOutline color="#94A3B8" width={16} height={16} />
+          <FilterOutline color="#94A3B8" size={16} />
           <select
             value={filterChapterId}
             onChange={(e) => setFilterChapterId(e.target.value)}
@@ -286,7 +286,7 @@ export default function AdminChapterOfficers() {
                             className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
                             title="Remove assignment"
                           >
-                            <TrashBinTrashOutline color="#94A3B8" width={16} height={16} />
+                            <TrashBinTrashOutline color="#94A3B8" size={16} />
                           </button>
                         )}
                       </td>
