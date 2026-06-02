@@ -56,10 +56,14 @@ BEGIN
 
   v_username := NEW.raw_user_meta_data->>'username';
 
+  -- is_email_verified drives the signup bonus (award_signup_bonus trigger on
+  -- profiles awards 500 only when this is true at insert). Provider-verified
+  -- signups (OAuth/autoconfirm) get it immediately; email/password signups have
+  -- email_confirmed_at = NULL here and are awarded later by the confirmation trigger.
   BEGIN
     INSERT INTO public.profiles (
       id, email, full_name, username, school_or_company,
-      chapter_id, role, spendable_points, lifetime_points
+      chapter_id, role, spendable_points, lifetime_points, is_email_verified
     ) VALUES (
       NEW.id,
       NEW.email,
@@ -69,14 +73,15 @@ BEGIN
       v_chapter_id,
       v_role,
       0,
-      0
+      0,
+      (NEW.email_confirmed_at IS NOT NULL)
     )
     ON CONFLICT (id) DO NOTHING;
   EXCEPTION
     WHEN unique_violation THEN
       INSERT INTO public.profiles (
         id, email, full_name, username, school_or_company,
-        chapter_id, role, spendable_points, lifetime_points
+        chapter_id, role, spendable_points, lifetime_points, is_email_verified
       ) VALUES (
         NEW.id,
         NEW.email,
@@ -86,7 +91,8 @@ BEGIN
         v_chapter_id,
         v_role,
         0,
-        0
+        0,
+        (NEW.email_confirmed_at IS NOT NULL)
       )
       ON CONFLICT (id) DO NOTHING;
     WHEN others THEN
@@ -112,11 +118,17 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- ── Apply officer role once the email is confirmed ──────────────────────────────
+-- ── On email confirmation: verify + award bonus + apply officer role ────────────
 -- Fires when email_confirmed_at transitions NULL → non-null (the user clicked the
--- confirmation link, proving inbox ownership). This is the secure point to grant
--- an officer role for email/password signups.
-CREATE OR REPLACE FUNCTION public.apply_officer_email_on_confirm()
+-- confirmation link, proving inbox ownership). This is the secure point to:
+--   1. mark the profile verified,
+--   2. award the (idempotent) signup bonus for email/password users, and
+--   3. apply any pre-assigned officer role.
+-- Supersedes the earlier apply_officer_email_on_confirm() (dropped below).
+DROP TRIGGER IF EXISTS on_auth_user_email_confirmed ON auth.users;
+DROP FUNCTION IF EXISTS public.apply_officer_email_on_confirm();
+
+CREATE OR REPLACE FUNCTION public.handle_email_confirmation()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -125,6 +137,13 @@ AS $$
 DECLARE
   v_assign_chapter uuid;
 BEGIN
+  -- Mark verified and award the signup bonus. award_signup_bonus_for_verified()
+  -- is idempotent (guards on an existing 'signup' point_transaction), so this is
+  -- safe even if the bonus was already granted at insert (OAuth path).
+  UPDATE public.profiles SET is_email_verified = true WHERE id = NEW.id;
+  PERFORM public.award_signup_bonus_for_verified(NEW.id);
+
+  -- Automated Officer Detection — apply a pre-assigned officer role now.
   SELECT chapter_id INTO v_assign_chapter
   FROM officer_email_assignments
   WHERE lower(email) = lower(NEW.email)
@@ -143,7 +162,7 @@ BEGIN
 
   RETURN NEW;
 EXCEPTION WHEN others THEN
-  RAISE WARNING 'apply_officer_email_on_confirm failed for %: %', NEW.id, SQLERRM;
+  RAISE WARNING 'handle_email_confirmation failed for %: %', NEW.id, SQLERRM;
   RETURN NEW;
 END;
 $$;
@@ -152,4 +171,4 @@ CREATE OR REPLACE TRIGGER on_auth_user_email_confirmed
   AFTER UPDATE OF email_confirmed_at ON auth.users
   FOR EACH ROW
   WHEN (OLD.email_confirmed_at IS NULL AND NEW.email_confirmed_at IS NOT NULL)
-  EXECUTE FUNCTION public.apply_officer_email_on_confirm();
+  EXECUTE FUNCTION public.handle_email_confirmation();
