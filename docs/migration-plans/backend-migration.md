@@ -13,7 +13,18 @@
 > - ✅ Slice 5 — `AdminModule` (`/admin/users`, `/admin/users/:id/transactions`, `/admin/users/:id/role`, `/admin/analytics`); 7-query analytics fan-out consolidated to one endpoint; `AdminDashboard`, `AdminUsers` migrated; 160 tests
 > - ✅ Slice 6 — `QrModule` (5 endpoints; `QrTokenService` with compact UUID/HS256 wire-compatible with edge functions; double-award gate preserved); `EventTicket`, `MyQR`, `QRScanner`, `AdminKiosk` migrated; 177 tests
 >   > ⚠️ Before deploying Slice 6 to EC2: synchronize `QR_JWT_SECRET` with the live Supabase Edge Function secret (`supabase secrets list`).
-> - ⏳ **Next: Slice 7 — `RegistrationsModule`** (event registration CRUD + manual check-in; `useEventsStore`)
+> - ✅ Slice 7 — `RegistrationsModule` (event registration CRUD + `manual_checkin` RPC; server-side re-registration check); `useEventsStore`, `EventRegistrants` migrated; tests passing
+> - ✅ Slice 8 — `PointsModule` (`/points/transactions`, `/points/summary`, `xp_tiers` CRUD; `increment_member_points` confirmed server-only); `usePointsStore`, `AdminCMS` XP tiers migrated
+> - ✅ Slice 9 — `MissionsModule` (consolidated member data endpoint, `approve_mission_winner` RPC, admin CRUD); `useMissionsStore`, `AdminCMS` missions migrated
+> - ✅ Slice 10 — `publicFetch` utility + 6 new server types (foundation for Group B)
+> - ✅ Slice 11 — `InterestsModule` (`GET /api/interests/options`); `useInterestsStore.fetchOptions` migrated
+> - ✅ Slice 12 — `NewsModule` (`GET /api/news`, `GET /api/news/:id`); `useNewsStore.fetchNews` migrated
+> - ✅ Slice 13 — `ChaptersModule` (`GET /api/chapters`) + `useChaptersStore`; 10+ scattered `supabase.from('chapters')` reads centralized
+> - ✅ Slice 14 — `RewardsModule` public catalog read (`GET /api/rewards`); `useRewardsStore.fetchRewards` migrated; class-level `AuthGuard` moved to per-method
+> - ✅ Slice 15 — `ReferralsModule` (`GET /api/referrals/me`); `useReferralsStore.loadReferralData` migrated
+> - ✅ Slice 16 — `JobsModule` (`GET /api/jobs`, `/api/jobs/all`, admin CRUD); `useJobsStore` fully migrated
+> - ✅ Slice 17 — `EventsModule` (`GET /api/events`, organizer CRUD with chapter-scoping); `useEventsStore.fetchEvents`/`createEvent`/`updateEvent`/`deleteEvent` migrated
+> - ✅ **Group B complete — 222/222 tests passing. Supabase-js on frontend is now realtime-only + storage uploads. Next: EC2 deploy.**
 
 ## Context
 
@@ -118,7 +129,8 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 8. ✅ **Points** (`PointsModule`) — `/points/transactions`, `/points/summary`, `xp_tiers` CRUD; `increment_member_points` confirmed server-only after slices 6+7. (`usePointsStore`, `AdminCMS` XP tiers) — **done 2026-06-04**
 9. ✅ **Missions** (`MissionsModule`) — consolidated member data endpoint, `approve_mission_winner` RPC, CRUD; server handles upsert logic. (`useMissionsStore`, `AdminCMS` missions) — **done 2026-06-04**
 
-**Group B — after launch:** broad public reads (events/jobs/news/chapters/interest_options), referrals, then (much later, if ever) realtime.
+**Group B — complete (2026-06-04):** public reads (events, jobs, news, chapters, interest_options, rewards catalog) + referrals all moved to NestJS. supabase-js on the frontend is now realtime-only + storage uploads.
+**Group C (future):** realtime migration (if ever) — currently locked out of scope.
 
 ---
 
