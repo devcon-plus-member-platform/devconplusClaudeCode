@@ -20,11 +20,17 @@ async function getFirebaseToken(forceRefresh = false): Promise<string | null> {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getFirebaseToken()
 
-  const buildHeaders = (t: string | null): Record<string, string> => ({
-    'Content-Type': 'application/json',
-    ...(init.headers as Record<string, string> | undefined),
-    ...(t ? { Authorization: `Bearer ${t}` } : {}),
-  })
+  const buildHeaders = (t: string | null): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    // Don't set Content-Type for FormData — the browser sets it with the
+    // multipart boundary automatically. Overriding it breaks the upload.
+    if (!(init.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    Object.assign(headers, init.headers as Record<string, string> | undefined);
+    if (t) headers['Authorization'] = `Bearer ${t}`;
+    return headers;
+  };
 
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers: buildHeaders(token) })
 

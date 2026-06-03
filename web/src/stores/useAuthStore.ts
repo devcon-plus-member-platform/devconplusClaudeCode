@@ -532,6 +532,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (patch) => {
     const current = get().user
     if (!current) return
+
+    if (USE_FIREBASE) {
+      const updated = await apiFetch<Profile>('/api/users/me', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      })
+      const chapterName = patch.chapter_id !== undefined
+        ? await fetchChapterName(patch.chapter_id ?? null)
+        : get().chapterName
+      set({
+        user: updated,
+        initials: updated.full_name ? getInitials(updated.full_name) : get().initials,
+        chapterName,
+      })
+      return
+    }
+
+    // Legacy Supabase direct path (VITE_AUTH_PROVIDER=supabase)
     const { error } = await supabase
       .from('profiles')
       .update(patch)
@@ -566,6 +584,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!current) throw new Error('Not authenticated')
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) throw new Error('Only image files are allowed')
     if (file.size > 10 * 1024 * 1024) throw new Error('Image must be under 10 MB')
+
+    if (USE_FIREBASE) {
+      const formData = new FormData()
+      formData.append('avatar', file)
+      const { avatar_url } = await apiFetch<{ avatar_url: string }>('/api/users/me/avatar', {
+        method: 'POST',
+        body: formData,
+      })
+      return avatar_url
+    }
+
+    // Legacy Supabase direct path (VITE_AUTH_PROVIDER=supabase)
     const ext = MIME_TO_EXT[file.type] ?? 'jpg'
     const path = `${current.id}/${Date.now()}.${ext}`
     const { error } = await supabase.storage
