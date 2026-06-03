@@ -24,16 +24,16 @@
 > - ✅ Slice 15 — `ReferralsModule` (`GET /api/referrals/me`); `useReferralsStore.loadReferralData` migrated
 > - ✅ Slice 16 — `JobsModule` (`GET /api/jobs`, `/api/jobs/all`, admin CRUD); `useJobsStore` fully migrated
 > - ✅ Slice 17 — `EventsModule` (`GET /api/events`, organizer CRUD with chapter-scoping); `useEventsStore.fetchEvents`/`createEvent`/`updateEvent`/`deleteEvent` migrated
-> - ✅ **Group B complete — 222/222 tests passing. Supabase-js on frontend is now realtime-only + storage uploads. Next: EC2 deploy.**
+> - ✅ **Group B complete — 222/222 tests passing. Core reads, writes, and business logic are now backend-migrated. Remaining direct Supabase usage is intentionally limited to deferred realtime/storage/export paths. Next: EC2 deploy.**
 
 ## Context
 
-**Why this is happening.** The auth migration (Firebase Auth + NestJS JWT bridge, Phases 0–4) is **complete and live**. Today the frontend still talks to Supabase *directly* via supabase-js for all data, injecting a NestJS-signed bridge JWT so RLS keeps working. We now move backend operations off the frontend and into NestJS, behind a clean layered architecture so the database (and Supabase as a whole) becomes swappable later.
+**Why this is happening.** The auth migration (Firebase Auth + NestJS JWT bridge, Phases 0–4) is **complete and live**. The backend migration is now functionally complete for core application data flows: the frontend uses NestJS for the main reads, writes, and business logic that used to go through direct supabase-js access. The remaining direct Supabase paths are limited, intentional exceptions for deferred realtime/storage/export concerns while the broader architecture shifts behind NestJS so the database (and Supabase as a whole) becomes swappable later.
 
 **Target architecture:** `Controller (presentation) → Service (business logic) → Repository (DAL) → Supabase Postgres`. The DAL is the *only* layer that imports supabase-js.
 
 **Locked decisions:**
-1. **Scope = Prioritized cutover.** Before mid-June launch: move all **writes**, all **RPC business logic**, and all **owner-scoped/sensitive reads** to NestJS. Public reads (events list, jobs, news, chapters, rewards catalog, interest_options) may stay on direct supabase-js until after launch.
+1. **Scope = Prioritized cutover.** All core **writes**, **RPC business logic**, **owner-scoped/sensitive reads**, and the Group B public reads are now moved to NestJS. The only remaining direct frontend-to-Supabase paths are deferred realtime/storage/export concerns.
 2. **DAL = supabase-js (service role) behind repository interfaces.** Only `*.repository.ts` files import supabase-js. Controllers/services never touch it.
 3. **Realtime = stays on Supabase.** Frontend keeps a thin supabase-js client solely for the 10 realtime channels. Not migrated now.
 4. **Host = AWS EC2** (see §5).
@@ -59,7 +59,7 @@
 - **~19 tables** written/owner-read from the frontend across 14 Zustand stores + admin pages.
 - **~17 RPCs** = the real business logic: `redeem_reward`, `approve_reward_claim`, `refund_reward_claim`, `approve_volunteer_application`, `manual_checkin`, `approve_organizer_upgrade`/`reject_organizer_upgrade`, `officer_approve_upgrade`, `officer_demote_coorganizer`, `admin_update_user_role`, `approve_mission_winner`, `delete_own_account`, `increment_member_points`, + 5 analytics RPCs.
 - **8 Edge Functions** → reimplement as controllers: `generate-qr-token`, `generate-user-qr`, `generate-pending-qr`, `award-points-on-scan`, `approve-at-door`, `check-rate-limit`, `send-email` (EmailModule exists), `delete-user` (covered by `DELETE /auth/account`).
-- **3 storage buckets** (`avatars`, `event_covers`, `reward_images`) — `avatars` migrates in the pilot; others can follow post-launch.
+- **3 storage buckets** (`avatars`, `event_covers`, `reward_images`) — `avatars` migrated in the pilot; `event_covers` remains a deferred browser-to-Supabase upload path in organizer/admin event flows; other storage cleanup can follow post-launch.
 - **10 realtime subscriptions** — stay on Supabase (locked).
 
 ---
@@ -129,8 +129,22 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 8. ✅ **Points** (`PointsModule`) — `/points/transactions`, `/points/summary`, `xp_tiers` CRUD; `increment_member_points` confirmed server-only after slices 6+7. (`usePointsStore`, `AdminCMS` XP tiers) — **done 2026-06-04**
 9. ✅ **Missions** (`MissionsModule`) — consolidated member data endpoint, `approve_mission_winner` RPC, CRUD; server handles upsert logic. (`useMissionsStore`, `AdminCMS` missions) — **done 2026-06-04**
 
-**Group B — complete (2026-06-04):** public reads (events, jobs, news, chapters, interest_options, rewards catalog) + referrals all moved to NestJS. supabase-js on the frontend is now realtime-only + storage uploads.
-**Group C (future):** realtime migration (if ever) — currently locked out of scope.
+**Group B — complete (2026-06-04):** public reads (events, jobs, news, chapters, interest_options, rewards catalog) + referrals all moved to NestJS. The frontend is now mostly limited to realtime plus a small number of deferred storage/export paths.
+
+## Remaining direct Supabase usage
+
+- **Event cover uploads still go browser → Supabase Storage** in:
+  - `web/src/pages/admin/AdminEvents.tsx`
+  - `web/src/pages/organizer/events/EventCreate.tsx`
+  - `web/src/pages/organizer/events/EventEdit.tsx`
+- **Admin event CSV exports still query Supabase directly** in:
+  - `web/src/pages/admin/AdminEvents.tsx`
+
+These paths are intentionally **not** being migrated right now. They are mostly storage/export concerns rather than business-logic gaps, so they are deferred as low-risk cleanup after the core backend migration.
+
+**Group C (future):**
+- Deferred storage/export cleanup for the remaining direct Supabase paths above
+- Optional realtime migration (if ever) — still out of current scope
 
 ---
 
@@ -172,7 +186,7 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 8. ✅ **Slice 7 PR** — `RegistrationsModule`; `useEventsStore`, `EventRegistrants` migrated.
 9. ✅ **Slice 8 PR** — `PointsModule`; `usePointsStore`, `AdminCMS` XP tiers migrated.
 10. ✅ **Slice 9 PR** — `MissionsModule`; `useMissionsStore`, `AdminCMS` missions migrated.
-11. **Group A complete.** 222/222 tests passing. Next: Group B (public reads) or EC2 deploy.
+11. **Group A and Group B complete.** 222/222 tests passing. EC2 deploy is the next operational milestone; remaining storage/export cleanup is deferred and non-blocking.
 
 ## Verification
 
