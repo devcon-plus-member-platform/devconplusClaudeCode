@@ -75,6 +75,13 @@ class EnvVariables {
   @IsUrl({ require_tld: false, protocols: ['http', 'https'] })
   SERVER_URL!: string;
 
+  // ── QR pipeline ─────────────────────────────────────────────────────────
+  // HMAC-SHA256 secret for signing QR JWTs (generate-qr-token + award-points-on-scan).
+  // Must match the value deployed to Supabase Edge Functions secrets.
+  @IsNotEmpty()
+  @IsString()
+  QR_JWT_SECRET!: string;
+
   // ── CORS ────────────────────────────────────────────────────────────────
   // Comma-separated list of allowed origins (no trailing slash).
   @IsNotEmpty()
