@@ -114,9 +114,9 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 5. ✅ **Admin role + analytics** (`AdminModule`) — `admin_update_user_role` + 5 analytics RPCs + user list + user transactions. (`AdminDashboard`, `AdminUsers`) — **done 2026-06-04**
 6. ✅ **QR pipeline** (`QrModule`) — 4 QR/scan edge functions ported; `QrTokenService` signs/verifies HS256 wire-compatible with Supabase edge fns; double-award gate preserved. (`EventTicket`, `MyQR`, `QRScanner`, `AdminKiosk`) — **done 2026-06-04**
    > ⚠️ Deploy blocker: synchronize `QR_JWT_SECRET` with live Supabase edge fn secret before switching `VITE_AUTH_PROVIDER=firebase` in production.
-7. ⏳ **Event registrations + manual check-in** (`RegistrationsModule`) — event registration CRUD + `manual_checkin` RPC; shares `registrations.repository.ts` with QrModule. (`useEventsStore`) — **next**
-8. **Points** (`PointsModule`) — `point_transactions` owner reads, `xp_tiers`, `increment_member_points`; ensure write path is server-only after 6/7.
-9. **Missions** (`MissionsModule`) — `approve_mission_winner`, submissions/participants.
+7. ✅ **Event registrations + manual check-in** (`RegistrationsModule`) — event registration CRUD + `manual_checkin` RPC; server-side re-registration check via DB query. (`useEventsStore`, `EventRegistrants`) — **done 2026-06-04**
+8. ✅ **Points** (`PointsModule`) — `/points/transactions`, `/points/summary`, `xp_tiers` CRUD; `increment_member_points` confirmed server-only after slices 6+7. (`usePointsStore`, `AdminCMS` XP tiers) — **done 2026-06-04**
+9. ✅ **Missions** (`MissionsModule`) — consolidated member data endpoint, `approve_mission_winner` RPC, CRUD; server handles upsert logic. (`useMissionsStore`, `AdminCMS` missions) — **done 2026-06-04**
 
 **Group B — after launch:** broad public reads (events/jobs/news/chapters/interest_options), referrals, then (much later, if ever) realtime.
 
@@ -157,8 +157,10 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 5. ✅ **Slice 4 PR** — `UpgradesModule` (upgrades + org-codes + co-organizers); `useAuthStore.requestOrganizerUpgrade`, `AdminOrgCodes`, `AdminUpgradeRequests`, `OrgCoOrganizers` migrated.
 6. ✅ **Slice 5 PR** — `AdminModule`; `AdminDashboard`, `AdminUsers` migrated.
 7. ✅ **Slice 6 PR** — `QrModule`; `EventTicket`, `MyQR`, `QRScanner`, `AdminKiosk` migrated.
-8. ⏳ **Slice 7 PR** — `RegistrationsModule`; `useEventsStore` writes migrated — **in progress**.
-9. Slices 8–9 (`PointsModule`, `MissionsModule`) follow.
+8. ✅ **Slice 7 PR** — `RegistrationsModule`; `useEventsStore`, `EventRegistrants` migrated.
+9. ✅ **Slice 8 PR** — `PointsModule`; `usePointsStore`, `AdminCMS` XP tiers migrated.
+10. ✅ **Slice 9 PR** — `MissionsModule`; `useMissionsStore`, `AdminCMS` missions migrated.
+11. **Group A complete.** 222/222 tests passing. Next: Group B (public reads) or EC2 deploy.
 
 ## Verification
 
