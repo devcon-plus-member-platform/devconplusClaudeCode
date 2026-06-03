@@ -47,6 +47,39 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
   reward_points_cost: number;
 }
 
+export interface Mission {
+  id: string;
+  title: string;
+  description: string | null;
+  xp_reward: number;
+  difficulty: string;
+  submission_type: 'proof_upload' | 'link' | 'self_attest';
+  github_url: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface MissionParticipant {
+  mission_id: string;
+  user_id: string;
+  joined_at: string | null;
+}
+
+export interface MissionSubmission {
+  id: string;
+  mission_id: string;
+  user_id: string;
+  pr_link: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  submitted_at: string | null;
+}
+
+export interface MissionSubmissionWithDetails extends MissionSubmission {
+  mission_title: string;
+  member_name: string;
+  member_email: string;
+}
+
 export interface XpTier {
   id: string;
   name: string;

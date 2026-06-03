@@ -17,6 +17,7 @@ import { AdminModule } from './admin/admin.module';
 import { QrModule } from './qr/qr.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { PointsModule } from './points/points.module';
+import { MissionsModule } from './missions/missions.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { PointsModule } from './points/points.module';
     QrModule,
     RegistrationsModule,
     PointsModule,
+    MissionsModule,
   ],
   controllers: [AppController],
   providers: [
