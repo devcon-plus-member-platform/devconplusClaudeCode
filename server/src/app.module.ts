@@ -18,6 +18,13 @@ import { QrModule } from './qr/qr.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { PointsModule } from './points/points.module';
 import { MissionsModule } from './missions/missions.module';
+import { InterestsModule } from './interests/interests.module';
+import { NewsModule } from './news/news.module';
+import { ChaptersModule } from './chapters/chapters.module';
+import { ReferralsModule } from './referrals/referrals.module';
+import { JobsModule } from './jobs/jobs.module';
+import { EventsModule } from './events/events.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 
 @Module({
   imports: [
@@ -47,6 +54,13 @@ import { MissionsModule } from './missions/missions.module';
     RegistrationsModule,
     PointsModule,
     MissionsModule,
+    InterestsModule,
+    NewsModule,
+    ChaptersModule,
+    ReferralsModule,
+    JobsModule,
+    EventsModule,
+    AnnouncementsModule,
   ],
   controllers: [AppController],
   providers: [
