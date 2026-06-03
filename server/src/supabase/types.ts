@@ -47,6 +47,24 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
   reward_points_cost: number;
 }
 
+export interface Registration {
+  id: string;
+  event_id: string;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  qr_code_token: string | null;
+  checked_in: boolean;
+  registered_at: string | null;
+  approved_at: string | null;
+}
+
+export interface RegistrantWithProfile extends Registration {
+  member_name: string;
+  member_email: string;
+  school_or_company: string;
+  form_responses: Record<string, unknown> | null;
+}
+
 export interface PointTransaction {
   id: string;
   user_id: string;
