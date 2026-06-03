@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Reward, RewardRedemption } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
-import { apiFetch } from '../lib/api'
+import { apiFetch, publicFetch } from '../lib/api'
 import { toast } from 'sonner'
 import { useAuthStore } from './useAuthStore'
 import { usePointsStore } from './usePointsStore'
@@ -68,14 +68,8 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
   fetchRewards: async () => {
     set((s) => ({ isLoading: s.rewards.length === 0, error: null }))
     try {
-      const { data, error } = await supabase
-        .from('rewards')
-        .select('*')
-        .eq('is_active', true)
-        .order('points_cost', { ascending: true })
-        .limit(50)
-      if (error) throw error
-      set({ rewards: (data ?? []) as Reward[] })
+      const data = await publicFetch<Reward[]>('/api/rewards')
+      set({ rewards: data })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -87,13 +81,8 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
   fetchAllRewards: async () => {
     set((s) => ({ isLoadingAll: s.allRewards.length === 0, error: null }))
     try {
-      const { data, error } = await supabase
-        .from('rewards')
-        .select('*')
-        .order('points_cost', { ascending: true })
-        .limit(100)
-      if (error) throw error
-      set({ allRewards: (data ?? []) as Reward[] })
+      const data = await apiFetch<Reward[]>('/api/rewards/all')
+      set({ allRewards: data })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
