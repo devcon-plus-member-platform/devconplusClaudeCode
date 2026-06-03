@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,6 +25,7 @@ import { ReferralsModule } from './referrals/referrals.module';
 import { JobsModule } from './jobs/jobs.module';
 import { EventsModule } from './events/events.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
+import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 
 @Module({
   imports: [
@@ -65,6 +66,8 @@ import { AnnouncementsModule } from './announcements/announcements.module';
   controllers: [AppController],
   providers: [
     AppService,
+    // Log every request centrally so all routes include their final status code.
+    { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
     // Apply the coarse throttler globally so every endpoint gets flood protection
     // without needing to add @UseGuards(ThrottlerGuard) on every controller.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
