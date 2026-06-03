@@ -47,6 +47,27 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
   reward_points_cost: number;
 }
 
+export interface VolunteerApplication {
+  id: string;
+  event_id: string;
+  user_id: string;
+  reason: string;
+  phone_number: string | null;
+  social_media_handle: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  applied_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+export interface OrgVolunteerApplication extends VolunteerApplication {
+  event_title: string;
+  event_chapter_id: string;
+  member_name: string;
+  member_email: string;
+  school_or_company: string;
+}
+
 export interface Profile {
   id: string;
   email: string;

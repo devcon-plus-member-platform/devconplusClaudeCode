@@ -11,6 +11,7 @@ import { FirebaseModule } from './firebase/firebase.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { UsersModule } from './users/users.module';
+import { VolunteersModule } from './volunteers/volunteers.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     RewardsModule,
+    VolunteersModule,
   ],
   controllers: [AppController],
   providers: [
