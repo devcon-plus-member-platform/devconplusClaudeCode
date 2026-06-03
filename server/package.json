@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "commonjs",
   "scripts": {
-    "dev": "nest start --watch --config nest-cli.dev.json",
+    "clean": "node -e \"const fs=require('fs'); for (const path of ['dist']) fs.rmSync(path,{recursive:true,force:true});\"",
+    "dev": "npm run clean && nest start --watch --config nest-cli.dev.json",
     "build": "nest build",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
