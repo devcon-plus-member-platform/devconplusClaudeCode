@@ -1101,27 +1101,47 @@ function MissionsTab() {
 
   const loadMissions = async () => {
     setLoadingMissions(true)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error: err } = await (supabase as any)
-      .from('missions')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (err) setError(err.message)
-    else setRows((data ?? []) as MissionRow[])
-    setLoadingMissions(false)
+    try {
+      if (USE_FIREBASE) {
+        const data = await apiFetch<MissionRow[]>('/api/missions/admin')
+        setRows(data)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error: err } = await (supabase as any)
+          .from('missions')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (err) setError(err.message)
+        else setRows((data ?? []) as MissionRow[])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load missions')
+    } finally {
+      setLoadingMissions(false)
+    }
   }
 
   const loadQueue = async () => {
     setLoadingQueue(true)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error: err } = await (supabase as any)
-      .from('mission_submissions')
-      .select(`*, missions:mission_id(title), profiles:user_id(full_name, email)`)
-      .eq('status', 'pending')
-      .order('submitted_at', { ascending: true })
-    if (err) setApproveError(err.message)
-    else setQueue((data ?? []) as MissionSubmissionRow[])
-    setLoadingQueue(false)
+    try {
+      if (USE_FIREBASE) {
+        const data = await apiFetch<MissionSubmissionRow[]>('/api/missions/queue')
+        setQueue(data)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error: err } = await (supabase as any)
+          .from('mission_submissions')
+          .select('*, missions:mission_id(title), profiles:user_id(full_name, email)')
+          .eq('status', 'pending')
+          .order('submitted_at', { ascending: true })
+        if (err) setApproveError(err.message)
+        else setQueue((data ?? []) as MissionSubmissionRow[])
+      }
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Failed to load queue')
+    } finally {
+      setLoadingQueue(false)
+    }
   }
 
   useEffect(() => { void loadMissions() }, [])
@@ -1159,14 +1179,22 @@ function MissionsTab() {
       is_active:       form.is_active,
     }
     try {
-      if (slideOver === 'create') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: err } = await (supabase as any).from('missions').insert(payload)
-        if (err) throw err
-      } else if (editingItem) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: err } = await (supabase as any).from('missions').update(payload).eq('id', editingItem.id)
-        if (err) throw err
+      if (USE_FIREBASE) {
+        if (slideOver === 'create') {
+          await apiFetch('/api/missions', { method: 'POST', body: JSON.stringify(payload) })
+        } else if (editingItem) {
+          await apiFetch(`/api/missions/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        }
+      } else {
+        if (slideOver === 'create') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: err } = await (supabase as any).from('missions').insert(payload)
+          if (err) throw err
+        } else if (editingItem) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: err } = await (supabase as any).from('missions').update(payload).eq('id', editingItem.id)
+          if (err) throw err
+        }
       }
       setSlideOver(null)
       await loadMissions()
@@ -1178,29 +1206,53 @@ function MissionsTab() {
   }
 
   const handleDelete = async (id: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: err } = await (supabase as any).from('missions').delete().eq('id', id)
-    if (err) setError(err.message)
-    else setRows((prev) => prev.filter((m) => m.id !== id))
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/missions/${id}`, { method: 'DELETE' })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: err } = await (supabase as any).from('missions').delete().eq('id', id)
+        if (err) { setError(err.message); return }
+      }
+      setRows((prev) => prev.filter((m) => m.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    }
     setConfirmDeleteId(null)
   }
 
   const handleToggleStatus = async (m: MissionRow) => {
     setTogglingStatusId(m.id)
     const nextActive = !m.is_active
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: err } = await (supabase as any).from('missions').update({ is_active: nextActive }).eq('id', m.id)
-    if (err) setError(err.message)
-    else setRows((prev) => prev.map((r) => (r.id === m.id ? { ...r, is_active: nextActive } : r)))
-    setTogglingStatusId(null)
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/missions/${m.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_active: nextActive }),
+        })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: err } = await (supabase as any).from('missions').update({ is_active: nextActive }).eq('id', m.id)
+        if (err) { setError(err.message); return }
+      }
+      setRows((prev) => prev.map((r) => (r.id === m.id ? { ...r, is_active: nextActive } : r)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Toggle failed')
+    } finally {
+      setTogglingStatusId(null)
+    }
   }
 
   const handleApprove = async (subId: string) => {
     setApprovingId(subId)
     setApproveError(null)
     try {
-      const { error: err } = await supabase.rpc('approve_mission_winner' as never, { sub_id: subId } as never)
-      if (err) throw err
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/missions/submissions/${subId}/approve`, { method: 'POST' })
+      } else {
+        const { error: err } = await supabase.rpc('approve_mission_winner' as never, { sub_id: subId } as never)
+        if (err) throw err
+      }
       setQueue((prev) => prev.filter((s) => s.id !== subId))
       await loadMissions()
     } catch (err) {

@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import type { Mission, MissionParticipant, MissionSubmission } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
+import { apiFetch } from '../lib/api'
 import { useAuthStore } from './useAuthStore'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 let _chanSeq = 0
 const nextChan = (base: string) => `${base}-${++_chanSeq}`
@@ -31,56 +34,84 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
   fetchAll: async (force = false) => {
     const { isLoading, lastFetched, missions } = get()
 
-    // Cache-first: if already loading, or if we have data and it's fresh (< 5 mins), skip
     const isFresh = lastFetched && (Date.now() - lastFetched < 300000)
     if (isLoading || (isFresh && missions.length > 0 && !force)) return
 
-    // Only fetch user-specific rows when authenticated (MemberLayout guards for !user)
     const userId = useAuthStore.getState().user?.id
     if (!userId) return
 
     set({ isLoading: true, error: null })
     try {
-      const [mRes, pRes, sRes] = await Promise.all([
-        supabase.from('missions').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(50),
-        supabase.from('mission_participants').select('*').eq('user_id', userId).limit(100),
-        supabase.from('mission_submissions').select('*').eq('user_id', userId).limit(100),
-      ])
-      if (mRes.error) throw mRes.error
-      set({
-        missions:     (mRes.data ?? []) as Mission[],
-        participants: (pRes.data ?? []) as MissionParticipant[],
-        submissions:  (sRes.data ?? []) as MissionSubmission[],
-        lastFetched:  Date.now(),
-      })
+      if (USE_FIREBASE) {
+        const data = await apiFetch<{
+          missions: Mission[]
+          participants: MissionParticipant[]
+          submissions: MissionSubmission[]
+        }>('/api/missions')
+        set({ missions: data.missions, participants: data.participants, submissions: data.submissions, lastFetched: Date.now() })
+      } else {
+        const [mRes, pRes, sRes] = await Promise.all([
+          supabase.from('missions').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(50),
+          supabase.from('mission_participants').select('*').eq('user_id', userId).limit(100),
+          supabase.from('mission_submissions').select('*').eq('user_id', userId).limit(100),
+        ])
+        if (mRes.error) throw mRes.error
+        set({
+          missions:     (mRes.data ?? []) as Mission[],
+          participants: (pRes.data ?? []) as MissionParticipant[],
+          submissions:  (sRes.data ?? []) as MissionSubmission[],
+          lastFetched:  Date.now(),
+        })
+      }
     } catch (err) {
-      set({
-        error: err instanceof Error ? err.message : String(err),
-      })
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ isLoading: false })
     }
   },
 
-  startMission: async (missionId, userId) => {
+  startMission: async (missionId, _userId) => {
+    // _userId ignored in Firebase mode — server derives it from the token.
+    if (USE_FIREBASE) {
+      const data = await apiFetch<MissionParticipant>(`/api/missions/${missionId}/start`, { method: 'POST' })
+      set((s) => ({
+        participants: s.participants.some((p) => p.mission_id === data.mission_id && p.user_id === data.user_id)
+          ? s.participants
+          : [...s.participants, data],
+      }))
+      return
+    }
+    const userId = _userId
     const { error } = await supabase
       .from('mission_participants')
       .insert({ mission_id: missionId, user_id: userId })
     if (error) throw error
-    // Optimistic — real-time will also arrive but dedup guard handles that
     set((s) => ({
-      participants: s.participants.some(
-        (p) => p.mission_id === missionId && p.user_id === userId
-      )
+      participants: s.participants.some((p) => p.mission_id === missionId && p.user_id === userId)
         ? s.participants
         : [...s.participants, { mission_id: missionId, user_id: userId, joined_at: new Date().toISOString() }],
     }))
   },
 
-  submitMission: async (missionId, userId, link) => {
-    const existing = get().submissions.find(
-      (s) => s.mission_id === missionId && s.user_id === userId
-    )
+  submitMission: async (missionId, _userId, link) => {
+    // _userId ignored in Firebase mode — server derives it from the token.
+    if (USE_FIREBASE) {
+      const data = await apiFetch<MissionSubmission>(`/api/missions/${missionId}/submit`, {
+        method: 'POST',
+        body: JSON.stringify({ link }),
+      })
+      set((s) => {
+        const exists = s.submissions.some((sub) => sub.id === data.id)
+        return {
+          submissions: exists
+            ? s.submissions.map((sub) => (sub.id === data.id ? data : sub))
+            : [...s.submissions, data],
+        }
+      })
+      return
+    }
+    const userId = _userId
+    const existing = get().submissions.find((s) => s.mission_id === missionId && s.user_id === userId)
     const now = new Date().toISOString()
     if (existing) {
       const { error } = await supabase
