@@ -241,11 +241,8 @@ export function OrgQRScanner() {
       return
     }
 
-    // Dynamic imports are cached after first load — no repeated network cost
-    const { supabase, getBridgeToken } = await import('../../../lib/supabase')
     const { useAuthStore } = await import('../../../stores/useAuthStore')
     const user = useAuthStore.getState().user
-
     if (!user) {
       showOverlay({ type: 'error', message: 'Session expired. Please sign in again.' })
       return
@@ -254,45 +251,46 @@ export function OrgQRScanner() {
     isProcessingRef.current = true
 
     try {
-      // In Firebase mode, supabase.auth.getSession() returns null (setSession bypassed).
-      // Bridge token is kept fresh by Firebase's onIdTokenChanged listener.
-      const accessToken = getBridgeToken()
-
-      if (!accessToken) {
-        showOverlay({ type: 'error', message: 'Session expired. Please sign in again.' })
-        isProcessingRef.current = false
-        return
+      const USE_FIREBASE = (import.meta.env.VITE_AUTH_PROVIDER as string) === 'firebase'
+      type ScanData = {
+        success: boolean; pending?: boolean; registration_id?: string
+        member_name?: string; points_awarded?: number; event_title?: string
+        already_checked_in?: boolean; error?: string
       }
+      let data: ScanData | null = null
 
-      const { data, error } = await supabase.functions.invoke<{
-        success: boolean
-        pending?: boolean
-        registration_id?: string
-        member_name?: string
-        points_awarded?: number
-        event_title?: string
-        already_checked_in?: boolean
-        error?: string
-      }>('award-points-on-scan', {
-        body: { token },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-
-      if (error) {
-        // FunctionsHttpError stores the raw Response as error.context (body unread).
-        // Read it to surface the actual gateway or function error message.
-        let errorMessage = 'Scan failed. Try again.'
-        try {
-          const body = await (error as unknown as { context: Response }).context.json() as { error?: string; message?: string }
-          if (body?.error) errorMessage = body.error
-          else if (body?.message) errorMessage = body.message
-        } catch { /* non-JSON body — keep generic message */ }
-        showOverlay({ type: 'error', message: errorMessage })
-        return
+      if (USE_FIREBASE) {
+        const { apiFetch } = await import('../../../lib/api')
+        data = await apiFetch<ScanData>('/api/qr/scan', {
+          method: 'POST',
+          body: JSON.stringify({ token }),
+        })
+      } else {
+        const { supabase, getBridgeToken } = await import('../../../lib/supabase')
+        const accessToken = getBridgeToken()
+        if (!accessToken) {
+          showOverlay({ type: 'error', message: 'Session expired. Please sign in again.' })
+          isProcessingRef.current = false
+          return
+        }
+        const res = await supabase.functions.invoke<ScanData>('award-points-on-scan', {
+          body: { token },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (res.error) {
+          let msg = 'Scan failed. Try again.'
+          try {
+            const body = await (res.error as unknown as { context: Response }).context.json() as { error?: string; message?: string }
+            if (body?.error) msg = body.error
+            else if (body?.message) msg = body.message
+          } catch { /* non-JSON */ }
+          showOverlay({ type: 'error', message: msg })
+          return
+        }
+        data = res.data
       }
 
       if (data?.pending && data.registration_id) {
-        // Member is pending — show approve/reject overlay (keeps scan lock held)
         showOverlay({
           type: 'pending',
           memberName: data.member_name ?? 'Member',
@@ -301,22 +299,18 @@ export function OrgQRScanner() {
         })
         return
       }
-
       if (data?.already_checked_in) {
         showOverlay({ type: 'already_checked_in', memberName: data.member_name ?? 'Member' })
         return
       }
-
       if (data?.error === 'token_expired' || data?.error === 'invalid_token') {
         showOverlay({ type: 'error', message: 'Invalid or expired QR code.' })
         return
       }
-
       if (!data?.success) {
         showOverlay({ type: 'error', message: data?.error ?? 'Scan failed. Try again.' })
         return
       }
-
       showOverlay({
         type: 'success',
         memberName: data.member_name ?? 'Member',
@@ -324,45 +318,51 @@ export function OrgQRScanner() {
         pointsAwarded: data.points_awarded ?? 0,
       })
     } catch {
-      showOverlay({
-        type: 'error',
-        message: 'Scan failed. Try again.',
-      })
+      showOverlay({ type: 'error', message: 'Scan failed. Try again.' })
     }
   }
 
   const handleDoorAction = async (registrationId: string, action: 'approve' | 'reject') => {
-    const { supabase, getBridgeToken } = await import('../../../lib/supabase')
-    const accessToken = getBridgeToken() ?? ''
     try {
-      const { data, error } = await supabase.functions.invoke<{
-        success: boolean
-        rejected?: boolean
-        already_approved?: boolean
-        member_name?: string
-        points_awarded?: number
-        event_title?: string
-        error?: string
-      }>('approve-at-door', {
-        body: { registration_id: registrationId, action },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
+      const USE_FIREBASE = (import.meta.env.VITE_AUTH_PROVIDER as string) === 'firebase'
+      type DoorData = {
+        success: boolean; rejected?: boolean; already_approved?: boolean
+        member_name?: string; points_awarded?: number; event_title?: string; error?: string
+      }
+      let data: DoorData | null = null
 
-      if (error || !data?.success) {
+      if (USE_FIREBASE) {
+        const { apiFetch } = await import('../../../lib/api')
+        data = await apiFetch<DoorData>('/api/qr/door-action', {
+          method: 'POST',
+          body: JSON.stringify({ registrationId, action }),
+        })
+      } else {
+        const { supabase, getBridgeToken } = await import('../../../lib/supabase')
+        const accessToken = getBridgeToken() ?? ''
+        const res = await supabase.functions.invoke<DoorData>('approve-at-door', {
+          body: { registration_id: registrationId, action },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (res.error || !res.data?.success) {
+          showOverlay({ type: 'error', message: res.data?.error ?? 'Action failed. Try again.' })
+          return
+        }
+        data = res.data
+      }
+
+      if (!data?.success) {
         showOverlay({ type: 'error', message: data?.error ?? 'Action failed. Try again.' })
         return
       }
-
       if (action === 'reject' || data.rejected) {
         showOverlay({ type: 'rejected', memberName: data.member_name ?? 'Member' })
         return
       }
-
       if (data.already_approved) {
         showOverlay({ type: 'already_checked_in', memberName: data.member_name ?? 'Member' })
         return
       }
-
       showOverlay({
         type: 'success',
         memberName: data.member_name ?? 'Member',
@@ -370,10 +370,7 @@ export function OrgQRScanner() {
         pointsAwarded: data.points_awarded ?? 0,
       })
     } catch (e) {
-      showOverlay({
-        type: 'error',
-        message: e instanceof Error ? e.message : 'Action failed. Try again.',
-      })
+      showOverlay({ type: 'error', message: e instanceof Error ? e.message : 'Action failed.' })
     }
   }
 
