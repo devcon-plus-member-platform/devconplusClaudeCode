@@ -6,9 +6,14 @@
 >
 > **Progress — as of 2026-06-04:**
 > - ✅ Scaffolding PR — `common/authz/`, `base.repository.ts`, `common/throttler/`, ESLint DAL rule, global prefix, health endpoint, `QR_JWT_SECRET` env validation
-> - ✅ Slice 1 — `UsersModule` (GET/PATCH `/api/users/me`, POST `/api/users/me/avatar`); `useAuthStore.updateProfile`/`uploadAvatar` migrated to `apiFetch`; 4 security issues addressed (mass-assign, magic-byte MIME, Multer size cap, avatar URL injection); 107 tests passing
-> - ✅ Slice 2 — `RewardsModule` (8 endpoints, 3 atomic RPCs: `redeem_reward`, `approve_reward_claim`, `refund_reward_claim`); `useRewardsStore` 8 operations migrated to `apiFetch`
-> - ⏳ **Next: Slice 3 — `VolunteersModule`** (`approve_volunteer_application` RPC; `useVolunteerStore`, `useOrgVolunteerStore`)
+> - ✅ Slice 1 — `UsersModule` (GET/PATCH `/api/users/me`, POST `/api/users/me/avatar`); `useAuthStore.updateProfile`/`uploadAvatar` migrated; 4 security issues fixed; 107 tests
+> - ✅ Slice 2 — `RewardsModule` (8 endpoints, 3 atomic RPCs); `useRewardsStore` migrated
+> - ✅ Slice 3 — `VolunteersModule` (6 endpoints, `approve_volunteer_application` RPC, chapter-scope on mutations); `useVolunteerStore`/`useOrgVolunteerStore` migrated; 126 tests
+> - ✅ Slice 4 — `UpgradesModule` (`/upgrades`, `/org-codes`, `/co-organizers`; 13 endpoints, 4 RPCs, `@RateLimit('org_upgrade')`); `useAuthStore.requestOrganizerUpgrade`, `AdminOrgCodes`, `AdminUpgradeRequests`, `OrgCoOrganizers` migrated; 152 tests
+> - ✅ Slice 5 — `AdminModule` (`/admin/users`, `/admin/users/:id/transactions`, `/admin/users/:id/role`, `/admin/analytics`); 7-query analytics fan-out consolidated to one endpoint; `AdminDashboard`, `AdminUsers` migrated; 160 tests
+> - ✅ Slice 6 — `QrModule` (5 endpoints; `QrTokenService` with compact UUID/HS256 wire-compatible with edge functions; double-award gate preserved); `EventTicket`, `MyQR`, `QRScanner`, `AdminKiosk` migrated; 177 tests
+>   > ⚠️ Before deploying Slice 6 to EC2: synchronize `QR_JWT_SECRET` with the live Supabase Edge Function secret (`supabase secrets list`).
+> - ⏳ **Next: Slice 7 — `RegistrationsModule`** (event registration CRUD + manual check-in; `useEventsStore`)
 
 ## Context
 
@@ -104,12 +109,12 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 **Group A — before mid-June launch (writes + RPCs + sensitive reads):**
 1. ✅ **Users/profile + avatar** (`UsersModule`) — *pilot*; proves the triad + `api.ts` round-trip end-to-end. (`useAuthStore.updateProfile`/`uploadAvatar`) — **done 2026-06-04**
 2. ✅ **Reward redemptions + reward writes** (`RewardsModule`) — `redeem_reward`/`approve_reward_claim`/`refund_reward_claim`; catalog read may stay direct. (`useRewardsStore`) — **done 2026-06-04**
-3. ⏳ **Volunteer applications** — `approve_volunteer_application`. (`useVolunteerStore`, `useOrgVolunteerStore`) — **next**
-4. **Organizer upgrades** — `approve/reject/officer_approve/officer_demote` + `organizer_codes` + `org_upgrade` rate bucket. (`useAuthStore.requestOrganizerUpgrade`, `OrgCoOrganizers`, AdminCMS)
-5. **Admin role + analytics** (`AdminModule`) — `admin_update_user_role` (super_admin) + 5 analytics RPCs. (`AdminDashboard`, `AdminUsers`)
-6. **QR pipeline** (`QrModule`) — port the 5 QR/scan edge functions; **auth flips from `verifyCallerJwt` (bridge JWT) to `AuthGuard` (Firebase)** atomically with its frontend cutover. Highest-risk A slice (points integrity) → sequence last in A. (`EventTicket`, `MyQR`, `AdminKiosk`, `EventRegistrants`)
-   > ⚠️ `QR_JWT_SECRET` in `server/.env` is a local placeholder — must be synchronized with the live Supabase Edge Function secret before this slice deploys.
-7. **Event registrations + manual check-in** (`RegistrationsModule`) — shares `registrations.repository.ts` with QrModule. (`useEventsStore`)
+3. ✅ **Volunteer applications** (`VolunteersModule`) — `approve_volunteer_application` RPC; chapter-scope on approve/reject/revert. (`useVolunteerStore`, `useOrgVolunteerStore`) — **done 2026-06-04**
+4. ✅ **Organizer upgrades** (`UpgradesModule`) — `approve/reject/officer_approve/officer_demote` + `organizer_codes` CRUD + `org_upgrade` rate bucket. (`useAuthStore.requestOrganizerUpgrade`, `AdminOrgCodes`, `AdminUpgradeRequests`, `OrgCoOrganizers`) — **done 2026-06-04**
+5. ✅ **Admin role + analytics** (`AdminModule`) — `admin_update_user_role` + 5 analytics RPCs + user list + user transactions. (`AdminDashboard`, `AdminUsers`) — **done 2026-06-04**
+6. ✅ **QR pipeline** (`QrModule`) — 4 QR/scan edge functions ported; `QrTokenService` signs/verifies HS256 wire-compatible with Supabase edge fns; double-award gate preserved. (`EventTicket`, `MyQR`, `QRScanner`, `AdminKiosk`) — **done 2026-06-04**
+   > ⚠️ Deploy blocker: synchronize `QR_JWT_SECRET` with live Supabase edge fn secret before switching `VITE_AUTH_PROVIDER=firebase` in production.
+7. ⏳ **Event registrations + manual check-in** (`RegistrationsModule`) — event registration CRUD + `manual_checkin` RPC; shares `registrations.repository.ts` with QrModule. (`useEventsStore`) — **next**
 8. **Points** (`PointsModule`) — `point_transactions` owner reads, `xp_tiers`, `increment_member_points`; ensure write path is server-only after 6/7.
 9. **Missions** (`MissionsModule`) — `approve_mission_winner`, submissions/participants.
 
@@ -145,10 +150,15 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 
 ## Execution order (first PRs)
 
-1. ✅ **Scaffolding PR** — `common/authz/` (`@Roles`, `RolesGuard`, `chapter-scope`), `common/repository/base.repository.ts`, `common/throttler/`, ESLint repository-import rule, `setGlobalPrefix('api', { exclude: ['auth/(.*)'] })`, `GET /api/health`, add `QR_JWT_SECRET` to env validation, `@nestjs/throttler` global config.
-2. ✅ **Slice 1 PR (pilot)** — `UsersModule` (profile read/update + avatar upload) end-to-end; refactor `useAuthStore` to `apiFetch`. RLS drop pending prod smoke test.
-3. ✅ **Slice 2 PR** — `RewardsModule` (8 endpoints, 3 atomic RPCs); `useRewardsStore` migrated.
-4. Proceed slice-by-slice through Group A (§4) — **next: Slice 3 (VolunteersModule)**.
+1. ✅ **Scaffolding PR** — `common/authz/`, `base.repository.ts`, `common/throttler/`, ESLint DAL rule, global prefix, health endpoint, `QR_JWT_SECRET` env validation.
+2. ✅ **Slice 1 PR** — `UsersModule`; `useAuthStore` migrated. RLS drop on `avatars` bucket pending prod smoke test.
+3. ✅ **Slice 2 PR** — `RewardsModule`; `useRewardsStore` migrated.
+4. ✅ **Slice 3 PR** — `VolunteersModule`; `useVolunteerStore`/`useOrgVolunteerStore` migrated.
+5. ✅ **Slice 4 PR** — `UpgradesModule` (upgrades + org-codes + co-organizers); `useAuthStore.requestOrganizerUpgrade`, `AdminOrgCodes`, `AdminUpgradeRequests`, `OrgCoOrganizers` migrated.
+6. ✅ **Slice 5 PR** — `AdminModule`; `AdminDashboard`, `AdminUsers` migrated.
+7. ✅ **Slice 6 PR** — `QrModule`; `EventTicket`, `MyQR`, `QRScanner`, `AdminKiosk` migrated.
+8. ⏳ **Slice 7 PR** — `RegistrationsModule`; `useEventsStore` writes migrated — **in progress**.
+9. Slices 8–9 (`PointsModule`, `MissionsModule`) follow.
 
 ## Verification
 
