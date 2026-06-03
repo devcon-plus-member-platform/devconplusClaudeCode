@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase, getBridgeToken } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 import type { Profile, UserRole, PointTransaction } from '@devcon-plus/supabase'
 
 const ROLES: UserRole[] = ['member', 'chapter_officer', 'hq_admin', 'super_admin']
@@ -38,38 +41,68 @@ export default function AdminUsers() {
     setSelectedUser(user)
     setUserTxns([])
     setTxnsLoading(true)
-    const { data } = await supabase
-      .from('point_transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(5)
-    setUserTxns((data ?? []) as PointTransaction[])
-    setTxnsLoading(false)
+    try {
+      if (USE_FIREBASE) {
+        const data = await apiFetch<PointTransaction[]>(`/api/admin/users/${user.id}/transactions`)
+        setUserTxns(data)
+      } else {
+        const { data } = await supabase
+          .from('point_transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(5)
+        setUserTxns((data ?? []) as PointTransaction[])
+      }
+    } finally {
+      setTxnsLoading(false)
+    }
   }
 
   const load = async () => {
     setIsLoading(true)
-    const { data, error: dbErr } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (dbErr) { setError(dbErr.message); setIsLoading(false); return }
-    setUsers((data ?? []) as Profile[])
-    setIsLoading(false)
+    try {
+      if (USE_FIREBASE) {
+        const data = await apiFetch<Profile[]>('/api/admin/users')
+        setUsers(data)
+      } else {
+        const { data, error: dbErr } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (dbErr) { setError(dbErr.message); return }
+        setUsers((data ?? []) as Profile[])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load users')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => { void load() }, [])
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
-    const { error: dbErr } = await supabase.rpc('admin_update_user_role' as any, {
-      p_user_id: userId,
-      p_new_role: newRole,
-    })
-    if (dbErr) { setError(dbErr.message); return }
-    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: newRole } : u))
-    if (selectedUser?.id === userId) {
-      setSelectedUser((prev) => prev ? { ...prev, role: newRole } : prev)
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/admin/users/${userId}/role`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role: newRole }),
+        })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: dbErr } = await supabase.rpc('admin_update_user_role' as any, {
+          p_user_id:  userId,
+          p_new_role: newRole,
+        })
+        if (dbErr) { setError(dbErr.message); return }
+      }
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: newRole } : u))
+      if (selectedUser?.id === userId) {
+        setSelectedUser((prev) => prev ? { ...prev, role: newRole } : prev)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Role update failed')
     }
   }
 

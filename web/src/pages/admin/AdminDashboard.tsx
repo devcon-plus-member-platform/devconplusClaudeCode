@@ -13,6 +13,9 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 interface KpiData {
   totalMembers: number
@@ -37,34 +40,49 @@ export default function AdminDashboard() {
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
-      const [
-        membersRes,
-        eventsRes,
-        xpRes,
-        chaptersRes,
-        growthRes,
-        xpChapterRes,
-        attendanceRes,
-      ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('events').select('*', { count: 'exact', head: true }),
-        supabase.rpc('get_total_xp_distributed'),
-        supabase.rpc('get_active_chapters_count'),
-        supabase.rpc('get_member_growth'),
-        supabase.rpc('get_xp_by_chapter'),
-        supabase.rpc('get_attendance_trend'),
-      ])
-
-      setKpis({
-        totalMembers: membersRes.count ?? 0,
-        totalEvents: eventsRes.count ?? 0,
-        xpDistributed: (xpRes.data as number) ?? 0,
-        activeChapters: (chaptersRes.data as number) ?? 0,
-      })
-      setMemberGrowth((growthRes.data as GrowthRow[]) ?? [])
-      setXpByChapter((xpChapterRes.data as XpRow[]) ?? [])
-      setAttendanceTrend((attendanceRes.data as AttendanceRow[]) ?? [])
-      setIsLoading(false)
+      try {
+        if (USE_FIREBASE) {
+          const analytics = await apiFetch<{
+            totalMembers: number; totalEvents: number
+            xpDistributed: number; activeChapters: number
+            memberGrowth: GrowthRow[]; xpByChapter: XpRow[]
+            attendanceTrend: AttendanceRow[]
+          }>('/api/admin/analytics')
+          setKpis({
+            totalMembers:  analytics.totalMembers,
+            totalEvents:   analytics.totalEvents,
+            xpDistributed: analytics.xpDistributed,
+            activeChapters: analytics.activeChapters,
+          })
+          setMemberGrowth(analytics.memberGrowth)
+          setXpByChapter(analytics.xpByChapter)
+          setAttendanceTrend(analytics.attendanceTrend)
+        } else {
+          const [
+            membersRes, eventsRes, xpRes, chaptersRes,
+            growthRes, xpChapterRes, attendanceRes,
+          ] = await Promise.all([
+            supabase.from('profiles').select('*', { count: 'exact', head: true }),
+            supabase.from('events').select('*', { count: 'exact', head: true }),
+            supabase.rpc('get_total_xp_distributed'),
+            supabase.rpc('get_active_chapters_count'),
+            supabase.rpc('get_member_growth'),
+            supabase.rpc('get_xp_by_chapter'),
+            supabase.rpc('get_attendance_trend'),
+          ])
+          setKpis({
+            totalMembers:  membersRes.count ?? 0,
+            totalEvents:   eventsRes.count ?? 0,
+            xpDistributed: (xpRes.data as number) ?? 0,
+            activeChapters: (chaptersRes.data as number) ?? 0,
+          })
+          setMemberGrowth((growthRes.data as GrowthRow[]) ?? [])
+          setXpByChapter((xpChapterRes.data as XpRow[]) ?? [])
+          setAttendanceTrend((attendanceRes.data as AttendanceRow[]) ?? [])
+        }
+      } finally {
+        setIsLoading(false)
+      }
     }
     void load()
   }, [])
