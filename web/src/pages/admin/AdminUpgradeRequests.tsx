@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
 import { useAuthStore } from '../../stores/useAuthStore'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 interface UpgradeRequest {
   id: string
@@ -35,16 +38,26 @@ export default function AdminUpgradeRequests() {
 
   const load = async () => {
     setIsLoading(true)
-    const { data, error: dbErr } = await supabase
-      .from('organizer_upgrade_requests')
-      .select(`
-        *,
-        profiles!user_id (full_name, email, chapter_id, chapters:chapter_id(name)),
-        chapters:chapter_id (name)
-      `)
-      .order('created_at', { ascending: false })
-    if (dbErr) { setError(dbErr.message) } else { setRequests((data ?? []) as unknown as UpgradeRequest[]) }
-    setIsLoading(false)
+    try {
+      if (USE_FIREBASE) {
+        const data = await apiFetch<UpgradeRequest[]>('/api/upgrades')
+        setRequests(data)
+      } else {
+        const { data, error: dbErr } = await supabase
+          .from('organizer_upgrade_requests')
+          .select(`
+            *,
+            profiles!user_id (full_name, email, chapter_id, chapters:chapter_id(name)),
+            chapters:chapter_id (name)
+          `)
+          .order('created_at', { ascending: false })
+        if (dbErr) { setError(dbErr.message) } else { setRequests((data ?? []) as unknown as UpgradeRequest[]) }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load requests')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => { void load() }, [])
@@ -54,17 +67,18 @@ export default function AdminUpgradeRequests() {
     setActionLoading(req.id)
     setError(null)
     try {
-      // Single atomic RPC — updates profile role + marks request approved server-side.
-      // Direct anon-key UPDATE on another user's profile is blocked by RLS.
-      const { error } = await supabase.rpc('approve_organizer_upgrade', {
-        p_request_id: req.id,
-        p_user_id:    req.user_id,
-        p_chapter_id: req.chapter_id ?? '',
-        p_reviewer_id: user?.id ?? '',
-        p_role: req.requested_role,
-      })
-      if (error) throw error
-
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/upgrades/${req.id}/approve`, { method: 'POST' })
+      } else {
+        const { error } = await supabase.rpc('approve_organizer_upgrade', {
+          p_request_id:  req.id,
+          p_user_id:     req.user_id,
+          p_chapter_id:  req.chapter_id ?? '',
+          p_reviewer_id: user?.id ?? '',
+          p_role:        req.requested_role,
+        })
+        if (error) throw error
+      }
       setRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'approved' } : r))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed')
@@ -78,12 +92,16 @@ export default function AdminUpgradeRequests() {
     setActionLoading(req.id)
     setError(null)
     try {
-      const { error: rpcErr } = await supabase.rpc('reject_organizer_upgrade' as any, {
-        p_request_id: req.id,
-        p_user_id:    req.user_id,
-      })
-      if (rpcErr) throw rpcErr
-
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/upgrades/${req.id}/reject`, { method: 'POST' })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: rpcErr } = await supabase.rpc('reject_organizer_upgrade' as any, {
+          p_request_id: req.id,
+          p_user_id:    req.user_id,
+        })
+        if (rpcErr) throw rpcErr
+      }
       setRequests((prev) => prev.map((r) => r.id === req.id ? { ...r, status: 'rejected' } : r))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed')

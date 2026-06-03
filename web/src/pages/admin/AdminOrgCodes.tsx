@@ -4,6 +4,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 const generateCode = (): string => {
   const letters = Array.from({ length: 3 }, () =>
@@ -78,39 +81,74 @@ export default function AdminOrgCodes() {
 
   const load = async () => {
     setIsLoading(true)
-    const [codesRes, chaptersRes] = await Promise.all([
-      supabase
-        .from('organizer_codes')
-        .select('*, chapters(name)')
-        .order('created_at', { ascending: false }),
-      supabase.from('chapters').select('id, name').order('name'),
-    ])
-    setCodes((codesRes.data ?? []) as OrgCode[])
-    setChapters((chaptersRes.data ?? []) as Chapter[])
-    setIsLoading(false)
+    try {
+      if (USE_FIREBASE) {
+        const [codesData, chaptersRes] = await Promise.all([
+          apiFetch<OrgCode[]>('/api/org-codes'),
+          supabase.from('chapters').select('id, name').order('name'),
+        ])
+        setCodes(codesData)
+        setChapters((chaptersRes.data ?? []) as Chapter[])
+      } else {
+        const [codesRes, chaptersRes] = await Promise.all([
+          supabase
+            .from('organizer_codes')
+            .select('*, chapters(name)')
+            .order('created_at', { ascending: false }),
+          supabase.from('chapters').select('id, name').order('name'),
+        ])
+        setCodes((codesRes.data ?? []) as OrgCode[])
+        setChapters((chaptersRes.data ?? []) as Chapter[])
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => { void load() }, [])
 
   const handleToggle = async (id: string, current: boolean) => {
-    const { error: dbErr } = await supabase
-      .from('organizer_codes')
-      .update({ is_active: !current })
-      .eq('id', id)
-    if (dbErr) { setError(dbErr.message); return }
-    setCodes((prev) => prev.map((c) => c.id === id ? { ...c, is_active: !current } : c))
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/org-codes/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_active: !current }),
+        })
+      } else {
+        const { error: dbErr } = await supabase
+          .from('organizer_codes')
+          .update({ is_active: !current })
+          .eq('id', id)
+        if (dbErr) { setError(dbErr.message); return }
+      }
+      setCodes((prev) => prev.map((c) => c.id === id ? { ...c, is_active: !current } : c))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Toggle failed')
+    }
   }
 
   const handleRotate = async (id: string) => {
     setRotatingId(id)
     const newCode = generateCode()
-    const { error: dbErr } = await supabase
-      .from('organizer_codes')
-      .update({ code: newCode })
-      .eq('id', id)
-    setRotatingId(null)
-    if (dbErr) { setError(dbErr.message); return }
-    setCodes((prev) => prev.map((c) => c.id === id ? { ...c, code: newCode } : c))
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/org-codes/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ code: newCode }),
+        })
+      } else {
+        const { error: dbErr } = await supabase
+          .from('organizer_codes')
+          .update({ code: newCode })
+          .eq('id', id)
+        if (dbErr) { setError(dbErr.message); return }
+      }
+      setCodes((prev) => prev.map((c) => c.id === id ? { ...c, code: newCode } : c))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rotation failed')
+    } finally {
+      setRotatingId(null)
+    }
   }
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -118,33 +156,61 @@ export default function AdminOrgCodes() {
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
-    const { error: dbErr } = await supabase
-      .from('organizer_codes')
-      .delete()
-      .eq('id', id)
-    setDeletingId(null)
-    setConfirmDeleteId(null)
-    if (dbErr) { setError(dbErr.message); return }
-    setCodes((prev) => prev.filter((c) => c.id !== id))
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/org-codes/${id}`, { method: 'DELETE' })
+      } else {
+        const { error: dbErr } = await supabase
+          .from('organizer_codes')
+          .delete()
+          .eq('id', id)
+        if (dbErr) { setError(dbErr.message); return }
+      }
+      setCodes((prev) => prev.filter((c) => c.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
   }
 
   const onSubmit = async (data: FormData) => {
     setError(null)
-    const { data: inserted, error: dbErr } = await supabase
-      .from('organizer_codes')
-      .insert({
-        code: data.code.toUpperCase(),
-        chapter_id: data.chapter_id,
-        assigned_role: data.assigned_role,
-        is_active: true,
-        usage_limit: data.has_usage_limit ? (data.usage_limit ?? null) : null,
-        usage_count: 0,
-        expires_at: data.has_expiry ? (data.expires_at ?? null) : null,
-      })
-      .select('*, chapters(name)')
-      .single()
-    if (dbErr) { setError(dbErr.message); return }
-    setCodes((prev) => [inserted as OrgCode, ...prev])
+    try {
+      if (USE_FIREBASE) {
+        const inserted = await apiFetch<OrgCode>('/api/org-codes', {
+          method: 'POST',
+          body: JSON.stringify({
+            code:          data.code.toUpperCase(),
+            chapter_id:    data.chapter_id,
+            assigned_role: data.assigned_role,
+            usage_limit:   data.has_usage_limit ? (data.usage_limit ?? undefined) : undefined,
+            expires_at:    data.has_expiry ? (data.expires_at ?? undefined) : undefined,
+          }),
+        })
+        setCodes((prev) => [inserted, ...prev])
+      } else {
+        const { data: inserted, error: dbErr } = await supabase
+          .from('organizer_codes')
+          .insert({
+            code:          data.code.toUpperCase(),
+            chapter_id:    data.chapter_id,
+            assigned_role: data.assigned_role,
+            is_active:     true,
+            usage_limit:   data.has_usage_limit ? (data.usage_limit ?? null) : null,
+            usage_count:   0,
+            expires_at:    data.has_expiry ? (data.expires_at ?? null) : null,
+          })
+          .select('*, chapters(name)')
+          .single()
+        if (dbErr) { setError(dbErr.message); return }
+        setCodes((prev) => [inserted as OrgCode, ...prev])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Create failed')
+      return
+    }
     reset({
       assigned_role: 'chapter_officer',
       code: generateCode(),

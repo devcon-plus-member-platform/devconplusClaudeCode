@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
 import { supabase } from '../../../lib/supabase'
+import { apiFetch } from '../../../lib/api'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 import { formatDate } from '../../../lib/dates'
 import { staggerContainer, cardItem } from '../../../lib/animation'
 
@@ -68,36 +71,47 @@ export function OrgCoOrganizers() {
     setLoading(true)
     setError(null)
     try {
-      const [codeRes, pendingRes, coOrgRes] = await Promise.all([
-        supabase
-          .from('organizer_codes')
-          .select('code')
-          .eq('chapter_id', chapterId)
-          .eq('assigned_role', 'chapter_officer')
-          .eq('is_active', true)
-          .limit(1)
-          .single(),
+      if (USE_FIREBASE) {
+        const [codeData, pendingData, coOrgData] = await Promise.all([
+          apiFetch<{ code: string } | null>('/api/org-codes/chapter').catch(() => null),
+          apiFetch<PendingRequest[]>('/api/upgrades/chapter'),
+          apiFetch<CoOrganizer[]>('/api/co-organizers'),
+        ])
+        if (codeData) setChapterCode(codeData)
+        setPendingRequests(pendingData)
+        setCoOrganizers(coOrgData)
+      } else {
+        const [codeRes, pendingRes, coOrgRes] = await Promise.all([
+          supabase
+            .from('organizer_codes')
+            .select('code')
+            .eq('chapter_id', chapterId)
+            .eq('assigned_role', 'chapter_officer')
+            .eq('is_active', true)
+            .limit(1)
+            .single(),
 
-        supabase
-          .from('organizer_upgrade_requests')
-          .select('id, created_at, profiles!user_id(id, full_name, email, avatar_url)')
-          .eq('chapter_id', chapterId)
-          .eq('status', 'pending')
-          .eq('requested_role', 'chapter_officer')
-          .order('created_at', { ascending: false }),
+          supabase
+            .from('organizer_upgrade_requests')
+            .select('id, created_at, profiles!user_id(id, full_name, email, avatar_url)')
+            .eq('chapter_id', chapterId)
+            .eq('status', 'pending')
+            .eq('requested_role', 'chapter_officer')
+            .order('created_at', { ascending: false }),
 
-        supabase
-          .from('profiles')
-          .select('id, full_name, email, avatar_url, created_at')
-          .eq('chapter_id', chapterId)
-          .eq('role', 'chapter_officer')
-          .neq('id', user!.id)
-          .order('created_at', { ascending: false }),
-      ])
+          supabase
+            .from('profiles')
+            .select('id, full_name, email, avatar_url, created_at')
+            .eq('chapter_id', chapterId)
+            .eq('role', 'chapter_officer')
+            .neq('id', user!.id)
+            .order('created_at', { ascending: false }),
+        ])
 
-      if (codeRes.data) setChapterCode(codeRes.data)
-      if (pendingRes.data) setPendingRequests(pendingRes.data as unknown as PendingRequest[])
-      if (coOrgRes.data) setCoOrganizers(coOrgRes.data)
+        if (codeRes.data) setChapterCode(codeRes.data)
+        if (pendingRes.data) setPendingRequests(pendingRes.data as unknown as PendingRequest[])
+        if (coOrgRes.data) setCoOrganizers(coOrgRes.data)
+      }
     } catch {
       setError('Failed to load co-organizer data. Please try again.')
     } finally {
@@ -116,28 +130,35 @@ export function OrgCoOrganizers() {
     if (!user?.id) return
     setActionLoading(requestId)
     try {
-      // RPCs not yet in generated types — cast to bypass strict overload checks
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: rpcError } = await (supabase.rpc as any)('officer_approve_upgrade', {
-        p_request_id: requestId,
-        p_reviewer_id: user.id,
-      }) as { data: { success: boolean; error?: string } | null; error: { message: string } | null }
-      if (rpcError || !data?.success) {
-        alert(data?.error ?? rpcError?.message ?? 'Failed to approve')
-        return
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/upgrades/${requestId}/officer-approve`, { method: 'POST' })
+        setPendingRequests((prev) => prev.filter((r) => r.id !== requestId))
+        const fresh = await apiFetch<CoOrganizer[]>('/api/co-organizers')
+        setCoOrganizers(fresh)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error: rpcError } = await (supabase.rpc as any)('officer_approve_upgrade', {
+          p_request_id:  requestId,
+          p_reviewer_id: user.id,
+        }) as { data: { success: boolean; error?: string } | null; error: { message: string } | null }
+        if (rpcError || !data?.success) {
+          alert(data?.error ?? rpcError?.message ?? 'Failed to approve')
+          return
+        }
+        setPendingRequests((prev) => prev.filter((r) => r.id !== requestId))
+        if (user.chapter_id) {
+          const { data: fresh } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, avatar_url, created_at')
+            .eq('chapter_id', user.chapter_id)
+            .eq('role', 'chapter_officer')
+            .neq('id', user.id)
+            .order('created_at', { ascending: false })
+          if (fresh) setCoOrganizers(fresh)
+        }
       }
-      // Optimistic: remove from pending, reload co-organizers list
-      setPendingRequests((prev) => prev.filter((r) => r.id !== requestId))
-      if (user.chapter_id) {
-        const { data: fresh } = await supabase
-          .from('profiles')
-          .select('id, full_name, email, avatar_url, created_at')
-          .eq('chapter_id', user.chapter_id)
-          .eq('role', 'chapter_officer')
-          .neq('id', user.id)
-          .order('created_at', { ascending: false })
-        if (fresh) setCoOrganizers(fresh)
-      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to approve')
     } finally {
       setActionLoading(null)
     }
@@ -147,15 +168,18 @@ export function OrgCoOrganizers() {
     if (!user?.id) return
     setActionLoading(requestId)
     try {
-      const { error: rpcError } = await supabase.rpc('reject_organizer_upgrade', {
-        p_request_id: requestId,
-        p_user_id: user.id,
-      })
-      if (rpcError) {
-        alert(rpcError.message)
-        return
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/upgrades/${requestId}/reject`, { method: 'POST' })
+      } else {
+        const { error: rpcError } = await supabase.rpc('reject_organizer_upgrade', {
+          p_request_id: requestId,
+          p_user_id:    user.id,
+        })
+        if (rpcError) { alert(rpcError.message); return }
       }
       setPendingRequests((prev) => prev.filter((r) => r.id !== requestId))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to reject')
     } finally {
       setActionLoading(null)
     }
@@ -166,17 +190,22 @@ export function OrgCoOrganizers() {
     setActionLoading(targetId)
     setConfirmRemoveId(null)
     try {
-      // RPC not yet in generated types — cast to bypass strict overload checks
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error: rpcError } = await (supabase.rpc as any)('officer_demote_coorganizer', {
-        p_target_id: targetId,
-        p_officer_id: user.id,
-      }) as { data: { success: boolean; error?: string } | null; error: { message: string } | null }
-      if (rpcError || !data?.success) {
-        alert(data?.error ?? rpcError?.message ?? 'Failed to remove')
-        return
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/co-organizers/${targetId}/remove`, { method: 'POST' })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error: rpcError } = await (supabase.rpc as any)('officer_demote_coorganizer', {
+          p_target_id:  targetId,
+          p_officer_id: user.id,
+        }) as { data: { success: boolean; error?: string } | null; error: { message: string } | null }
+        if (rpcError || !data?.success) {
+          alert(data?.error ?? rpcError?.message ?? 'Failed to remove')
+          return
+        }
       }
       setCoOrganizers((prev) => prev.filter((c) => c.id !== targetId))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to remove')
     } finally {
       setActionLoading(null)
     }

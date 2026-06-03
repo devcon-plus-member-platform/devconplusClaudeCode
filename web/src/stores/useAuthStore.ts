@@ -669,10 +669,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const current = get().user
     if (!current) throw new Error('Not authenticated')
 
+    if (USE_FIREBASE) {
+      try {
+        await apiFetch('/api/upgrades/request', {
+          method: 'POST',
+          body: JSON.stringify({ code: code.toUpperCase() }),
+        })
+        set({ user: { ...current, pending_role: 'chapter_officer', pending_chapter_id: current.chapter_id } })
+        return 'submitted'
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : ''
+        if (msg === 'already_pending') return 'already_pending'
+        if (msg === 'invalid_code') return 'invalid_code'
+        if (msg === 'wrong_chapter') return 'wrong_chapter'
+        throw err
+      }
+    }
+
+    // Legacy Supabase path
     // Rate limit: 3 attempts per user per 25h — prevents organizer code brute-forcing.
     // Requires JWT (org_upgrade is a user-keyed bucket in the edge function).
-    // In Firebase mode, supabase.auth.getSession() returns null (no setSession called),
-    // so we read the bridge token directly.
     const upgradeLimit = await callRateLimit('org_upgrade', { token: getBridgeToken() ?? undefined })
     if (!upgradeLimit.allowed) {
       const secs = upgradeLimit.retryAfterSeconds ?? 86400
@@ -682,7 +698,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       )
     }
 
-    // CheckCircleOutline for existing pending request
     const { data: existing } = await supabase
       .from('organizer_upgrade_requests')
       .select('id, status')
@@ -691,7 +706,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       .maybeSingle()
     if (existing) return 'already_pending'
 
-    // Validate the code
     const { data: codeRow } = await supabase
       .from('organizer_codes')
       .select('id, chapter_id, assigned_role, is_active')
@@ -700,12 +714,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       .maybeSingle()
     if (!codeRow) return 'invalid_code'
 
-    // Chapter match check: HQ codes (null chapter_id) are valid for anyone
     if (codeRow.chapter_id !== null && codeRow.chapter_id !== current.chapter_id) {
       return 'wrong_chapter'
     }
 
-    // Submit upgrade request
     const { error } = await supabase
       .from('organizer_upgrade_requests')
       .insert({
@@ -717,7 +729,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       })
     if (error) throw error
 
-    // Store pending state on profile so it's visible elsewhere
     const { error: updateErr } = await supabase
       .from('profiles')
       .update({
