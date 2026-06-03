@@ -1,10 +1,13 @@
 // apps/member/src/stores/useNotificationsStore.ts
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { apiFetch } from '../lib/api'
 
 let _chanSeq = 0
 const nextChan = (base: string) => `${base}-${++_chanSeq}`
 import { toast } from 'sonner'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 export interface Notification {
   id: string
@@ -25,22 +28,44 @@ interface NotificationsState {
   clearAll: () => void
 }
 
+interface AnnouncementRow {
+  id: string
+  event_id: string
+  message: string
+  created_at: string | null
+}
+
 export const useNotificationsStore = create<NotificationsState>((set) => ({
   notifications: [],
   unreadCount: 0,
 
   fetchRecent: async (approvedIds, eventTitles) => {
     if (approvedIds.length === 0) return
-    const { data, error } = await supabase
-      .from('event_announcements')
-      .select('id, event_id, message, created_at')
-      .in('event_id', approvedIds)
-      .order('created_at', { ascending: false })
-      .limit(50)
-    if (error) {
-      console.warn('[fetchRecent] failed:', error.message)
-      return
+    let data: AnnouncementRow[] | null = null
+
+    if (USE_FIREBASE) {
+      try {
+        data = await apiFetch<AnnouncementRow[]>(
+          `/api/announcements?event_ids=${encodeURIComponent(approvedIds.join(','))}`
+        )
+      } catch (err) {
+        console.warn('[fetchRecent] failed:', err instanceof Error ? err.message : String(err))
+        return
+      }
+    } else {
+      const result = await supabase
+        .from('event_announcements')
+        .select('id, event_id, message, created_at')
+        .in('event_id', approvedIds)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (result.error) {
+        console.warn('[fetchRecent] failed:', result.error.message)
+        return
+      }
+      data = result.data
     }
+
     if (!data) return
     const notifications: Notification[] = data.map((row) => ({
       id: row.id,

@@ -9,6 +9,7 @@ import { fadeUp, staggerContainer } from '../../../lib/animation'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
 import { supabase } from '../../../lib/supabase'
+import { useChaptersStore } from '../../../stores/useChaptersStore'
 import {
   schema,
   type FormData,
@@ -48,7 +49,7 @@ export function OrgEventCreate() {
   const { user, chapterName } = useAuthStore()
 
   const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
-  const [chapters, setChapters] = useState<Array<{ id: string; name: string; region: string }>>([])
+  const { chapters, fetchChapters } = useChaptersStore()
 
   const { draft, saveDraft, clearDraft } = useFormDraft<EventCreateDraft>(
     'org-event-create',
@@ -175,14 +176,8 @@ export function OrgEventCreate() {
 
   useEffect(() => {
     if (!isAdmin) return
-    void supabase
-      .from('chapters')
-      .select('id, name, region')
-      .order('name')
-      .then(({ data }) => {
-        if (data) setChapters(data as Array<{ id: string; name: string; region: string }>)
-      })
-  }, [isAdmin])
+    void fetchChapters()
+  }, [isAdmin, fetchChapters])
 
   // ── Cover image handlers ─────────────────────────────────────────────────
 
@@ -308,7 +303,6 @@ export function OrgEventCreate() {
         external_registration_url:   isExternal ? (urlIsTba ? 'tba' : externalUrl.trim()) : null,
         cover_image_url,
         chapter_id:                  chapterId,
-        created_by:                  user.id,
         custom_form_schema:          customFields.length > 0 ? customFields as unknown as Json : null,
       })
       submitStartRef.current = null

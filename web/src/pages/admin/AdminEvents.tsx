@@ -5,7 +5,11 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
+import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
+import { useChaptersStore } from '../../stores/useChaptersStore'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 // ── Custom form field types ────────────────────────────────────────────────────
 
@@ -123,6 +127,16 @@ const eventSchema = z
 type EventFormData = z.infer<typeof eventSchema>
 
 const normalizeExternalUrl = (value?: string | null) => (value === 'tba' ? '' : (value ?? ''))
+
+const attachChapterName = (
+  event: Event,
+  chapters: { id: string; name: string }[],
+): EventWithChapter => ({
+  ...event,
+  chapters: event.chapter_id
+    ? { name: chapters.find((chapter) => chapter.id === event.chapter_id)?.name ?? '—' }
+    : null,
+})
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -413,34 +427,50 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         cover_image_url,
       }
       if (mode === 'create') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
-        const { data: result, error: dbErr } = await (supabase as any)
-          .from('events')
-          .insert({
-            ...payload,
-            status:             'upcoming',
-            tags:               [],
-            cover_image_url,
-            created_by:         null,
-            is_featured:        false,
-            is_promoted:        false,
+        if (USE_FIREBASE) {
+          const result = await apiFetch<Event>('/api/events', {
+            method: 'POST',
+            body: JSON.stringify(payload),
           })
-          .select('*, chapters(name)')
-          .single()
-        if (dbErr) { setSubmitError((dbErr as { message: string }).message); return }
-        onSaved(result as unknown as EventWithChapter)
+          onSaved(attachChapterName(result, chapters))
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
+          const { data: result, error: dbErr } = await (supabase as any)
+            .from('events')
+            .insert({
+              ...payload,
+              status:             'upcoming',
+              tags:               [],
+              cover_image_url,
+              created_by:         null,
+              is_featured:        false,
+              is_promoted:        false,
+            })
+            .select('*, chapters(name)')
+            .single()
+          if (dbErr) { setSubmitError((dbErr as { message: string }).message); return }
+          onSaved(result as unknown as EventWithChapter)
+        }
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
-        const { data: result, error: dbErr } = await (supabase as any)
-          .from('events')
-          .update({
-            ...payload,
+        if (USE_FIREBASE) {
+          const result = await apiFetch<Event>(`/api/events/${event!.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
           })
-          .eq('id', event!.id)
-          .select('*, chapters(name)')
-          .single()
-        if (dbErr) { setSubmitError((dbErr as { message: string }).message); return }
-        onSaved(result as unknown as EventWithChapter)
+          onSaved(attachChapterName(result, chapters))
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
+          const { data: result, error: dbErr } = await (supabase as any)
+            .from('events')
+            .update({
+              ...payload,
+            })
+            .eq('id', event!.id)
+            .select('*, chapters(name)')
+            .single()
+          if (dbErr) { setSubmitError((dbErr as { message: string }).message); return }
+          onSaved(result as unknown as EventWithChapter)
+        }
       }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
@@ -1053,7 +1083,7 @@ export default function AdminEvents() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<{ mode: 'create' | 'edit'; event?: EventWithChapter } | null>(null)
-  const [chapters, setChapters] = useState<{ id: string; name: string }[]>([])
+  const { chapters, fetchChapters } = useChaptersStore()
   const [exportDialog, setExportDialog] = useState<ExportDialogState | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
@@ -1084,24 +1114,29 @@ export default function AdminEvents() {
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
-      const [eventsResult, chaptersResult] = await Promise.all([
-        supabase
-          .from('events')
-          .select('*, chapters(name)')
-          .order('event_date', { ascending: false }),
-        supabase
-          .from('chapters')
-          .select('id, name')
-          .order('name'),
-      ])
-      if (eventsResult.error) {
-        setError(eventsResult.error.message)
+      setError(null)
+      try {
+        await fetchChapters()
+
+        if (USE_FIREBASE) {
+          const [eventRows, chapterRows] = await Promise.all([
+            publicFetch<Event[]>('/api/events'),
+            publicFetch<{ id: string; name: string }[]>('/api/chapters'),
+          ])
+          setEvents(eventRows.map((event) => attachChapterName(event, chapterRows)))
+        } else {
+          const eventsResult = await supabase
+            .from('events')
+            .select('*, chapters(name)')
+            .order('event_date', { ascending: false })
+          if (eventsResult.error) throw eventsResult.error
+          setEvents((eventsResult.data ?? []) as unknown as EventWithChapter[])
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load events')
+      } finally {
         setIsLoading(false)
-        return
       }
-      setEvents((eventsResult.data ?? []) as unknown as EventWithChapter[])
-      setChapters((chaptersResult.data ?? []) as { id: string; name: string }[])
-      setIsLoading(false)
     }
     void load()
   }, [])
@@ -1286,14 +1321,15 @@ export default function AdminEvents() {
   const handleDelete = async (id: string) => {
     setDeletingId(id)
     setError(null)
-    // Delete registrations first to avoid FK constraint violation
-    const { error: regErr } = await supabase.from('event_registrations').delete().eq('event_id', id)
-    if (regErr) { setError(regErr.message); setDeletingId(null); setConfirmDeleteId(null); return }
-    const { error: dbErr } = await supabase.from('events').delete().eq('id', id)
-    setDeletingId(null)
-    setConfirmDeleteId(null)
-    if (dbErr) { setError(dbErr.message); return }
-    setEvents((prev) => prev.filter((e) => e.id !== id))
+    try {
+      await apiFetch(`/api/events/${id}`, { method: 'DELETE' })
+      setEvents((prev) => prev.filter((e) => e.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
   }
 
   return (

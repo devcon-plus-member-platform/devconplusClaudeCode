@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Event, EventRegistration, DevconCategory, Json } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
-import { apiFetch } from '../lib/api'
+import { apiFetch, publicFetch } from '../lib/api'
 
 const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
@@ -45,7 +45,6 @@ interface CreateEventPayload {
   is_external?: boolean
   external_registration_url?: string | null
   chapter_id: string
-  created_by: string
   /** JSONB: array of CustomFormField objects */
   custom_form_schema?: Json | null
 }
@@ -103,13 +102,8 @@ export const useEventsStore = create<EventsState>((set) => ({
   fetchEvents: async () => {
     set((s) => ({ isLoading: s.events.length === 0, error: null }))
     try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true })
-        .limit(100)
-      if (error) throw error
-      set({ events: sortByEventDate((data ?? []) as Event[]) })
+      const data = await publicFetch<Event[]>('/api/events')
+      set({ events: sortByEventDate(data) })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -118,35 +112,25 @@ export const useEventsStore = create<EventsState>((set) => ({
   },
 
   createEvent: async (payload) => {
-    const { data, error } = await supabase
-      .from('events')
-      .insert(payload)
-      .select()
-      .single()
-    if (error) throw error
-    const newEvent = data as Event
+    const newEvent = await apiFetch<Event>('/api/events', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
     set((s) => ({ events: sortByEventDate([...s.events, newEvent]) }))
     return newEvent
   },
 
   deleteEvent: async (id) => {
-    // Delete registrations first to avoid FK constraint violation (409)
-    const { error: regErr } = await supabase.from('event_registrations').delete().eq('event_id', id)
-    if (regErr) throw regErr
-    const { error } = await supabase.from('events').delete().eq('id', id)
-    if (error) throw error
+    // Server cascades event_registrations deletion before removing the event.
+    await apiFetch<void>(`/api/events/${id}`, { method: 'DELETE' })
     set((s) => ({ events: s.events.filter((e) => e.id !== id) }))
   },
 
   updateEvent: async (id, payload) => {
-    const { data, error } = await supabase
-      .from('events')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) throw error
-    const updated = data as Event
+    const updated = await apiFetch<Event>(`/api/events/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
     set((s) => ({
       events: sortByEventDate(s.events.map((e) => (e.id === id ? updated : e))),
     }))

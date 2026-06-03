@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { PenOutline, CheckCircleOutline, CloseCircleLineDuotone, AddCircleOutline, TrashBinTrashOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
+import { apiFetch, publicFetch } from '../../lib/api'
 import type { Chapter, Region } from '@devcon-plus/supabase'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 const REGIONS: Region[] = ['Luzon', 'Visayas', 'Mindanao']
 
@@ -26,6 +29,11 @@ interface ChapterCardProps {
   onConfirmDelete: (id: string) => Promise<void>
   onCancelDelete: () => void
   deletingId: string | null
+}
+
+interface ChapterXpRow {
+  chapter: string
+  xp: number
 }
 
 function ChapterCard({
@@ -259,18 +267,39 @@ export default function AdminChapters() {
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
-      const [chaptersRes, xpRes] = await Promise.all([
-        supabase.from('chapters').select('*').order('name'),
-        supabase.rpc('get_xp_by_chapter'),
-      ])
-      if (chaptersRes.error) { setError(chaptersRes.error.message); setIsLoading(false); return }
-      setChapters((chaptersRes.data ?? []) as Chapter[])
-      const lookup: Record<string, number> = {}
-      ;((xpRes.data ?? []) as { chapter: string; xp: number }[]).forEach(({ chapter, xp }) => {
-        lookup[chapter] = xp
-      })
-      setXpLookup(lookup)
-      setIsLoading(false)
+      setError(null)
+      try {
+        let chapterRows: Chapter[] = []
+        let xpRows: ChapterXpRow[] = []
+
+        if (USE_FIREBASE) {
+          const [chaptersData, xpData] = await Promise.all([
+            publicFetch<Chapter[]>('/api/chapters'),
+            apiFetch<ChapterXpRow[]>('/api/chapters/xp'),
+          ])
+          chapterRows = chaptersData
+          xpRows = xpData
+        } else {
+          const [chaptersRes, xpRes] = await Promise.all([
+            supabase.from('chapters').select('*').order('name'),
+            supabase.rpc('get_xp_by_chapter'),
+          ])
+          if (chaptersRes.error) throw chaptersRes.error
+          chapterRows = (chaptersRes.data ?? []) as Chapter[]
+          xpRows = ((xpRes.data ?? []) as ChapterXpRow[])
+        }
+
+        setChapters(chapterRows)
+        const lookup: Record<string, number> = {}
+        xpRows.forEach(({ chapter, xp }) => {
+          lookup[chapter] = xp
+        })
+        setXpLookup(lookup)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load chapters')
+      } finally {
+        setIsLoading(false)
+      }
     }
     void load()
   }, [])
@@ -287,44 +316,81 @@ export default function AdminChapters() {
   const saveEdit = async (id: string) => {
     setSaving(true)
     setError(null)
-    const { error: dbErr } = await supabase
-      .from('chapters')
-      .update({ name: editName, region: editRegion })
-      .eq('id', id)
-    setSaving(false)
-    if (dbErr) { setError(dbErr.message); return }
-    setChapters((prev) =>
-      prev.map((c) => c.id === id ? { ...c, name: editName, region: editRegion } : c)
-    )
-    setEditingId(null)
+    try {
+      if (USE_FIREBASE) {
+        const updated = await apiFetch<Chapter>(`/api/chapters/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ name: editName, region: editRegion }),
+        })
+        setChapters((prev) => prev.map((c) => c.id === id ? updated : c))
+      } else {
+        const { error: dbErr } = await supabase
+          .from('chapters')
+          .update({ name: editName, region: editRegion })
+          .eq('id', id)
+        if (dbErr) throw dbErr
+        setChapters((prev) =>
+          prev.map((c) => c.id === id ? { ...c, name: editName, region: editRegion } : c)
+        )
+      }
+      setEditingId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Update failed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const addChapter = async () => {
     if (!addName.trim()) return
     setAdding(true)
     setError(null)
-    const { data, error: dbErr } = await supabase
-      .from('chapters')
-      .insert({ name: addName.trim(), region: addRegion })
-      .select()
-      .single()
-    setAdding(false)
-    if (dbErr) { setError(dbErr.message); return }
-    setChapters((prev) =>
-      [...prev, data as Chapter].sort((a, b) => a.name.localeCompare(b.name))
-    )
-    setAddName('')
-    setAddRegion('Luzon')
+    try {
+      let created: Chapter
+      if (USE_FIREBASE) {
+        created = await apiFetch<Chapter>('/api/chapters', {
+          method: 'POST',
+          body: JSON.stringify({ name: addName.trim(), region: addRegion }),
+        })
+      } else {
+        const { data, error: dbErr } = await supabase
+          .from('chapters')
+          .insert({ name: addName.trim(), region: addRegion })
+          .select()
+          .single()
+        if (dbErr) throw dbErr
+        created = data as Chapter
+      }
+
+      setChapters((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      )
+      setAddName('')
+      setAddRegion('Luzon')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Create failed')
+    } finally {
+      setAdding(false)
+    }
   }
 
   const deleteChapter = async (id: string) => {
     setDeletingId(id)
     setError(null)
-    const { error: dbErr } = await supabase.from('chapters').delete().eq('id', id)
-    setDeletingId(null)
-    setConfirmDeleteId(null)
-    if (dbErr) { setError(dbErr.message); return }
-    setChapters((prev) => prev.filter((c) => c.id !== id))
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch<void>(`/api/chapters/${id}`, { method: 'DELETE' })
+      } else {
+        const { error: dbErr } = await supabase.from('chapters').delete().eq('id', id)
+        if (dbErr) throw dbErr
+      }
+      setChapters((prev) => prev.filter((c) => c.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
   }
 
   return (
