@@ -47,6 +47,20 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
   reward_points_cost: number;
 }
 
+export interface XpTier {
+  id: string;
+  name: string;
+  label: string;
+  min_points: number;
+  max_points: number | null;
+  badge_color: string | null;
+}
+
+export interface PointSummary {
+  spendable_points: number;
+  lifetime_points: number;
+}
+
 export interface Registration {
   id: string;
   event_id: string;
