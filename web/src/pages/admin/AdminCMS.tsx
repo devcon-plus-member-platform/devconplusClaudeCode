@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 import { useAuthStore } from '../../stores/useAuthStore'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
@@ -1435,13 +1438,23 @@ function XpTiersTab() {
 
   const load = async () => {
     setLoading(true)
-    const { data, error: err } = await supabase
-      .from('xp_tiers')
-      .select('*')
-      .order('min_points')
-    if (err) setError(err.message)
-    else setRows((data ?? []) as XpTier[])
-    setLoading(false)
+    try {
+      if (USE_FIREBASE) {
+        const data = await apiFetch<XpTier[]>('/api/points/tiers')
+        setRows(data)
+      } else {
+        const { data, error: err } = await supabase
+          .from('xp_tiers')
+          .select('*')
+          .order('min_points')
+        if (err) setError(err.message)
+        else setRows((data ?? []) as XpTier[])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tiers')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { void load() }, [])
@@ -1468,19 +1481,27 @@ function XpTiersTab() {
     setSaving(true)
     setError(null)
     const payload = {
-      name: form.name.trim(),
-      label: form.label.trim(),
+      name:       form.name.trim(),
+      label:      form.label.trim(),
       min_points: parseInt(form.min_points, 10) || 0,
       max_points: form.max_points.trim() !== '' ? parseInt(form.max_points, 10) : null,
       badge_color: form.badge_color.trim() || null,
     }
     try {
-      if (slideOver === 'create') {
-        const { error: err } = await supabase.from('xp_tiers').insert(payload)
-        if (err) throw err
-      } else if (editingItem) {
-        const { error: err } = await supabase.from('xp_tiers').update(payload).eq('id', editingItem.id)
-        if (err) throw err
+      if (USE_FIREBASE) {
+        if (slideOver === 'create') {
+          await apiFetch('/api/points/tiers', { method: 'POST', body: JSON.stringify(payload) })
+        } else if (editingItem) {
+          await apiFetch(`/api/points/tiers/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        }
+      } else {
+        if (slideOver === 'create') {
+          const { error: err } = await supabase.from('xp_tiers').insert(payload)
+          if (err) throw err
+        } else if (editingItem) {
+          const { error: err } = await supabase.from('xp_tiers').update(payload).eq('id', editingItem.id)
+          if (err) throw err
+        }
       }
       setSlideOver(null)
       await load()
@@ -1492,9 +1513,18 @@ function XpTiersTab() {
   }
 
   const handleDelete = async (id: string) => {
-    const { error: err } = await supabase.from('xp_tiers').delete().eq('id', id)
-    if (err) setError(err.message)
-    else setRows((prev) => prev.filter((t) => t.id !== id))
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/points/tiers/${id}`, { method: 'DELETE' })
+        setRows((prev) => prev.filter((t) => t.id !== id))
+      } else {
+        const { error: err } = await supabase.from('xp_tiers').delete().eq('id', id)
+        if (err) setError(err.message)
+        else setRows((prev) => prev.filter((t) => t.id !== id))
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    }
     setConfirmDeleteId(null)
   }
 
