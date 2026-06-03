@@ -24,3 +24,10 @@ supabase/migrations/.claude/
 # Server build output
 server/dist/
 server/node_modules/
+
+# Terraform local state
+infra/.terraform/
+infra/terraform.tfvars
+infra/*.tfplan
+infra/terraform.tfstate
+infra/terraform.tfstate.*

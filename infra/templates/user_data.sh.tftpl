@@ -1,0 +1,41 @@
+#!/bin/bash
+set -euxo pipefail
+
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+dnf update -y
+dnf install -y docker docker-compose-plugin nginx git certbot python3-certbot-nginx
+
+systemctl enable --now docker
+systemctl enable --now nginx
+
+usermod -aG docker ec2-user
+
+if ! id -u ${deploy_user} >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash ${deploy_user}
+fi
+
+usermod -aG docker ${deploy_user}
+
+install -d -m 0755 -o ${deploy_user} -g ${deploy_user} ${deployment_dir}
+
+cat >/etc/nginx/conf.d/devcon-plus.conf <<'NGINX'
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
+
+  location / {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+  }
+}
+NGINX
+
+nginx -t
+systemctl restart nginx
