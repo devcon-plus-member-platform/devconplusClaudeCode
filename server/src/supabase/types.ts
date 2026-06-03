@@ -197,6 +197,97 @@ export interface OrgVolunteerApplication extends VolunteerApplication {
   school_or_company: string;
 }
 
+export interface Chapter {
+  id: string;
+  name: string;
+  region: string | null;
+  created_at: string | null;
+}
+
+export interface InterestOption {
+  id: number;
+  category: string;
+  label: string;
+  emoji: string | null;
+}
+
+export interface NewsPost {
+  id: string;
+  title: string;
+  body: string | null;
+  category: string | null;
+  cover_image_url: string | null;
+  author_id: string | null;
+  is_featured: boolean | null;
+  is_promoted: boolean | null;
+  created_at: string | null;
+}
+
+export interface Job {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  description: string | null;
+  apply_url: string | null;
+  logo_url: string | null;
+  work_type: string | null;
+  is_active: boolean | null;
+  is_promoted: boolean | null;
+  posted_at: string | null;
+}
+
+export interface Event {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  event_date: string | null;
+  end_date: string | null;
+  end_time: string | null;
+  category: string | null;
+  devcon_category: string | null;
+  tags: string[] | null;
+  visibility: string | null;
+  privacy_status: string | null;
+  is_free: boolean | null;
+  ticket_price: number | null;
+  ticket_price_php: number | null;
+  capacity: number | null;
+  points_value: number | null;
+  volunteer_points: number | null;
+  requires_approval: boolean | null;
+  is_chapter_locked: boolean | null;
+  is_featured: boolean | null;
+  is_promoted: boolean | null;
+  is_external: boolean | null;
+  external_registration_url: string | null;
+  cover_image_url: string | null;
+  status: string | null;
+  slug: string | null;
+  custom_form_schema: Record<string, unknown> | null;
+  chapter_id: string | null;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export interface EventAnnouncement {
+  id: string;
+  event_id: string;
+  organizer_id: string | null;
+  message: string;
+  created_at: string | null;
+}
+
+export interface Referral {
+  id: string;
+  referrer_id: string | null;
+  referred_user_id: string | null;
+  status: string | null;
+  confirmed_at: string | null;
+  created_at: string | null;
+}
+
 export interface Profile {
   id: string;
   email: string;
@@ -216,5 +307,8 @@ export interface Profile {
   linkedin_url: string | null;
   github_url: string | null;
   portfolio_url: string | null;
+  interests: number[] | null;
+  tech_stack: number[] | null;
+  community_roles: number[] | null;
   created_at: string;
 }
