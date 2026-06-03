@@ -3,6 +3,12 @@
 > Executes **Phases 5–6** of [auth-migration.md](./auth-migration.md). Companion doc, not a replacement.
 >
 > **Host decision change:** this plan targets **AWS EC2** for the NestJS service, superseding the Cloud Run decision recorded in [auth-migration.md](./auth-migration.md) (§"Cloud Run deployment specifics") and project memory. Rationale is in §5 (cold starts now hit latency-sensitive paths once NestJS is on the critical write/scan path). The same Docker image runs on both, so the choice is reversible.
+>
+> **Progress — as of 2026-06-04:**
+> - ✅ Scaffolding PR — `common/authz/`, `base.repository.ts`, `common/throttler/`, ESLint DAL rule, global prefix, health endpoint, `QR_JWT_SECRET` env validation
+> - ✅ Slice 1 — `UsersModule` (GET/PATCH `/api/users/me`, POST `/api/users/me/avatar`); `useAuthStore.updateProfile`/`uploadAvatar` migrated to `apiFetch`; 4 security issues addressed (mass-assign, magic-byte MIME, Multer size cap, avatar URL injection); 107 tests passing
+> - ✅ Slice 2 — `RewardsModule` (8 endpoints, 3 atomic RPCs: `redeem_reward`, `approve_reward_claim`, `refund_reward_claim`); `useRewardsStore` 8 operations migrated to `apiFetch`
+> - ⏳ **Next: Slice 3 — `VolunteersModule`** (`approve_volunteer_application` RPC; `useVolunteerStore`, `useOrgVolunteerStore`)
 
 ## Context
 
@@ -96,12 +102,13 @@ server/src/
 Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` → bake → **drop that table's RLS last** (only after negative tests pass in prod). Deploy NestJS before the frontend that calls it.
 
 **Group A — before mid-June launch (writes + RPCs + sensitive reads):**
-1. **Users/profile + avatar** (`UsersModule`) — *pilot*; proves the triad + `api.ts` round-trip end-to-end. (`useAuthStore.updateProfile`/`uploadAvatar`)
-2. **Reward redemptions + reward writes** (`RewardsModule`) — `redeem_reward`/`approve_reward_claim`/`refund_reward_claim`; catalog read may stay direct. (`useRewardsStore`)
-3. **Volunteer applications** — `approve_volunteer_application`. (`useVolunteerStore`, `useOrgVolunteerStore`)
+1. ✅ **Users/profile + avatar** (`UsersModule`) — *pilot*; proves the triad + `api.ts` round-trip end-to-end. (`useAuthStore.updateProfile`/`uploadAvatar`) — **done 2026-06-04**
+2. ✅ **Reward redemptions + reward writes** (`RewardsModule`) — `redeem_reward`/`approve_reward_claim`/`refund_reward_claim`; catalog read may stay direct. (`useRewardsStore`) — **done 2026-06-04**
+3. ⏳ **Volunteer applications** — `approve_volunteer_application`. (`useVolunteerStore`, `useOrgVolunteerStore`) — **next**
 4. **Organizer upgrades** — `approve/reject/officer_approve/officer_demote` + `organizer_codes` + `org_upgrade` rate bucket. (`useAuthStore.requestOrganizerUpgrade`, `OrgCoOrganizers`, AdminCMS)
 5. **Admin role + analytics** (`AdminModule`) — `admin_update_user_role` (super_admin) + 5 analytics RPCs. (`AdminDashboard`, `AdminUsers`)
 6. **QR pipeline** (`QrModule`) — port the 5 QR/scan edge functions; **auth flips from `verifyCallerJwt` (bridge JWT) to `AuthGuard` (Firebase)** atomically with its frontend cutover. Highest-risk A slice (points integrity) → sequence last in A. (`EventTicket`, `MyQR`, `AdminKiosk`, `EventRegistrants`)
+   > ⚠️ `QR_JWT_SECRET` in `server/.env` is a local placeholder — must be synchronized with the live Supabase Edge Function secret before this slice deploys.
 7. **Event registrations + manual check-in** (`RegistrationsModule`) — shares `registrations.repository.ts` with QrModule. (`useEventsStore`)
 8. **Points** (`PointsModule`) — `point_transactions` owner reads, `xp_tiers`, `increment_member_points`; ensure write path is server-only after 6/7.
 9. **Missions** (`MissionsModule`) — `approve_mission_winner`, submissions/participants.
@@ -138,9 +145,10 @@ Each slice = NestJS endpoints → frontend store/page switched to `apiFetch` →
 
 ## Execution order (first PRs)
 
-1. **Scaffolding PR:** `common/authz/` (`@Roles`, `RolesGuard`, `chapter-scope`), `common/repository/base.repository.ts`, `common/throttler/`, ESLint repository-import rule, `setGlobalPrefix('api', { exclude: ['auth/(.*)'] })`, `GET /api/health`, add `QR_JWT_SECRET` to env validation, `@nestjs/throttler` global config.
-2. **Slice 1 PR (pilot):** `UsersModule` (profile read/update + avatar upload) end-to-end; refactor `useAuthStore` to `apiFetch`; drop `avatars` storage RLS after verification.
-3. Proceed slice-by-slice through Group A (§4).
+1. ✅ **Scaffolding PR** — `common/authz/` (`@Roles`, `RolesGuard`, `chapter-scope`), `common/repository/base.repository.ts`, `common/throttler/`, ESLint repository-import rule, `setGlobalPrefix('api', { exclude: ['auth/(.*)'] })`, `GET /api/health`, add `QR_JWT_SECRET` to env validation, `@nestjs/throttler` global config.
+2. ✅ **Slice 1 PR (pilot)** — `UsersModule` (profile read/update + avatar upload) end-to-end; refactor `useAuthStore` to `apiFetch`. RLS drop pending prod smoke test.
+3. ✅ **Slice 2 PR** — `RewardsModule` (8 endpoints, 3 atomic RPCs); `useRewardsStore` migrated.
+4. Proceed slice-by-slice through Group A (§4) — **next: Slice 3 (VolunteersModule)**.
 
 ## Verification
 
