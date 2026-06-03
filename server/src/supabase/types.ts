@@ -27,5 +27,8 @@ export interface Profile {
   pending_chapter_id: string | null;
   auth_uid: string | null;
   is_email_verified: boolean;
+  linkedin_url: string | null;
+  github_url: string | null;
+  portfolio_url: string | null;
   created_at: string;
 }

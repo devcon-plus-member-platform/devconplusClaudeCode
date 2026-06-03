@@ -37,6 +37,9 @@ const mockProfile: Profile = {
   pending_chapter_id: null,
   auth_uid: MOCK_FIREBASE_UID,
   is_email_verified: true,
+  linkedin_url: null,
+  github_url: null,
+  portfolio_url: null,
   created_at: '2026-05-28T00:00:00Z',
 };
 
