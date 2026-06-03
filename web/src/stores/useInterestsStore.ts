@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { supabase } from '../lib/supabase'
+import { apiFetch, publicFetch } from '../lib/api'
 import { useAuthStore } from './useAuthStore'
 
 export interface InterestOption {
@@ -29,44 +29,31 @@ export const useInterestsStore = create<InterestsState>((set, get) => ({
   fetchOptions: async () => {
     if (get().options.length > 0) return
     set({ isLoading: true, error: null })
-    const { data, error } = await supabase
-      .from('interest_options')
-      .select('id, category, label, emoji')
-      .order('id')
-    if (error) {
-      set({ isLoading: false, error: error.message })
-      return
+    try {
+      const data = await publicFetch<InterestOption[]>('/api/interests/options')
+      set({ options: data, isLoading: false })
+    } catch (err) {
+      set({ isLoading: false, error: err instanceof Error ? err.message : String(err) })
     }
-    set({
-      options: (data ?? []).map((row) => ({
-        ...row,
-        category: row.category as 'interest' | 'tech_stack' | 'community_role',
-      })),
-      isLoading: false,
-    })
   },
 
   saveSelections: async (interests, techStack, communityRoles) => {
-    const user = useAuthStore.getState().user
-    if (!user) return
+    if (!useAuthStore.getState().user) return
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
+    await apiFetch('/api/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify({
         interests,
         tech_stack: techStack,
         community_roles: communityRoles,
-      })
-      .eq('id', user.id)
-
-    if (error) {
-      console.error('[useInterestsStore] saveSelections error:', error)
+      }),
+    }).catch((err) => {
       // Fall through — still patch in-memory state so the user isn't looped back
-    }
+      console.error('[useInterestsStore] saveSelections error:', err)
+    })
 
     // Directly patch the auth store user so MemberLayout's interests-null guard
-    // sees the updated value. initialize() has an isInitialized re-entry guard
-    // and is a no-op once the session is live — calling it won't re-fetch.
+    // sees the updated value.
     useAuthStore.setState((s) => ({
       user: s.user ? { ...s.user, interests, tech_stack: techStack, community_roles: communityRoles } : null,
     }))

@@ -6,11 +6,8 @@ import { z } from 'zod'
 import { ArrowLeftOutline, CameraOutline, CheckCircleOutline, CloseCircleOutline, LetterOutline, LockOutline, MapPointOutline, ShieldCheckOutline, LinkOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../stores/useAuthStore'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 import PasswordConfirmModal from '../../components/PasswordConfirmModal'
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-interface Chapter { id: string; name: string; region: string }
 
 const USERNAME_RE = /^[a-z0-9_]+$/
 
@@ -55,7 +52,7 @@ export default function ProfileEdit() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user?.avatar_url ?? null)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarError, setAvatarError] = useState<string | null>(null)
-  const [chapters, setChapters] = useState<Chapter[]>([])
+  const { chapters, fetchChapters } = useChaptersStore()
 
   // Username availability
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
@@ -82,12 +79,7 @@ export default function ProfileEdit() {
   // Save state
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Load chapters
-  useEffect(() => {
-    supabase.from('chapters').select('id, name, region').order('name').then(({ data }) => {
-      if (data) setChapters(data as Chapter[])
-    })
-  }, [])
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
 
   // CheckCircleOutline if upgrade already pending on mount
   useEffect(() => {

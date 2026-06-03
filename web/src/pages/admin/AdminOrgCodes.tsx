@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 
 const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
@@ -31,11 +32,6 @@ interface OrgCode {
   chapters?: { name: string } | null
 }
 
-interface Chapter {
-  id: string
-  name: string
-}
-
 const CODE_PATTERN = /^DCN-[A-Z]{3}-[0-9]{4}$/
 
 const schema = z
@@ -53,7 +49,7 @@ type FormData = z.infer<typeof schema>
 
 export default function AdminOrgCodes() {
   const [codes, setCodes] = useState<OrgCode[]>([])
-  const [chapters, setChapters] = useState<Chapter[]>([])
+  const { chapters, fetchChapters } = useChaptersStore()
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -83,29 +79,24 @@ export default function AdminOrgCodes() {
     setIsLoading(true)
     try {
       if (USE_FIREBASE) {
-        const [codesData, chaptersRes] = await Promise.all([
-          apiFetch<OrgCode[]>('/api/org-codes'),
-          supabase.from('chapters').select('id, name').order('name'),
-        ])
+        const codesData = await apiFetch<OrgCode[]>('/api/org-codes')
         setCodes(codesData)
-        setChapters((chaptersRes.data ?? []) as Chapter[])
       } else {
-        const [codesRes, chaptersRes] = await Promise.all([
-          supabase
-            .from('organizer_codes')
-            .select('*, chapters(name)')
-            .order('created_at', { ascending: false }),
-          supabase.from('chapters').select('id, name').order('name'),
-        ])
+        const codesRes = await supabase
+          .from('organizer_codes')
+          .select('*, chapters(name)')
+          .order('created_at', { ascending: false })
         setCodes((codesRes.data ?? []) as OrgCode[])
-        setChapters((chaptersRes.data ?? []) as Chapter[])
       }
     } finally {
       setIsLoading(false)
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    void load()
+    void fetchChapters()
+  }, [fetchChapters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggle = async (id: string, current: boolean) => {
     try {

@@ -9,10 +9,11 @@ import { SkeletonEventCard, SkeletonFeaturedEvent } from '../../components/Skele
 import { staggerContainer, cardItem, fadeUp } from '../../lib/animation'
 import { isEventArchived } from '../../lib/dates'
 import { supabase } from '../../lib/supabase'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 import { fuzzySearchFilter } from '../../lib/utils'
 import SearchBar from '../../components/SearchBar'
 import SearchEmptyState from '../../components/SearchEmptyState'
-import type { Event, EventRegistration, Chapter } from '@devcon-plus/supabase'
+import type { Event, EventRegistration } from '@devcon-plus/supabase'
 
 // Flower-of-life pattern matching Rewards/Dashboard
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -59,7 +60,7 @@ export default function EventsList() {
   const [eventFilter, setEventFilter] = useState<EventFilter>('all')
 
   // Chapter filter state
-  const [chapters, setChapters] = useState<Chapter[]>([])
+  const { chapters, fetchChapters } = useChaptersStore()
   const [regionChapterIds, setRegionChapterIds] = useState<Set<string>>(new Set())
   const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null)
   const [showChapterSheet, setShowChapterSheet] = useState(false)
@@ -96,39 +97,16 @@ export default function EventsList() {
         setAttendeeDetails(details)
       })
 
-    // Try to fetch real chapters; fall back silently on error
-    supabase
-      .from('chapters')
-      .select('*')
-      .order('name')
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setChapters(data as Chapter[])
-        }
-      })
-  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    void fetchChapters()
+  }, [user?.id, fetchChapters]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const chapterId = user?.chapter_id
-    if (!chapterId) return
-
-    void (async () => {
-      const { data: ownChapter } = await supabase
-        .from('chapters')
-        .select('region')
-        .eq('id', chapterId)
-        .single()
-      if (!ownChapter?.region) return
-
-      const { data: siblings } = await supabase
-        .from('chapters')
-        .select('id')
-        .eq('region', ownChapter.region)
-      if (siblings) {
-        setRegionChapterIds(new Set(siblings.map((c) => c.id)))
-      }
-    })()
-  }, [user?.chapter_id])
+    if (!chapterId || chapters.length === 0) return
+    const region = chapters.find((c) => c.id === chapterId)?.region
+    if (!region) return
+    setRegionChapterIds(new Set(chapters.filter((c) => c.region === region).map((c) => c.id)))
+  }, [user?.chapter_id, chapters])
 
   const toggleSearch = () => {
     setIsSearchVisible(!isSearchVisible)

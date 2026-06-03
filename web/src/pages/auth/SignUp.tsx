@@ -11,10 +11,9 @@ import { useFormDraft } from '../../hooks/useFormDraft'
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 import { supabase } from '../../lib/supabase'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 
 const USERNAME_RE = /^[a-z0-9_]+$/
-
-interface Chapter { id: string; name: string; region: string }
 
 // const optionalUrl = z.string().url('Must be a valid URL').or(z.literal('')).optional()
 
@@ -80,21 +79,17 @@ export default function SignUp() {
   const [legalModal, setLegalModal] = useState<LegalModalType | null>(null)
   const turnstileRef = useRef<TurnstileInstance>(null)
   const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [chapters, setChapters] = useState<Chapter[]>([])
+  const { chapters, fetchChapters } = useChaptersStore()
   const [isOAuthMode, setIsOAuthMode] = useState(false)
   const [oauthEmail, setOauthEmail] = useState('')
+
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
 
   const { draft, saveDraft, clearDraft } = useFormDraft<Omit<FormData, 'password'>>(
     'sign-up',
     'session',
     { exclude: ['password'] },
   )
-
-  useEffect(() => {
-    supabase.from('chapters').select('id, name, region').then(({ data }) => {
-      if (data) setChapters(data as Chapter[])
-    })
-  }, [])
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),

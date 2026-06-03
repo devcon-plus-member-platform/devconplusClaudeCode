@@ -8,6 +8,7 @@ import { useJobsStore } from '../../stores/useJobsStore'
 import { usePointsStore } from '../../stores/usePointsStore'
 import { useMissionsStore } from '../../stores/useMissionsStore'
 import { supabase } from '../../lib/supabase'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 import EventCard from '../../components/EventCard'
 import JobCard from '../../components/JobCard'
 import VolunteerXpCard from '../../components/VolunteerXpCard'
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const { jobs, isLoading: jobsLoading, fetchJobs } = useJobsStore()
   const { transactions, loadTotalPoints, loadTransactions, isLoading: pointsLoading } = usePointsStore()
   const { missions, participants, submissions, fetchAll: fetchMissions, isLoading: missionsLoading } = useMissionsStore()
+  const { chapters: allChapters, fetchChapters } = useChaptersStore()
   const [regionChapterIds, setRegionChapterIds] = useState<Set<string>>(new Set())
   const [bannerIdx, setBannerIdx] = useState(0)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -79,27 +81,15 @@ export default function Dashboard() {
       })
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
+
   useEffect(() => {
     const chapterId = user?.chapter_id
-    if (!chapterId) return
-
-    void (async () => {
-      const { data: ownChapter } = await supabase
-        .from('chapters')
-        .select('region')
-        .eq('id', chapterId)
-        .single()
-      if (!ownChapter?.region) return
-
-      const { data: siblings } = await supabase
-        .from('chapters')
-        .select('id')
-        .eq('region', ownChapter.region)
-      if (siblings) {
-        setRegionChapterIds(new Set(siblings.map((c) => c.id)))
-      }
-    })()
-  }, [user?.chapter_id])
+    if (!chapterId || allChapters.length === 0) return
+    const region = allChapters.find((c) => c.id === chapterId)?.region
+    if (!region) return
+    setRegionChapterIds(new Set(allChapters.filter((c) => c.region === region).map((c) => c.id)))
+  }, [user?.chapter_id, allChapters])
 
   useEffect(() => {
     const t = setInterval(() => setBannerIdx((i) => (i + 1) % Math.max(bannersLengthRef.current, 1)), 4000)

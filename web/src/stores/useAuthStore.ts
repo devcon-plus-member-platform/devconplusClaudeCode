@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import { GoogleAuthProvider, getIdToken as getFirebaseIdToken, onAuthStateChanged, onIdTokenChanged, signInWithPopup } from 'firebase/auth'
+import { EmailAuthProvider, GoogleAuthProvider, getIdToken as getFirebaseIdToken, onAuthStateChanged, onIdTokenChanged, reauthenticateWithCredential, signInWithPopup, updateEmail as firebaseUpdateEmail, updatePassword as firebaseUpdatePassword } from 'firebase/auth'
 import type { Profile } from '@devcon-plus/supabase'
 import { supabase, getBridgeToken, setBridgeToken } from '../lib/supabase'
 import { firebaseAuth } from '../lib/firebase'
 import { emailSigninViaBridge, exchangeFirebaseToken, refreshViaBridge, setupSupabaseSession } from '../lib/authBridge'
-import { apiFetch } from '../lib/api'
+import { apiFetch, publicFetch } from '../lib/api'
 
 // Feature flag — flip VITE_AUTH_PROVIDER=firebase to enable the Firebase popup
 // path and bridge session flow. Flip back to 'supabase' for instant rollback.
@@ -167,10 +167,8 @@ async function fetchChapterName(chapterId: string | null): Promise<string | null
   if (_chapterNameCache.has(chapterId)) return _chapterNameCache.get(chapterId) ?? null
   // Cache miss — fetch all chapters at once to populate the full cache.
   // Cost: 1 extra query on first auth only; every subsequent call is a Map lookup.
-  const { data } = await supabase.from('chapters').select('id, name')
-  if (data) {
-    for (const ch of data) _chapterNameCache.set(ch.id, ch.name)
-  }
+  const data = await publicFetch<{ id: string; name: string }[]>('/api/chapters').catch(() => [])
+  for (const ch of data) _chapterNameCache.set(ch.id, ch.name)
   return _chapterNameCache.get(chapterId) ?? null
 }
 
@@ -572,7 +570,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateEmail: async (newEmail, currentPassword) => {
     const current = get().user
     if (!current) throw new Error('Not authenticated')
-    // Re-authenticate first
+
+    if (USE_FIREBASE) {
+      const firebaseUser = firebaseAuth.currentUser
+      if (!firebaseUser) throw new Error('Not authenticated')
+      // Re-authenticate with Firebase — required before sensitive operations
+      const credential = EmailAuthProvider.credential(current.email, currentPassword)
+      await reauthenticateWithCredential(firebaseUser, credential).catch(() => {
+        throw new Error('Incorrect password')
+      })
+      await firebaseUpdateEmail(firebaseUser, newEmail)
+      // Sync new email to profiles table so the stored record stays consistent
+      await apiFetch('/api/users/me', { method: 'PATCH', body: JSON.stringify({ email: newEmail }) })
+      set((s) => ({ user: s.user ? { ...s.user, email: newEmail } : null }))
+      return
+    }
+
+    // Legacy Supabase path
     const { error: authErr } = await supabase.auth.signInWithPassword({
       email: current.email,
       password: currentPassword,
@@ -613,9 +627,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   deleteAccount: async () => {
-    const { error } = await supabase.rpc('delete_own_account')
-    if (error) throw error
-    await supabase.auth.signOut()
+    if (USE_FIREBASE) {
+      await apiFetch('/api/users/me', { method: 'DELETE' })
+      await supabase.auth.signOut()
+    } else {
+      const { error } = await supabase.rpc('delete_own_account')
+      if (error) throw error
+      await supabase.auth.signOut()
+    }
   },
 
   resetPassword: async (email, captchaToken) => {
@@ -647,7 +666,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updatePassword: async (newPassword, currentPassword) => {
     const current = get().user
     if (!current) throw new Error('Not authenticated')
-    // Re-authenticate first
+
+    if (USE_FIREBASE) {
+      const firebaseUser = firebaseAuth.currentUser
+      if (!firebaseUser) throw new Error('Not authenticated')
+      // Re-authenticate with Firebase — required before sensitive operations
+      const credential = EmailAuthProvider.credential(current.email, currentPassword)
+      await reauthenticateWithCredential(firebaseUser, credential).catch(() => {
+        throw new Error('Incorrect password')
+      })
+      await firebaseUpdatePassword(firebaseUser, newPassword)
+      return
+    }
+
+    // Legacy Supabase path
     const { error: authErr } = await supabase.auth.signInWithPassword({
       email: current.email,
       password: currentPassword,
@@ -808,6 +840,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // shows username as "unavailable", no error message shown to the user).
     const limit = await callRateLimit('username_check')
     if (!limit.allowed) return false
+
+    if (USE_FIREBASE) {
+      const result = await publicFetch<{ available: boolean }>(
+        `/api/users/check-username?username=${encodeURIComponent(username.toLowerCase())}`
+      ).catch(() => ({ available: false }))
+      return result.available
+    }
 
     const { data } = await supabase
       .from('profiles')

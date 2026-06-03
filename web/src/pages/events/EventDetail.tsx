@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 // import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
 import { useAuthStore } from '../../stores/useAuthStore'
-import { supabase } from '../../lib/supabase'
+import { publicFetch } from '../../lib/api'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
@@ -22,6 +23,7 @@ export default function EventDetail() {
   const navigate = useNavigate()
   const { events, registrations } = useEventsStore()
   const { user } = useAuthStore()
+  const { getChapterById, fetchChapters } = useChaptersStore()
   // const { loadApplications, getApplicationByEventId } = useVolunteerStore() // disabled: volunteer-for-event feature
 
   const storeEvent = events.find((e) => e.slug === slug)
@@ -32,23 +34,18 @@ export default function EventDetail() {
 
   const event = storeEvent ?? localEvent ?? undefined
 
-  // Fetch event directly when not available from the authenticated store
+  // Fetch event directly when not available from the store (e.g. direct URL access).
   useEffect(() => {
     if (event || !slug) return
     setLoading(true)
-    supabase
-      .from('events')
-      .select('*')
-      .eq('slug', slug)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          setNotFound(true)
-        } else {
-          setLocalEvent(data as NonNullable<typeof storeEvent>)
-        }
-        setLoading(false)
+    publicFetch<NonNullable<typeof storeEvent>[]>('/api/events')
+      .then((data) => {
+        const found = data.find((e) => e.slug === slug) ?? null
+        if (!found) setNotFound(true)
+        else setLocalEvent(found)
       })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false))
   }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Disabled: volunteer-for-event feature — load volunteer applications for authenticated users
@@ -63,18 +60,12 @@ export default function EventDetail() {
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== user?.chapter_id
   const isExternal = event?.is_external === true
 
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
+
   const [shareToast, setShareToast] = useState(false)
-  const [eventChapterName, setEventChapterName] = useState<string | null>(null)
-  useEffect(() => {
-    if (isChapterLocked && event?.chapter_id) {
-      supabase
-        .from('chapters')
-        .select('name')
-        .eq('id', event.chapter_id)
-        .single()
-        .then(({ data }) => setEventChapterName(data?.name ?? null))
-    }
-  }, [isChapterLocked, event?.chapter_id])
+  const eventChapterName = isChapterLocked && event?.chapter_id
+    ? (getChapterById(event.chapter_id)?.name ?? null)
+    : null
 
   if (loading) {
     return (

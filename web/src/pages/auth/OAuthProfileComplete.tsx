@@ -7,11 +7,10 @@ import { CheckCircleOutline, CloseCircleOutline, LinkOutline } from 'solar-icon-
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../stores/useAuthStore'
+import { useChaptersStore } from '../../stores/useChaptersStore'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
 const USERNAME_RE = /^[a-z0-9_]+$/
-
-interface Chapter { id: string; name: string; region: string }
 
 const optionalUrl = z.string().url('Must be a valid URL').or(z.literal('')).optional()
 
@@ -29,7 +28,7 @@ type FormData = z.infer<typeof schema>
 export default function OAuthProfileComplete() {
   const navigate = useNavigate()
   const { checkUsernameAvailable } = useAuthStore()
-  const [chapters, setChapters] = useState<Chapter[]>([])
+  const { chapters, fetchChapters } = useChaptersStore()
   const [formError, setFormError] = useState<string | null>(null)
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
   const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -41,10 +40,9 @@ export default function OAuthProfileComplete() {
     resolver: zodResolver(schema),
   })
 
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
+
   useEffect(() => {
-    void supabase.from('chapters').select('id, name, region').order('name').then(({ data }) => {
-      if (data) setChapters(data as Chapter[])
-    })
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return
       const meta = session.user.user_metadata
