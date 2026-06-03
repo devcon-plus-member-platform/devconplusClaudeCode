@@ -4,6 +4,9 @@ import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCirc
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
+import { apiFetch } from '../../../lib/api'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
@@ -315,6 +318,16 @@ export function OrgEventRegistrants() {
   useEffect(() => {
     if (!id) return
     setIsLoading(true)
+    if (USE_FIREBASE) {
+      apiFetch<RegistrantWithResponses[]>(`/api/registrations/event/${id}`)
+        .then((data) => {
+          // Server returns member_name/email/school_or_company directly; add event_title
+          setRegistrants(data.map((r) => ({ ...r, event_title: event?.title ?? '' })))
+        })
+        .catch(() => { /* error toast handled by caller */ })
+        .finally(() => setIsLoading(false))
+      return
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- form_responses not yet in generated DB types
     ;(supabase as any)
       .from('event_registrations')
@@ -370,31 +383,39 @@ export function OrgEventRegistrants() {
 
   const handleApproveVolunteer = async (appId: string) => {
     if (!organizerUser?.id) return
-    await supabase.rpc('approve_volunteer_application' as any, {
-      p_application_id: appId,
-      p_organizer_id:   organizerUser.id,
-    })
+    if (USE_FIREBASE) {
+      await apiFetch(`/api/volunteers/${appId}/approve`, { method: 'POST' }).catch(() => null)
+    } else {
+      await supabase.rpc('approve_volunteer_application' as any, {
+        p_application_id: appId,
+        p_organizer_id:   organizerUser.id,
+      })
+    }
     await fetchVolunteers()
   }
 
   const handleApprove = async (regId: string): Promise<boolean> => {
-    const qrToken = 'DCN-' + crypto.randomUUID().slice(0, 8).toUpperCase()
-    const { error } = await supabase
-      .from('event_registrations')
-      .update({
-        status:        'approved',
-        approved_at:   new Date().toISOString(),
-        qr_code_token: qrToken,
-      })
-      .eq('id', regId)
-    if (error) return false
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/registrations/${regId}/approve`, { method: 'POST' })
+      } else {
+        const qrToken = 'DCN-' + crypto.randomUUID().slice(0, 8).toUpperCase()
+        const { error } = await supabase
+          .from('event_registrations')
+          .update({ status: 'approved', approved_at: new Date().toISOString(), qr_code_token: qrToken })
+          .eq('id', regId)
+        if (error) return false
+      }
+    } catch { return false }
+
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'approved' as const } : r))
     )
+    // Email notification — stays on edge function path (EmailModule migration separate)
     const reg = registrants.find((r) => r.id === regId)
-    if (reg?.member_email) {
+    if (reg?.member_email && event) {
       const accessToken = getBridgeToken()
-      if (accessToken && event) {
+      if (accessToken) {
         const eventDate = event.event_date
           ? new Date(event.event_date).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
           : 'Date TBA'
@@ -413,11 +434,17 @@ export function OrgEventRegistrants() {
   }
 
   const handleReject = async (regId: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('event_registrations')
-      .update({ status: 'rejected' })
-      .eq('id', regId)
-    if (error) return false
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/registrations/${regId}/reject`, { method: 'POST' })
+      } else {
+        const { error } = await supabase
+          .from('event_registrations')
+          .update({ status: 'rejected' })
+          .eq('id', regId)
+        if (error) return false
+      }
+    } catch { return false }
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'rejected' as const } : r))
     )
@@ -425,11 +452,17 @@ export function OrgEventRegistrants() {
   }
 
   const handleRevert = async (regId: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('event_registrations')
-      .update({ status: 'pending', approved_at: null, qr_code_token: null })
-      .eq('id', regId)
-    if (error) return false
+    try {
+      if (USE_FIREBASE) {
+        await apiFetch(`/api/registrations/${regId}/revert`, { method: 'POST' })
+      } else {
+        const { error } = await supabase
+          .from('event_registrations')
+          .update({ status: 'pending', approved_at: null, qr_code_token: null })
+          .eq('id', regId)
+        if (error) return false
+      }
+    } catch { return false }
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'pending' as const } : r))
     )
@@ -438,17 +471,26 @@ export function OrgEventRegistrants() {
 
   const handleCheckIn = async (regId: string): Promise<boolean> => {
     if (!organizerUser?.id) return false
-    const { data, error } = await supabase.rpc('manual_checkin', {
-      p_registration_id: regId,
-      p_organizer_id:    organizerUser.id,
-    })
-    if (error || !(data as unknown as { success?: boolean })?.success) return false
-    const result = data as unknown as { success: boolean; member_name: string; points_awarded: number }
-    setRegistrants((prev) =>
-      prev.map((r) => r.id === regId ? { ...r, checked_in: true } : r)
-    )
-    toast.success(`${result.member_name} checked in — +${result.points_awarded} pts`)
-    return true
+    try {
+      if (USE_FIREBASE) {
+        const result = await apiFetch<{ success: boolean; member_name: string; points_awarded: number }>(
+          `/api/registrations/${regId}/manual-checkin`,
+          { method: 'POST' },
+        )
+        setRegistrants((prev) => prev.map((r) => r.id === regId ? { ...r, checked_in: true } : r))
+        toast.success(`${result.member_name} checked in — +${result.points_awarded} pts`)
+        return true
+      }
+      const { data, error } = await supabase.rpc('manual_checkin', {
+        p_registration_id: regId,
+        p_organizer_id:    organizerUser.id,
+      })
+      if (error || !(data as unknown as { success?: boolean })?.success) return false
+      const result = data as unknown as { success: boolean; member_name: string; points_awarded: number }
+      setRegistrants((prev) => prev.map((r) => r.id === regId ? { ...r, checked_in: true } : r))
+      toast.success(`${result.member_name} checked in — +${result.points_awarded} pts`)
+      return true
+    } catch { return false }
   }
 
   const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
