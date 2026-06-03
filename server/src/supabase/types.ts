@@ -47,6 +47,50 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
   reward_points_cost: number;
 }
 
+export interface OrgCode {
+  id: string;
+  code: string;
+  chapter_id: string | null;
+  assigned_role: 'chapter_officer' | 'hq_admin';
+  is_active: boolean;
+  usage_limit: number | null;
+  usage_count: number;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface OrgCodeWithChapter extends OrgCode {
+  chapter_name: string | null;
+}
+
+export interface UpgradeRequest {
+  id: string;
+  user_id: string;
+  organizer_code: string;
+  chapter_id: string | null;
+  requested_role: 'chapter_officer' | 'hq_admin';
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface UpgradeRequestWithDetails extends UpgradeRequest {
+  member_name: string;
+  member_email: string;
+  member_chapter_id: string | null;
+  member_chapter_name: string | null;
+  request_chapter_name: string | null;
+}
+
+export interface CoOrganizer {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  created_at: string;
+}
+
 export interface VolunteerApplication {
   id: string;
   event_id: string;

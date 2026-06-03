@@ -12,6 +12,7 @@ import { SupabaseModule } from './supabase/supabase.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { UsersModule } from './users/users.module';
 import { VolunteersModule } from './volunteers/volunteers.module';
+import { UpgradesModule } from './upgrades/upgrades.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { VolunteersModule } from './volunteers/volunteers.module';
     UsersModule,
     RewardsModule,
     VolunteersModule,
+    UpgradesModule,
   ],
   controllers: [AppController],
   providers: [
