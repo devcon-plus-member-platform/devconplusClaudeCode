@@ -40,6 +40,14 @@ export class UsersService {
     return this.usersRepo.update(userId, dto as Partial<Profile>);
   }
 
+  isUsernameAvailable(username: string): Promise<boolean> {
+    return this.usersRepo.isUsernameAvailable(username);
+  }
+
+  deleteAccount(userId: string): Promise<void> {
+    return this.usersRepo.deleteAccount(userId);
+  }
+
   async uploadAvatar(
     userId: string,
     file: Express.Multer.File,

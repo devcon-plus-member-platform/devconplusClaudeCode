@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
+
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Profile } from '../supabase/types';
@@ -30,6 +31,20 @@ export class UsersRepository extends BaseRepository {
       .eq('id', id)
       .single();
     return this.unwrap(result as { data: Profile | null; error: { message: string } | null });
+  }
+
+  async isUsernameAvailable(username: string): Promise<boolean> {
+    const { data } = await this.db
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+    return !data;
+  }
+
+  async deleteAccount(userId: string): Promise<void> {
+    const { error } = await this.db.from('profiles').delete().eq('id', userId);
+    if (error) throw new InternalServerErrorException(`Account deletion failed: ${error.message}`);
   }
 
   async update(id: string, patch: Partial<Profile>): Promise<Profile> {

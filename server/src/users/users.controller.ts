@@ -1,9 +1,14 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Patch,
   Post,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -16,23 +21,52 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { MAX_AVATAR_BYTES, UsersService } from './users.service';
 
 @Controller('users')
-@UseGuards(AuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  /**
+   * GET /api/users/check-username?username=X — check username availability.
+   * Public — called during sign-up before the user has a session.
+   * Returns { available: boolean }.
+   */
+  @Get('check-username')
+  async checkUsername(
+    @Query('username') username: string,
+  ): Promise<{ available: boolean }> {
+    if (!username || username.trim().length === 0) {
+      throw new BadRequestException('username query param is required');
+    }
+    const available = await this.usersService.isUsernameAvailable(username.trim());
+    return { available };
+  }
+
   /** GET /api/users/me — fetch the caller's own profile. */
   @Get('me')
+  @UseGuards(AuthGuard)
   getMe(@CurrentUser() user: AuthenticatedUser): Promise<Profile> {
     return this.usersService.getProfile(user.profileId);
   }
 
   /** PATCH /api/users/me — update mutable profile fields. */
   @Patch('me')
+  @UseGuards(AuthGuard)
   updateMe(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: UpdateProfileDto,
   ): Promise<Profile> {
     return this.usersService.updateProfile(user.profileId, dto);
+  }
+
+  /**
+   * DELETE /api/users/me — delete the caller's own account.
+   * Removes the profile row (FK cascades handle related data).
+   * Client is responsible for signing out after a successful response.
+   */
+  @Delete('me')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AuthGuard)
+  deleteMe(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    return this.usersService.deleteAccount(user.profileId);
   }
 
   /**
@@ -45,6 +79,7 @@ export class UsersController {
    * the Storage URL into profiles.avatar_url server-side.
    */
   @Post('me/avatar')
+  @UseGuards(AuthGuard)
   @UseInterceptors(
     FileInterceptor('avatar', {
       limits: { fileSize: MAX_AVATAR_BYTES, files: 1 },

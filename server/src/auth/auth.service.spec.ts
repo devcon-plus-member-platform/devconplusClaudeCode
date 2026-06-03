@@ -40,6 +40,9 @@ const mockProfile: Profile = {
   linkedin_url: null,
   github_url: null,
   portfolio_url: null,
+  interests: null,
+  tech_stack: null,
+  community_roles: null,
   created_at: '2026-05-28T00:00:00Z',
 };
 
