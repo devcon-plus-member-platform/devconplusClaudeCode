@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import LegalModal, { type LegalModalType } from '../../components/LegalModal'
-import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline } from 'solar-icon-set'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { ArrowLeftOutline, PenNewSquareOutline } from 'solar-icon-set'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase } from '../../lib/supabase'
@@ -124,6 +124,7 @@ export default function EventRegister() {
   const { draft, saveDraft, clearDraft } = useFormDraft<{
     formResponses: Record<string, string | string[]>
     agreed: boolean
+    schoolValue: string
   }>(`event-register:${slug ?? ''}`, 'local')
   const navigate = useNavigate()
   const { events, registrations, register } = useEventsStore()
@@ -132,6 +133,18 @@ export default function EventRegister() {
   const [legalModal, setLegalModal] = useState<LegalModalType | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [schoolValue, setSchoolValue] = useState<string>(
+    (draft.schoolValue as string) ?? user?.school_or_company ?? ''
+  )
+  const [schoolSaved, setSchoolSaved] = useState(false)
+
+  // Sync school field if profile loads after mount and draft has no override
+  useEffect(() => {
+    if (user?.school_or_company && !(draft.schoolValue as string)) {
+      setSchoolValue(user.school_or_company)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.school_or_company])
 
   const [formResponses, setFormResponses] = useState<Record<string, string | string[]>>(
     (draft.formResponses as Record<string, string | string[]>) ?? {},
@@ -183,7 +196,7 @@ export default function EventRegister() {
     const next = { ...formResponses, [fieldId]: value }
     setFormResponses(next)
     if (fieldErrors[fieldId]) setFieldErrors(prev => ({ ...prev, [fieldId]: '' }))
-    saveDraft({ formResponses: next, agreed })
+    saveDraft({ formResponses: next, agreed, schoolValue })
   }
 
   const validateCustomFields = (): boolean => {
@@ -207,6 +220,13 @@ export default function EventRegister() {
     setSubmitting(true)
     setError(null)
     try {
+      // Persist school/company to profile if the user added or changed it
+      const trimmedSchool = schoolValue.trim()
+      if (trimmedSchool && trimmedSchool !== (user.school_or_company ?? '')) {
+        await useAuthStore.getState().updateProfile({ school_or_company: trimmedSchool })
+        setSchoolSaved(true)
+      }
+
       await register(eventId, user.id)
       const reg = useEventsStore.getState().registrations.find((r) => r.event_id === eventId)
       const destination = reg?.status === 'approved'
@@ -286,22 +306,66 @@ export default function EventRegister() {
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4 pb-24">
         {/* Pre-filled profile fields */}
-        <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details (pre-filled)</p>
+        <div className="flex items-center justify-between">
+          <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details</p>
+          <Link
+            to="/profile/edit"
+            className="flex items-center gap-1 text-md3-label-md text-primary font-medium"
+          >
+            <PenNewSquareOutline width={14} height={14} color="rgb(var(--color-primary))" />
+            Edit Profile
+          </Link>
+        </div>
 
-        {[
-          { label: 'Full Name',         value: user.full_name },
-          { label: 'Email',             value: user.email },
-          { label: 'School / Company',  value: user.school_or_company ?? '' },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <label className="text-md3-body-md font-medium text-slate-700 block mb-1">{label}</label>
-            <input
-              value={value}
-              readOnly
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500"
-            />
-          </div>
-        ))}
+        {/* Read-only: Full Name */}
+        <div>
+          <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Full Name</label>
+          <input
+            value={user.full_name}
+            readOnly
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
+          />
+        </div>
+
+        {/* Read-only: Email */}
+        <div>
+          <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Email</label>
+          <input
+            value={user.email}
+            readOnly
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
+          />
+        </div>
+
+        {/* Editable: School / Company */}
+        <div>
+          <label className="text-md3-body-md font-medium text-slate-700 block mb-1">
+            School / Company
+          </label>
+          <input
+            type="text"
+            value={schoolValue}
+            onChange={(e) => {
+              setSchoolValue(e.target.value)
+              saveDraft({ formResponses, agreed, schoolValue: e.target.value })
+            }}
+            placeholder="e.g. University of the Philippines"
+            className={`w-full border rounded-xl px-4 py-3 text-md3-body-md text-slate-900 focus:outline-none focus:ring-1 transition-colors ${
+              !schoolValue.trim()
+                ? 'border-amber-300 bg-amber-50 focus:border-amber-400 focus:ring-amber-200 placeholder:text-amber-400'
+                : 'border-slate-200 bg-white focus:border-primary focus:ring-primary/20'
+            }`}
+          />
+          {!schoolValue.trim() ? (
+            <p className="text-md3-label-md text-amber-600 mt-1.5 flex items-center gap-1">
+              <span>Add your School/Company</span>
+            </p>
+          ) : schoolSaved ? (
+            <p className="text-md3-label-md text-green mt-1.5">Saved to your profile.</p>
+          ) : (
+            <p className="text-md3-label-md text-slate-400 mt-1.5">Saved to your profile when you register.</p>
+          )}
+        </div>
 
         {/* Dynamic custom fields */}
         {customSchema.length > 0 && (
