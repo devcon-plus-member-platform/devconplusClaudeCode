@@ -25,15 +25,28 @@ import { UpdateRewardDto } from './dto/update-reward.dto';
 import { RewardsService } from './rewards.service';
 
 @Controller('rewards')
-@UseGuards(AuthGuard)
 export class RewardsController {
   constructor(private readonly rewardsService: RewardsService) {}
+
+  /** GET /api/rewards — public active rewards catalog, no auth required. */
+  @Get()
+  getPublicCatalog(): Promise<Reward[]> {
+    return this.rewardsService.getPublicCatalog();
+  }
+
+  /** GET /api/rewards/all — full catalog including inactive rewards (hq_admin+). */
+  @Get('all')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('hq_admin')
+  getAllRewards(): Promise<Reward[]> {
+    return this.rewardsService.getAllRewards();
+  }
 
   // ── Reward CRUD (hq_admin writes) ────────────────────────────────────
 
   /** POST /api/rewards — create a reward (hq_admin+). */
   @Post()
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles('hq_admin')
   createReward(@Body() dto: CreateRewardDto): Promise<Reward> {
     return this.rewardsService.createReward(dto);
@@ -41,7 +54,7 @@ export class RewardsController {
 
   /** PATCH /api/rewards/:id — update a reward (hq_admin+). */
   @Patch(':id')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles('hq_admin')
   updateReward(
     @Param() { id }: IdParamDto,
@@ -53,7 +66,7 @@ export class RewardsController {
   /** DELETE /api/rewards/:id — delete reward + cascade redemptions (hq_admin+). */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles('hq_admin')
   deleteReward(@Param() { id }: IdParamDto): Promise<void> {
     return this.rewardsService.deleteReward(id);
@@ -66,6 +79,7 @@ export class RewardsController {
    * userId always comes from the verified token — never from the request body.
    */
   @Post(':id/redeem')
+  @UseGuards(AuthGuard)
   redeemReward(
     @CurrentUser() user: AuthenticatedUser,
     @Param() { id }: IdParamDto,
@@ -75,6 +89,7 @@ export class RewardsController {
 
   /** GET /api/rewards/redemptions/mine — caller's own redemption history. */
   @Get('redemptions/mine')
+  @UseGuards(AuthGuard)
   getMemberRedemptions(
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<RewardRedemption[]> {
@@ -88,7 +103,7 @@ export class RewardsController {
    * Used by the organizer rewards management page.
    */
   @Get('redemptions')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles('chapter_officer')
   getAllRedemptions(): Promise<RewardRedemptionWithDetails[]> {
     return this.rewardsService.getAllRedemptions();
@@ -100,7 +115,7 @@ export class RewardsController {
    */
   @Post('redemptions/:id/approve')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles('chapter_officer')
   approveClaim(
     @CurrentUser() user: AuthenticatedUser,
@@ -115,7 +130,7 @@ export class RewardsController {
    */
   @Post('redemptions/:id/refund')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard, RolesGuard)
   @Roles('chapter_officer')
   refundClaim(
     @CurrentUser() user: AuthenticatedUser,

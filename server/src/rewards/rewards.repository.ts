@@ -27,6 +27,31 @@ export class RewardsRepository extends BaseRepository {
     super(supabase);
   }
 
+  // ── Public catalog ────────────────────────────────────────────────────
+
+  async findActiveRewards(): Promise<Reward[]> {
+    const result = await this.db
+      .from('rewards')
+      .select('*')
+      .eq('is_active', true)
+      .order('points_cost', { ascending: true })
+      .limit(50);
+    return this.unwrap(
+      result as { data: Reward[] | null; error: { message: string } | null },
+    );
+  }
+
+  async findAllRewards(): Promise<Reward[]> {
+    const result = await this.db
+      .from('rewards')
+      .select('*')
+      .order('points_cost', { ascending: true })
+      .limit(100);
+    return this.unwrap(
+      result as { data: Reward[] | null; error: { message: string } | null },
+    );
+  }
+
   // ── Reward CRUD ───────────────────────────────────────────────────────
 
   async findRewardById(id: string): Promise<Reward> {

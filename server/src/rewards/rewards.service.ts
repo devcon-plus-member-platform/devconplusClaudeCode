@@ -12,6 +12,16 @@ import { RewardsRepository } from './rewards.repository';
 export class RewardsService {
   constructor(private readonly rewardsRepo: RewardsRepository) {}
 
+  // ── Public catalog ────────────────────────────────────────────────────
+
+  getPublicCatalog(): Promise<Reward[]> {
+    return this.rewardsRepo.findActiveRewards();
+  }
+
+  getAllRewards(): Promise<Reward[]> {
+    return this.rewardsRepo.findAllRewards();
+  }
+
   // ── Reward CRUD (hq_admin / super_admin only) ─────────────────────────
 
   createReward(dto: CreateRewardDto): Promise<Reward> {
