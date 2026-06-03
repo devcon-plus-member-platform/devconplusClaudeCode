@@ -312,7 +312,7 @@ export default function EventRegister() {
             to="/profile/edit"
             className="flex items-center gap-1 text-md3-label-md text-primary font-medium"
           >
-            <PenNewSquareOutline width={14} height={14} color="rgb(var(--color-primary))" />
+            <PenNewSquareOutline size={14} color="rgb(var(--color-primary))" />
             Edit Profile
           </Link>
         </div>
