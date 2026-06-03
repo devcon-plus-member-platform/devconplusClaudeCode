@@ -534,13 +534,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!current) return
 
     if (USE_FIREBASE) {
+      // avatar_url: managed by POST /api/users/me/avatar (server persists it).
+      // chapter_id: managed by the organizer-upgrade request workflow.
+      // Both are removed from the server DTO to prevent mass-assignment bypass.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { avatar_url: _av, chapter_id: _ch, ...serverPatch } = patch
       const updated = await apiFetch<Profile>('/api/users/me', {
         method: 'PATCH',
-        body: JSON.stringify(patch),
+        body: JSON.stringify(serverPatch),
       })
-      const chapterName = patch.chapter_id !== undefined
-        ? await fetchChapterName(patch.chapter_id ?? null)
-        : get().chapterName
+      const chapterName = get().chapterName
       set({
         user: updated,
         initials: updated.full_name ? getInitials(updated.full_name) : get().initials,
@@ -592,6 +595,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         method: 'POST',
         body: formData,
       })
+      // Server persists avatar_url to the DB; update local state so callers
+      // don't need a separate updateProfile({ avatar_url }) round-trip.
+      set({ user: { ...current, avatar_url } })
       return avatar_url
     }
 

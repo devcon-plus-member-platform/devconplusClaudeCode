@@ -1,5 +1,10 @@
-import { IsOptional, IsString, IsUrl, IsUUID, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 
+// chapter_id is intentionally absent — chapter changes require the organizer
+// upgrade request workflow (pending_chapter_id reviewed by an admin/officer).
+// avatar_url is intentionally absent — the dedicated POST /api/users/me/avatar
+// endpoint handles upload AND persists the URL server-side, preventing callers
+// from injecting arbitrary URLs that bypass the upload pipeline.
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
@@ -15,15 +20,6 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(100)
   school_or_company?: string;
-
-  @IsOptional()
-  @IsUUID('4')
-  chapter_id?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  avatar_url?: string;
 
   @IsOptional()
   @IsUrl({ require_tld: true, protocols: ['https', 'http'] })

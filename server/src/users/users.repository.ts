@@ -2,7 +2,6 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Profile } from '../supabase/types';
-import type { UpdateProfileDto } from './dto/update-profile.dto';
 
 const ALLOWED_AVATAR_TYPES = new Set([
   'image/jpeg',
@@ -33,7 +32,7 @@ export class UsersRepository extends BaseRepository {
     return this.unwrap(result as { data: Profile | null; error: { message: string } | null });
   }
 
-  async update(id: string, patch: UpdateProfileDto): Promise<Profile> {
+  async update(id: string, patch: Partial<Profile>): Promise<Profile> {
     const result = await this.db
       .from('profiles')
       .update(patch as Record<string, unknown>)

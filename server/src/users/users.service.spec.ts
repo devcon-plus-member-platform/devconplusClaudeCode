@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Profile } from '../supabase/types';
 import { UsersRepository } from './users.repository';
-import { UsersService } from './users.service';
+import { MAX_AVATAR_BYTES, UsersService } from './users.service';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -30,23 +30,30 @@ const mockProfile: Profile = {
   created_at: '2026-01-01T00:00:00Z',
 };
 
+// Minimal real magic bytes for each accepted image type
+const JPEG_HEADER  = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+const PNG_HEADER   = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+const GIF_HEADER   = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00]);
+const WEBP_HEADER  = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+const PDF_HEADER   = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+const SCRIPT_BYTES = Buffer.from([0x3c, 0x3f, 0x70, 0x68, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
 const makeFile = (
+  buffer: Buffer,
   overrides: Partial<Express.Multer.File> = {},
 ): Express.Multer.File => ({
   fieldname: 'avatar',
   originalname: 'photo.jpg',
   encoding: '7bit',
-  mimetype: 'image/jpeg',
-  buffer: Buffer.from('fake-image-data'),
-  size: 1024,
+  mimetype: 'image/jpeg',   // always client-declared — service ignores this
+  buffer,
+  size: buffer.length,
   stream: null!,
   destination: '',
   filename: '',
   path: '',
   ...overrides,
 });
-
-const TEN_MB = 10 * 1024 * 1024;
 
 // ── Mock factories ────────────────────────────────────────────────────────
 
@@ -66,14 +73,9 @@ describe('UsersService', () => {
 
   beforeEach(async () => {
     repo = makeUsersRepo();
-
     const module = await Test.createTestingModule({
-      providers: [
-        UsersService,
-        { provide: UsersRepository, useValue: repo },
-      ],
+      providers: [UsersService, { provide: UsersRepository, useValue: repo }],
     }).compile();
-
     service = module.get(UsersService);
   });
 
@@ -86,8 +88,7 @@ describe('UsersService', () => {
     });
 
     it('returns the profile from the repository', async () => {
-      const result = await service.getProfile(MOCK_USER_ID);
-      expect(result).toEqual(mockProfile);
+      expect(await service.getProfile(MOCK_USER_ID)).toEqual(mockProfile);
     });
   });
 
@@ -103,70 +104,94 @@ describe('UsersService', () => {
     it('returns the updated profile', async () => {
       const updated = { ...mockProfile, full_name: 'New Name' };
       repo.update.mockResolvedValue(updated);
-      const result = await service.updateProfile(MOCK_USER_ID, { full_name: 'New Name' });
-      expect(result).toEqual(updated);
+      expect(await service.updateProfile(MOCK_USER_ID, { full_name: 'New Name' })).toEqual(updated);
     });
   });
 
-  // ── uploadAvatar — positive ──────────────────────────────────────────
+  // ── uploadAvatar — magic-byte validation (positive) ──────────────────
 
-  describe('uploadAvatar (positive)', () => {
+  describe('uploadAvatar — magic bytes (positive)', () => {
     it.each([
-      ['image/jpeg', 'photo.jpg'],
-      ['image/png',  'photo.png'],
-      ['image/webp', 'photo.webp'],
-      ['image/gif',  'photo.gif'],
-    ])('accepts %s files', async (mimetype, originalname) => {
-      const file = makeFile({ mimetype, originalname });
+      ['image/jpeg', JPEG_HEADER],
+      ['image/png',  PNG_HEADER],
+      ['image/gif',  GIF_HEADER],
+      ['image/webp', WEBP_HEADER],
+    ])('accepts %s based on buffer content', async (mime, header) => {
+      const file = makeFile(header, { mimetype: mime });
       await expect(service.uploadAvatar(MOCK_USER_ID, file)).resolves.toBe(
         'https://cdn.supabase.co/avatars/user.jpg',
       );
-      expect(repo.uploadAvatar).toHaveBeenCalledWith(
-        MOCK_USER_ID,
-        file.buffer,
-        mimetype,
-      );
+      // Must call uploadAvatar with the DETECTED type, not the client-declared one
+      expect(repo.uploadAvatar).toHaveBeenCalledWith(MOCK_USER_ID, header, mime);
     });
 
-    it('accepts a file exactly at the 10 MB limit', async () => {
-      const file = makeFile({ size: TEN_MB });
-      await expect(service.uploadAvatar(MOCK_USER_ID, file)).resolves.toBeDefined();
+    it('uses detected MIME even when client declares wrong type', async () => {
+      // Client lies and declares image/gif but sends a PNG
+      const file = makeFile(PNG_HEADER, { mimetype: 'image/gif' });
+      await service.uploadAvatar(MOCK_USER_ID, file);
+      // Storage should receive 'image/png' (detected), not 'image/gif' (declared)
+      expect(repo.uploadAvatar).toHaveBeenCalledWith(MOCK_USER_ID, PNG_HEADER, 'image/png');
     });
   });
 
-  // ── uploadAvatar — negative ──────────────────────────────────────────
+  // ── uploadAvatar — magic-byte validation (negative) ──────────────────
 
-  describe('uploadAvatar (negative)', () => {
-    it('rejects unsupported MIME types with BadRequestException', async () => {
-      const badTypes = ['application/pdf', 'video/mp4', 'image/tiff', 'text/plain'];
-      for (const mimetype of badTypes) {
-        const file = makeFile({ mimetype });
-        await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow(
-          BadRequestException,
-        );
-      }
+  describe('uploadAvatar — magic bytes (negative)', () => {
+    it('rejects a PDF buffer even when declared as image/jpeg', async () => {
+      const file = makeFile(PDF_HEADER, { mimetype: 'image/jpeg' });
+      await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects files over 10 MB with BadRequestException', async () => {
-      const file = makeFile({ size: TEN_MB + 1 });
-      await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow(
-        BadRequestException,
-      );
+    it('rejects a PHP script buffer even when declared as image/png', async () => {
+      const file = makeFile(SCRIPT_BYTES, { mimetype: 'image/png' });
+      await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow(BadRequestException);
     });
 
-    it('uses the 10 MB threshold exactly — 10 MB + 1 byte is over the limit', async () => {
-      const borderPass = makeFile({ size: TEN_MB });
-      const borderFail = makeFile({ size: TEN_MB + 1 });
-      await expect(service.uploadAvatar(MOCK_USER_ID, borderPass)).resolves.toBeDefined();
-      await expect(service.uploadAvatar(MOCK_USER_ID, borderFail)).rejects.toThrow(
-        BadRequestException,
-      );
+    it('rejects a buffer too short to contain magic bytes', async () => {
+      const file = makeFile(Buffer.from([0xff, 0xd8]));
+      await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow(BadRequestException);
     });
 
-    it('never calls repo.uploadAvatar when validation fails', async () => {
-      const file = makeFile({ mimetype: 'application/pdf' });
+    it('never calls repo.uploadAvatar when magic-byte check fails', async () => {
+      const file = makeFile(PDF_HEADER, { mimetype: 'image/jpeg' });
       await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow();
       expect(repo.uploadAvatar).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── uploadAvatar — size gate (defense-in-depth) ───────────────────────
+
+  describe('uploadAvatar — size gate', () => {
+    it('accepts a file exactly at the 10 MB limit', async () => {
+      const buf = Buffer.concat([JPEG_HEADER, Buffer.alloc(MAX_AVATAR_BYTES - JPEG_HEADER.length)]);
+      const file = makeFile(buf, { size: MAX_AVATAR_BYTES });
+      await expect(service.uploadAvatar(MOCK_USER_ID, file)).resolves.toBeDefined();
+    });
+
+    it('rejects a file 1 byte over the limit', async () => {
+      const buf = Buffer.concat([JPEG_HEADER, Buffer.alloc(MAX_AVATAR_BYTES - JPEG_HEADER.length + 1)]);
+      const file = makeFile(buf, { size: MAX_AVATAR_BYTES + 1 });
+      await expect(service.uploadAvatar(MOCK_USER_ID, file)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── uploadAvatar — profile persistence ───────────────────────────────
+
+  describe('uploadAvatar — profile persistence', () => {
+    it('persists avatar_url to the profile after upload (server owns the URL)', async () => {
+      const file = makeFile(JPEG_HEADER);
+      await service.uploadAvatar(MOCK_USER_ID, file);
+      expect(repo.update).toHaveBeenCalledWith(
+        MOCK_USER_ID,
+        { avatar_url: 'https://cdn.supabase.co/avatars/user.jpg' },
+      );
+    });
+
+    it('returns the public Storage URL', async () => {
+      const file = makeFile(JPEG_HEADER);
+      expect(await service.uploadAvatar(MOCK_USER_ID, file)).toBe(
+        'https://cdn.supabase.co/avatars/user.jpg',
+      );
     });
   });
 });

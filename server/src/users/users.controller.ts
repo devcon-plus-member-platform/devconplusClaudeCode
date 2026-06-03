@@ -13,7 +13,7 @@ import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { Profile } from '../supabase/types';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UsersService } from './users.service';
+import { MAX_AVATAR_BYTES, UsersService } from './users.service';
 
 @Controller('users')
 @UseGuards(AuthGuard)
@@ -38,10 +38,18 @@ export class UsersController {
   /**
    * POST /api/users/me/avatar — upload a new avatar image.
    * Accepts multipart/form-data with field name "avatar".
-   * Returns the public Supabase Storage URL for the uploaded image.
+   *
+   * Multer rejects the stream before it is fully buffered if it exceeds
+   * MAX_AVATAR_BYTES — this is the primary size gate. The service also
+   * validates magic bytes (not the client-declared MIME type) and persists
+   * the Storage URL into profiles.avatar_url server-side.
    */
   @Post('me/avatar')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: { fileSize: MAX_AVATAR_BYTES, files: 1 },
+    }),
+  )
   async uploadAvatar(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
