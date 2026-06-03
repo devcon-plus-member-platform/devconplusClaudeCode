@@ -11,6 +11,42 @@ export type ProfileRole =
   | 'hq_admin'
   | 'super_admin';
 
+export interface Reward {
+  id: string;
+  name: string;
+  description: string | null;
+  points_cost: number;
+  type: 'digital' | 'physical' | null;
+  claim_method: 'onsite' | 'digital_delivery' | null;
+  image_url: string | null;
+  stock_remaining: number | null;
+  max_per_user: number | null;
+  financial_cost_php: number | null;
+  is_active: boolean;
+  is_coming_soon: boolean;
+  created_at: string;
+}
+
+export interface RewardRedemption {
+  id: string;
+  user_id: string | null;
+  reward_id: string | null;
+  status: 'pending' | 'claimed' | 'cancelled';
+  redeemed_at: string | null;
+  claimed_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  claim_pin: string | null;
+}
+
+export interface RewardRedemptionWithDetails extends RewardRedemption {
+  member_name: string;
+  member_email: string;
+  reward_name: string;
+  reward_image_url: string | null;
+  reward_points_cost: number;
+}
+
 export interface Profile {
   id: string;
   email: string;

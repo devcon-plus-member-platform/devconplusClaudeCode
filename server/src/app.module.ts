@@ -9,6 +9,7 @@ import { validateEnv } from './config/env.validation';
 import { EmailModule } from './email/email.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { SupabaseModule } from './supabase/supabase.module';
+import { RewardsModule } from './rewards/rewards.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module';
     EmailModule,
     AuthModule,
     UsersModule,
+    RewardsModule,
   ],
   controllers: [AppController],
   providers: [

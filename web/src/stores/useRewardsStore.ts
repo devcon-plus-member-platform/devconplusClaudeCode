@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import type { Reward, RewardRedemption } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
+import { apiFetch } from '../lib/api'
 import { toast } from 'sonner'
 import { useAuthStore } from './useAuthStore'
 import { usePointsStore } from './usePointsStore'
 import type { RewardFormData } from '../pages/organizer/rewards/rewardFormConstants'
+
+const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 let _chanSeq = 0
 const nextChan = (base: string) => `${base}-${++_chanSeq}`
@@ -112,8 +115,12 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       is_coming_soon: data.is_coming_soon,
       image_url: imageUrl,
     }
-    const { error } = await supabase.from('rewards').insert(payload)
-    if (error) throw new Error(error.message)
+    if (USE_FIREBASE) {
+      await apiFetch('/api/rewards', { method: 'POST', body: JSON.stringify(payload) })
+    } else {
+      const { error } = await supabase.from('rewards').insert(payload)
+      if (error) throw new Error(error.message)
+    }
     await Promise.all([get().fetchAllRewards(), get().fetchRewards()])
   },
 
@@ -131,23 +138,29 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       is_coming_soon: data.is_coming_soon,
       image_url: imageUrl,
     }
-    const { error } = await supabase.from('rewards').update(payload).eq('id', id)
-    if (error) throw new Error(error.message)
+    if (USE_FIREBASE) {
+      await apiFetch(`/api/rewards/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+    } else {
+      const { error } = await supabase.from('rewards').update(payload).eq('id', id)
+      if (error) throw new Error(error.message)
+    }
     await Promise.all([get().fetchAllRewards(), get().fetchRewards()])
   },
 
   // ── Delete (permanent) ───────────────────────────────────────────────────
   deleteReward: async (id) => {
-    // Remove child redemptions first to satisfy FK constraint
-    const { error: redemptionsError } = await supabase
-      .from('reward_redemptions')
-      .delete()
-      .eq('reward_id', id)
-    if (redemptionsError) throw new Error(redemptionsError.message)
-
-    const { error } = await supabase.from('rewards').delete().eq('id', id)
-    if (error) throw new Error(error.message)
-
+    if (USE_FIREBASE) {
+      await apiFetch(`/api/rewards/${id}`, { method: 'DELETE' })
+    } else {
+      // Remove child redemptions first to satisfy FK constraint
+      const { error: redemptionsError } = await supabase
+        .from('reward_redemptions')
+        .delete()
+        .eq('reward_id', id)
+      if (redemptionsError) throw new Error(redemptionsError.message)
+      const { error } = await supabase.from('rewards').delete().eq('id', id)
+      if (error) throw new Error(error.message)
+    }
     set((s) => ({
       rewards: s.rewards.filter((r) => r.id !== id),
       allRewards: s.allRewards.filter((r) => r.id !== id),
@@ -184,9 +197,24 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
     const user = useAuthStore.getState().user
     if (!user) return { success: false, error: 'Not authenticated' }
 
-    // redeem_reward exists in DB but not yet in generated types — cast is intentional
-    // RPC returns { success, redemption_id, claim_pin } directly so we avoid
-    // a separate SELECT that could fail if PostgREST schema cache is stale
+    if (USE_FIREBASE) {
+      try {
+        const result = await apiFetch<{ redemptionId: string; claimPin: string | null }>(
+          `/api/rewards/${rewardId}/redeem`,
+          { method: 'POST' },
+        )
+        await Promise.all([
+          usePointsStore.getState().loadTotalPoints(),
+          get().fetchRewards(),
+        ])
+        return { success: true, redemptionId: result.redemptionId, claimPin: result.claimPin }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Redemption failed'
+        return { success: false, error: msg }
+      }
+    }
+
+    // Legacy Supabase path
     type RedeemResult = { success: boolean; redemption_id?: string; claim_pin?: string; error?: string }
     const { data: rpcData, error } = await supabase.rpc('redeem_reward' as never, {
       p_reward_id: rewardId,
@@ -216,13 +244,18 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
     if (!user) return
     set({ isLoading: true, error: null })
     try {
-      const { data, error } = await supabase
-        .from('reward_redemptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('redeemed_at', { ascending: false })
-      if (error) throw error
-      set({ redemptions: (data ?? []) as RewardRedemption[] })
+      if (USE_FIREBASE) {
+        const data = await apiFetch<RewardRedemption[]>('/api/rewards/redemptions/mine')
+        set({ redemptions: data })
+      } else {
+        const { data, error } = await supabase
+          .from('reward_redemptions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('redeemed_at', { ascending: false })
+        if (error) throw error
+        set({ redemptions: (data ?? []) as RewardRedemption[] })
+      }
     } catch (err) {
       set({ redemptions: [], error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -234,40 +267,48 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
   fetchAllRedemptions: async () => {
     set({ isLoadingClaims: true, error: null })
     try {
-      const { data, error } = await supabase
-        .from('reward_redemptions')
-        .select(`
-          *,
-          profiles!reward_redemptions_user_id_fkey (full_name, email),
-          rewards!reward_redemptions_reward_id_fkey (name, image_url, points_cost)
-        `)
-        .order('redeemed_at', { ascending: false })
-        .limit(200)
-      if (error) throw error
-      const mapped: RewardRedemptionWithDetails[] = (data ?? []).map((row) => {
-        const profile = row.profiles as { full_name: string; email: string } | null
-        const reward = row.rewards as { name: string; image_url: string | null; points_cost: number } | null
-        return {
-          id: row.id,
-          user_id: row.user_id ?? '',
-          reward_id: row.reward_id ?? '',
-          status: (row.status ?? 'pending') as RewardRedemption['status'],
-          redeemed_at: row.redeemed_at ?? '',
-          claimed_at: row.claimed_at,
-          reviewed_by: (row as Record<string, unknown>).reviewed_by as string | null ?? null,
-          reviewed_at: (row as Record<string, unknown>).reviewed_at as string | null ?? null,
-          claim_pin: (row as Record<string, unknown>).claim_pin as string | null ?? null,
-          member_name: profile?.full_name ?? 'Unknown',
-          member_email: profile?.email ?? '',
-          reward_name: reward?.name ?? 'Unknown Reward',
-          reward_image_url: reward?.image_url ?? null,
-          reward_points_cost: reward?.points_cost ?? 0,
-        }
-      })
-      set({
-        allRedemptions: mapped,
-        unseenClaimCount: mapped.filter((r) => r.status === 'pending').length,
-      })
+      if (USE_FIREBASE) {
+        const data = await apiFetch<RewardRedemptionWithDetails[]>('/api/rewards/redemptions')
+        set({
+          allRedemptions: data,
+          unseenClaimCount: data.filter((r) => r.status === 'pending').length,
+        })
+      } else {
+        const { data, error } = await supabase
+          .from('reward_redemptions')
+          .select(`
+            *,
+            profiles!reward_redemptions_user_id_fkey (full_name, email),
+            rewards!reward_redemptions_reward_id_fkey (name, image_url, points_cost)
+          `)
+          .order('redeemed_at', { ascending: false })
+          .limit(200)
+        if (error) throw error
+        const mapped: RewardRedemptionWithDetails[] = (data ?? []).map((row) => {
+          const profile = row.profiles as { full_name: string; email: string } | null
+          const reward = row.rewards as { name: string; image_url: string | null; points_cost: number } | null
+          return {
+            id: row.id,
+            user_id: row.user_id ?? '',
+            reward_id: row.reward_id ?? '',
+            status: (row.status ?? 'pending') as RewardRedemption['status'],
+            redeemed_at: row.redeemed_at ?? '',
+            claimed_at: row.claimed_at,
+            reviewed_by: (row as Record<string, unknown>).reviewed_by as string | null ?? null,
+            reviewed_at: (row as Record<string, unknown>).reviewed_at as string | null ?? null,
+            claim_pin: (row as Record<string, unknown>).claim_pin as string | null ?? null,
+            member_name: profile?.full_name ?? 'Unknown',
+            member_email: profile?.email ?? '',
+            reward_name: reward?.name ?? 'Unknown Reward',
+            reward_image_url: reward?.image_url ?? null,
+            reward_points_cost: reward?.points_cost ?? 0,
+          }
+        })
+        set({
+          allRedemptions: mapped,
+          unseenClaimCount: mapped.filter((r) => r.status === 'pending').length,
+        })
+      }
     } catch (err) {
       set({ allRedemptions: [], error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -279,7 +320,24 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
   approveClaim: async (redemptionId) => {
     const organizer = useAuthStore.getState().user
     if (!organizer) return { success: false, error: 'Not authenticated' }
-    // approve_reward_claim / refund_reward_claim not yet in generated types — cast is intentional
+
+    if (USE_FIREBASE) {
+      try {
+        await apiFetch(`/api/rewards/redemptions/${redemptionId}/approve`, { method: 'POST' })
+        set((s) => ({
+          allRedemptions: s.allRedemptions.map((r) =>
+            r.id === redemptionId
+              ? { ...r, status: 'claimed' as const, reviewed_by: organizer.id, reviewed_at: new Date().toISOString() }
+              : r
+          ),
+        }))
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Approval failed' }
+      }
+    }
+
+    // Legacy Supabase path
     const { data, error } = await supabase.rpc('approve_reward_claim' as never, {
       p_redemption_id: redemptionId,
       p_organizer_id: organizer.id,
@@ -301,7 +359,24 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
   refundClaim: async (redemptionId) => {
     const organizer = useAuthStore.getState().user
     if (!organizer) return { success: false, error: 'Not authenticated' }
-    // approve_reward_claim / refund_reward_claim not yet in generated types — cast is intentional
+
+    if (USE_FIREBASE) {
+      try {
+        await apiFetch(`/api/rewards/redemptions/${redemptionId}/refund`, { method: 'POST' })
+        set((s) => ({
+          allRedemptions: s.allRedemptions.map((r) =>
+            r.id === redemptionId
+              ? { ...r, status: 'cancelled' as const, reviewed_by: organizer.id, reviewed_at: new Date().toISOString() }
+              : r
+          ),
+        }))
+        return { success: true }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Refund failed' }
+      }
+    }
+
+    // Legacy Supabase path
     const { data, error } = await supabase.rpc('refund_reward_claim' as never, {
       p_redemption_id: redemptionId,
       p_organizer_id: organizer.id,
