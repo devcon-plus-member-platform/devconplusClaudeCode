@@ -11,6 +11,31 @@ import { firebaseAuth } from './firebase'
 
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
 
+async function readResponseBody<T>(res: Response): Promise<T> {
+  if (res.status === 204 || res.status === 205) {
+    return undefined as T
+  }
+
+  const text = await res.text()
+  if (!text) return undefined as T
+
+  return JSON.parse(text) as T
+}
+
+async function readErrorMessage(res: Response): Promise<string | null> {
+  if (res.status === 204 || res.status === 205) return null
+
+  const text = await res.text()
+  if (!text) return null
+
+  try {
+    const body = JSON.parse(text) as { message?: string }
+    return body.message ?? text
+  } catch {
+    return text
+  }
+}
+
 async function getFirebaseToken(forceRefresh = false): Promise<string | null> {
   const user = firebaseAuth.currentUser
   if (!user) return null
@@ -39,16 +64,28 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     const fresh = await getFirebaseToken(true)
     const retry = await fetch(`${BASE_URL}${path}`, { ...init, headers: buildHeaders(fresh) })
     if (!retry.ok) {
-      const body = await retry.json().catch(() => ({})) as { message?: string }
-      throw new Error(body.message ?? `API error ${retry.status}`)
+      const message = await readErrorMessage(retry)
+      throw new Error(message ?? `API error ${retry.status}`)
     }
-    return retry.json() as Promise<T>
+    return readResponseBody<T>(retry)
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { message?: string }
-    throw new Error(body.message ?? `API error ${res.status}`)
+    const message = await readErrorMessage(res)
+    throw new Error(message ?? `API error ${res.status}`)
   }
 
-  return res.json() as Promise<T>
+  return readResponseBody<T>(res)
+}
+
+export async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> =
+    init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }
+  Object.assign(headers, init.headers as Record<string, string> | undefined)
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers })
+  if (!res.ok) {
+    const message = await readErrorMessage(res)
+    throw new Error(message ?? `API error ${res.status}`)
+  }
+  return readResponseBody<T>(res)
 }
