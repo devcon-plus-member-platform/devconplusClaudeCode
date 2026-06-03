@@ -13,6 +13,7 @@ import { RewardsModule } from './rewards/rewards.module';
 import { UsersModule } from './users/users.module';
 import { VolunteersModule } from './volunteers/volunteers.module';
 import { UpgradesModule } from './upgrades/upgrades.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { UpgradesModule } from './upgrades/upgrades.module';
     RewardsModule,
     VolunteersModule,
     UpgradesModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

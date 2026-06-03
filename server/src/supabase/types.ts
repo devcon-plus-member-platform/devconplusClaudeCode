@@ -47,6 +47,26 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
   reward_points_cost: number;
 }
 
+export interface PointTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  description: string;
+  transaction_ref: string | null;
+  source: string | null;
+  created_at: string;
+}
+
+export interface AdminAnalytics {
+  totalMembers: number;
+  totalEvents: number;
+  xpDistributed: number;
+  activeChapters: number;
+  memberGrowth: { month: string; count: number }[];
+  xpByChapter: { chapter: string; xp: number }[];
+  attendanceTrend: { event: string; attendance: number }[];
+}
+
 export interface OrgCode {
   id: string;
   code: string;
