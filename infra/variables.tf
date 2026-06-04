@@ -10,6 +10,12 @@ variable "instance_name" {
   default     = "devcon-plus-api"
 }
 
+variable "api_domain" {
+  description = "Desired public hostname for the backend once DNS is ready."
+  type        = string
+  default     = "api.devcon.ph"
+}
+
 variable "ssh_public_key" {
   description = "OpenSSH public key material that will be imported as an EC2 key pair."
   type        = string
@@ -38,4 +44,22 @@ variable "deployment_dir" {
   description = "Directory on the instance where the repo will be cloned and the backend will run."
   type        = string
   default     = "/opt/devcon-plus"
+}
+
+variable "docker_compose_version" {
+  description = "Docker Compose plugin version installed during EC2 bootstrap."
+  type        = string
+  default     = "2.39.2"
+}
+
+variable "cloudwatch_log_retention_days" {
+  description = "Retention in days for CloudWatch log groups created for the backend host."
+  type        = number
+  default     = 14
+}
+
+variable "alarm_email" {
+  description = "Optional email address subscribed to backend CloudWatch alarm notifications."
+  type        = string
+  default     = null
 }
