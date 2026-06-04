@@ -40,6 +40,10 @@ fi
 rm -f /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/example_ssl.conf
 find /etc/nginx/default.d -maxdepth 1 -type f -delete 2>/dev/null || true
 
+cat >/etc/nginx/nginx.conf <<'NGINX_MAIN'
+${nginx_main_config}
+NGINX_MAIN
+
 cat >/etc/nginx/conf.d/00-devcon-plus.conf <<'NGINX'
 ${nginx_http_config}
 NGINX

@@ -207,6 +207,7 @@ resource "aws_instance" "backend" {
       nginx_access_log_group = local.log_group_names.nginx_access
       nginx_error_log_group  = local.log_group_names.nginx_error
     })
+    nginx_main_config = templatefile("${path.module}/templates/nginx.conf.tftpl", {})
     nginx_http_config = templatefile("${path.module}/templates/nginx-http.conf.tftpl", {
       api_domain = var.api_domain
     })
