@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { useAuthStore } from './useAuthStore'
 
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 import { getTier, getNextTier, getTierProgress, TIERS, type Tier } from '../lib/tiers'
 
 // Monotonic counter to generate unique channel names on every subscribe call.
@@ -45,18 +44,8 @@ export const usePointsStore = create<PointsState>((set, get) => ({
     if (!user) return
     set((s) => ({ pendingLoads: s.pendingLoads + 1, isLoading: true, error: null }))
     try {
-      if (USE_FIREBASE) {
-        const data = await apiFetch<PointTransaction[]>('/api/points/transactions')
-        set({ transactions: data })
-      } else {
-        const { data, error } = await supabase
-          .from('point_transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-        if (error) throw error
-        set({ transactions: (data ?? []) as PointTransaction[] })
-      }
+      const data = await apiFetch<PointTransaction[]>('/api/points/transactions')
+      set({ transactions: data })
     } catch (err) {
       set({ transactions: [], error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -75,22 +64,11 @@ export const usePointsStore = create<PointsState>((set, get) => ({
       let spendablePoints: number
       let lifetimePoints: number
 
-      if (USE_FIREBASE) {
-        const summary = await apiFetch<{ spendable_points: number; lifetime_points: number }>(
-          '/api/points/summary',
-        )
-        spendablePoints = summary.spendable_points
-        lifetimePoints  = summary.lifetime_points
-      } else {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('spendable_points, lifetime_points')
-          .eq('id', user.id)
-          .single()
-        if (error) throw error
-        spendablePoints = data?.spendable_points ?? 0
-        lifetimePoints  = data?.lifetime_points  ?? 0
-      }
+      const summary = await apiFetch<{ spendable_points: number; lifetime_points: number }>(
+        '/api/points/summary',
+      )
+      spendablePoints = summary.spendable_points
+      lifetimePoints  = summary.lifetime_points
 
       set({
         spendablePoints,

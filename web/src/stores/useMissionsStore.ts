@@ -4,8 +4,6 @@ import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { useAuthStore } from './useAuthStore'
 
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
-
 let _chanSeq = 0
 const nextChan = (base: string) => `${base}-${++_chanSeq}`
 
@@ -42,27 +40,12 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
 
     set({ isLoading: true, error: null })
     try {
-      if (USE_FIREBASE) {
-        const data = await apiFetch<{
-          missions: Mission[]
-          participants: MissionParticipant[]
-          submissions: MissionSubmission[]
-        }>('/api/missions')
-        set({ missions: data.missions, participants: data.participants, submissions: data.submissions, lastFetched: Date.now() })
-      } else {
-        const [mRes, pRes, sRes] = await Promise.all([
-          supabase.from('missions').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(50),
-          supabase.from('mission_participants').select('*').eq('user_id', userId).limit(100),
-          supabase.from('mission_submissions').select('*').eq('user_id', userId).limit(100),
-        ])
-        if (mRes.error) throw mRes.error
-        set({
-          missions:     (mRes.data ?? []) as Mission[],
-          participants: (pRes.data ?? []) as MissionParticipant[],
-          submissions:  (sRes.data ?? []) as MissionSubmission[],
-          lastFetched:  Date.now(),
-        })
-      }
+      const data = await apiFetch<{
+        missions: Mission[]
+        participants: MissionParticipant[]
+        submissions: MissionSubmission[]
+      }>('/api/missions')
+      set({ missions: data.missions, participants: data.participants, submissions: data.submissions, lastFetched: Date.now() })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -71,68 +54,29 @@ export const useMissionsStore = create<MissionsState>((set, get) => ({
   },
 
   startMission: async (missionId, _userId) => {
-    // _userId ignored in Firebase mode — server derives it from the token.
-    if (USE_FIREBASE) {
-      const data = await apiFetch<MissionParticipant>(`/api/missions/${missionId}/start`, { method: 'POST' })
-      set((s) => ({
-        participants: s.participants.some((p) => p.mission_id === data.mission_id && p.user_id === data.user_id)
-          ? s.participants
-          : [...s.participants, data],
-      }))
-      return
-    }
-    const userId = _userId
-    const { error } = await supabase
-      .from('mission_participants')
-      .insert({ mission_id: missionId, user_id: userId })
-    if (error) throw error
+    // _userId is ignored — server derives it from the token.
+    const data = await apiFetch<MissionParticipant>(`/api/missions/${missionId}/start`, { method: 'POST' })
     set((s) => ({
-      participants: s.participants.some((p) => p.mission_id === missionId && p.user_id === userId)
+      participants: s.participants.some((p) => p.mission_id === data.mission_id && p.user_id === data.user_id)
         ? s.participants
-        : [...s.participants, { mission_id: missionId, user_id: userId, joined_at: new Date().toISOString() }],
+        : [...s.participants, data],
     }))
   },
 
   submitMission: async (missionId, _userId, link) => {
-    // _userId ignored in Firebase mode — server derives it from the token.
-    if (USE_FIREBASE) {
-      const data = await apiFetch<MissionSubmission>(`/api/missions/${missionId}/submit`, {
-        method: 'POST',
-        body: JSON.stringify({ link }),
-      })
-      set((s) => {
-        const exists = s.submissions.some((sub) => sub.id === data.id)
-        return {
-          submissions: exists
-            ? s.submissions.map((sub) => (sub.id === data.id ? data : sub))
-            : [...s.submissions, data],
-        }
-      })
-      return
-    }
-    const userId = _userId
-    const existing = get().submissions.find((s) => s.mission_id === missionId && s.user_id === userId)
-    const now = new Date().toISOString()
-    if (existing) {
-      const { error } = await supabase
-        .from('mission_submissions')
-        .update({ pr_link: link, submitted_at: now })
-        .eq('id', existing.id)
-      if (error) throw error
-      set((s) => ({
-        submissions: s.submissions.map((sub) =>
-          sub.id === existing.id ? { ...sub, pr_link: link, submitted_at: now } : sub
-        ),
-      }))
-    } else {
-      const { data, error } = await supabase
-        .from('mission_submissions')
-        .insert({ mission_id: missionId, user_id: userId, pr_link: link })
-        .select()
-        .single()
-      if (error) throw error
-      set((s) => ({ submissions: [...s.submissions, data as MissionSubmission] }))
-    }
+    // _userId is ignored — server derives it from the token.
+    const data = await apiFetch<MissionSubmission>(`/api/missions/${missionId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ link }),
+    })
+    set((s) => {
+      const exists = s.submissions.some((sub) => sub.id === data.id)
+      return {
+        submissions: exists
+          ? s.submissions.map((sub) => (sub.id === data.id ? data : sub))
+          : [...s.submissions, data],
+      }
+    })
   },
 
   subscribeToChanges: () => {

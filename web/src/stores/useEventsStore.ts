@@ -3,8 +3,6 @@ import type { Event, EventRegistration, DevconCategory, Json } from '@devcon-plu
 import { supabase } from '../lib/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
 
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
-
 // Monotonic counter to generate unique channel names on every subscribe call.
 // supabase.channel(name) deduplicates by name — returning the same (possibly
 // stale) channel if the previous removal hasn't resolved yet. Unique names
@@ -177,20 +175,11 @@ export const useEventsStore = create<EventsState>((set) => ({
     return () => { void supabase.removeChannel(channel) }
   },
 
-  fetchRegistrations: async (userId) => {
+  fetchRegistrations: async (_userId) => {
     set((s) => ({ isLoading: s.registrations.length === 0, error: null }))
     try {
-      if (USE_FIREBASE) {
-        const data = await apiFetch<FullRegistration[]>('/api/registrations/mine')
-        set({ registrations: data })
-      } else {
-        const { data, error } = await supabase
-          .from('event_registrations')
-          .select('*')
-          .eq('user_id', userId)
-        if (error) throw error
-        set({ registrations: (data ?? []) as FullRegistration[] })
-      }
+      const data = await apiFetch<FullRegistration[]>('/api/registrations/mine')
+      set({ registrations: data })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -199,67 +188,28 @@ export const useEventsStore = create<EventsState>((set) => ({
   },
 
   register: async (eventId, _userId) => {
-    // _userId is ignored in Firebase mode — server derives userId from the token.
+    // _userId is ignored — server derives userId from the token.
     const event = useEventsStore.getState().events.find((e) => e.id === eventId)
     if (event?.is_external) {
       throw new Error('This event uses external registration.')
     }
-
-    if (USE_FIREBASE) {
-      const data = await apiFetch<FullRegistration>('/api/registrations', {
-        method: 'POST',
-        body: JSON.stringify({ eventId }),
-      })
-      // Server handles re-registration logic — just update local state
-      set((s) => {
-        const exists = s.registrations.some((r) => r.id === data.id)
-        return {
-          registrations: exists
-            ? s.registrations.map((r) => (r.id === data.id ? data : r))
-            : [...s.registrations, data],
-        }
-      })
-      return
-    }
-
-    // Legacy Supabase path
-    const cancelled = useEventsStore.getState().registrations.find(
-      (r) => r.event_id === eventId && r.status === 'cancelled'
-    )
-    if (cancelled) {
-      const { data, error } = await supabase
-        .from('event_registrations')
-        .update({ status: 'pending', qr_code_token: null })
-        .eq('id', cancelled.id)
-        .select()
-        .single()
-      if (error) throw error
-      set((s) => ({
-        registrations: s.registrations.map((r) =>
-          r.id === cancelled.id ? (data as FullRegistration) : r
-        ),
-      }))
-    } else {
-      const { data, error } = await supabase
-        .from('event_registrations')
-        .insert({ event_id: eventId, user_id: _userId })
-        .select()
-        .single()
-      if (error) throw error
-      set((s) => ({ registrations: [...s.registrations, data as FullRegistration] }))
-    }
+    const data = await apiFetch<FullRegistration>('/api/registrations', {
+      method: 'POST',
+      body: JSON.stringify({ eventId }),
+    })
+    // Server handles re-registration logic — just update local state
+    set((s) => {
+      const exists = s.registrations.some((r) => r.id === data.id)
+      return {
+        registrations: exists
+          ? s.registrations.map((r) => (r.id === data.id ? data : r))
+          : [...s.registrations, data],
+      }
+    })
   },
 
   cancelRegistration: async (regId) => {
-    if (USE_FIREBASE) {
-      await apiFetch(`/api/registrations/${regId}/cancel`, { method: 'PATCH' })
-    } else {
-      const { error } = await supabase
-        .from('event_registrations')
-        .update({ status: 'cancelled', qr_code_token: null })
-        .eq('id', regId)
-      if (error) throw error
-    }
+    await apiFetch(`/api/registrations/${regId}/cancel`, { method: 'PATCH' })
     set((s) => ({
       registrations: s.registrations.map((r) =>
         r.id === regId
