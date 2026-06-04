@@ -113,7 +113,7 @@ export default function AdminLayout() {
       </aside>
 
       {/* Main content area — floating card */}
-      <main data-scroll-container className="flex-1 bg-white rounded-2xl shadow-card border border-slate-100 overflow-y-auto">
+      <main data-scroll-container className="flex-1 min-h-0 bg-white rounded-2xl shadow-card border border-slate-100 overflow-y-auto">
         <Outlet key={recoveryKey} />
       </main>
     </div>
