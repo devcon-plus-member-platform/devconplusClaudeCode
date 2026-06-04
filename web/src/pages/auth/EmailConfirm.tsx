@@ -15,9 +15,7 @@ export default function EmailConfirm() {
   useEffect(() => {
     const statusParam = searchParams.get('status')   // 'success' | 'error' (Firebase path)
     const reasonParam = searchParams.get('reason')   // 'expired' | 'invalid' | undefined
-    const tokenHash   = searchParams.get('token_hash') // Supabase legacy path
     const rawToken    = searchParams.get('token')    // NestJS bridge JWT (fallback: old email links)
-    const type = (searchParams.get('type') ?? 'signup') as 'signup' | 'email'
 
     function onConfirmed() {
       setStatus('confirmed')
@@ -55,18 +53,6 @@ export default function EmailConfirm() {
     if (rawToken) {
       const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'
       window.location.replace(`${apiUrl}/auth/email/verify?token=${encodeURIComponent(rawToken)}`)
-      return
-    }
-
-    // ── Legacy Supabase email confirmation path ──────────────────────────
-    // Kept for existing users during the JIT migration window.
-    if (tokenHash) {
-      supabase.auth
-        .verifyOtp({ token_hash: tokenHash, type })
-        .then(({ error }) => {
-          if (error) onFailed(error.message)
-          else onConfirmed()
-        })
       return
     }
 

@@ -6,8 +6,6 @@ import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
-
 interface LocationState {
   email: string
   type: 'signup' | 'reset'
@@ -37,20 +35,11 @@ export default function EmailSent() {
     setResendError(null)
     setResendSuccess(false)
     try {
-      if (USE_FIREBASE && type === 'signup') {
-        // Firebase path — NestJS sends the email via Gmail SMTP
+      if (type === 'signup') {
         await apiFetch('/auth/email/resend-verification', {
           method: 'POST',
           body: JSON.stringify({ email }),
         })
-      } else if (type === 'signup') {
-        // Legacy Supabase path
-        const { error } = await supabase.auth.resend({
-          type: 'signup',
-          email,
-          options: { captchaToken: turnstileToken ?? undefined },
-        })
-        if (error) throw error
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,

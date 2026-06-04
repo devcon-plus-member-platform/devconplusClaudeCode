@@ -86,22 +86,12 @@ export default function AdminKiosk() {
       return
     }
 
-    const USE_FIREBASE = (import.meta.env.VITE_AUTH_PROVIDER as string) === 'firebase'
     type ScanData = { success: boolean; member_name?: string; points_awarded?: number; error?: string }
-    let data: ScanData | null | undefined
-
-    if (USE_FIREBASE) {
-      const { apiFetch } = await import('../../lib/api')
-      data = await apiFetch<ScanData>('/api/qr/scan', {
-        method: 'POST',
-        body: JSON.stringify({ token }),
-      }).catch(() => null)
-    } else {
-      const res = await supabase.functions.invoke<ScanData>('award-points-on-scan', {
-        body: { qr_code_token: token, organizer_id: currentUser.id },
-      })
-      data = res.data
-    }
+    const { apiFetch } = await import('../../lib/api')
+    const data = await apiFetch<ScanData>('/api/qr/scan', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }).catch(() => null)
 
     if (data?.success) {
       setLastResult({

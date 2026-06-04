@@ -10,10 +10,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { usePointsStore } from '../../stores/usePointsStore'
-import { supabase, getBridgeToken } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
-
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 // Countdown border geometry — matches EventTicket
 const RECT_SIZE = 220
@@ -52,32 +49,17 @@ export default function MyQR() {
       setIsRefreshing(true)
       setFetchError(false)
 
-      if (USE_FIREBASE) {
-        try {
-          const data = await apiFetch<{ token: string; expires_at: number }>(
-            '/api/qr/user-token',
-            { method: 'POST' },
-          )
-          if (cancelled) return
-          setToken(data.token)
-          setSecondsLeft(TOKEN_TTL)
-        } catch {
-          if (!cancelled) { setFetchError(true); inErrorState = true }
-        }
-        setIsRefreshing(false)
-        return
+      try {
+        const data = await apiFetch<{ token: string; expires_at: number }>(
+          '/api/qr/user-token',
+          { method: 'POST' },
+        )
+        if (cancelled) return
+        setToken(data.token)
+        setSecondsLeft(TOKEN_TTL)
+      } catch {
+        if (!cancelled) { setFetchError(true); inErrorState = true }
       }
-
-      // Legacy path
-      const accessToken = getBridgeToken()
-      if (!accessToken) { navigate('/sign-in', { replace: true }); return }
-      const { data, error } = await supabase.functions.invoke<{ token: string; expires_at: number }>(
-        'generate-user-qr',
-        { headers: { Authorization: `Bearer ${accessToken}` } },
-      )
-      if (cancelled) return
-      if (error || !data?.token) { setFetchError(true); inErrorState = true }
-      else { setToken(data.token); setSecondsLeft(TOKEN_TTL) }
       setIsRefreshing(false)
     }
 

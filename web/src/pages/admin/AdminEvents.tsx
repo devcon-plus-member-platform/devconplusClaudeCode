@@ -9,8 +9,6 @@ import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
-
 // ── Custom form field types ────────────────────────────────────────────────────
 
 type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'radio'
@@ -427,50 +425,17 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         cover_image_url,
       }
       if (mode === 'create') {
-        if (USE_FIREBASE) {
-          const result = await apiFetch<Event>('/api/events', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          })
-          onSaved(attachChapterName(result, chapters))
-        } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
-          const { data: result, error: dbErr } = await (supabase as any)
-            .from('events')
-            .insert({
-              ...payload,
-              status:             'upcoming',
-              tags:               [],
-              cover_image_url,
-              created_by:         null,
-              is_featured:        false,
-              is_promoted:        false,
-            })
-            .select('*, chapters(name)')
-            .single()
-          if (dbErr) { setSubmitError((dbErr as { message: string }).message); return }
-          onSaved(result as unknown as EventWithChapter)
-        }
+        const result = await apiFetch<Event>('/api/events', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        onSaved(attachChapterName(result, chapters))
       } else {
-        if (USE_FIREBASE) {
-          const result = await apiFetch<Event>(`/api/events/${event!.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(payload),
-          })
-          onSaved(attachChapterName(result, chapters))
-        } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
-          const { data: result, error: dbErr } = await (supabase as any)
-            .from('events')
-            .update({
-              ...payload,
-            })
-            .eq('id', event!.id)
-            .select('*, chapters(name)')
-            .single()
-          if (dbErr) { setSubmitError((dbErr as { message: string }).message); return }
-          onSaved(result as unknown as EventWithChapter)
-        }
+        const result = await apiFetch<Event>(`/api/events/${event!.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+        onSaved(attachChapterName(result, chapters))
       }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
@@ -1118,20 +1083,11 @@ export default function AdminEvents() {
       try {
         await fetchChapters()
 
-        if (USE_FIREBASE) {
-          const [eventRows, chapterRows] = await Promise.all([
-            publicFetch<Event[]>('/api/events'),
-            publicFetch<{ id: string; name: string }[]>('/api/chapters'),
-          ])
-          setEvents(eventRows.map((event) => attachChapterName(event, chapterRows)))
-        } else {
-          const eventsResult = await supabase
-            .from('events')
-            .select('*, chapters(name)')
-            .order('event_date', { ascending: false })
-          if (eventsResult.error) throw eventsResult.error
-          setEvents((eventsResult.data ?? []) as unknown as EventWithChapter[])
-        }
+        const [eventRows, chapterRows] = await Promise.all([
+          publicFetch<Event[]>('/api/events'),
+          publicFetch<{ id: string; name: string }[]>('/api/chapters'),
+        ])
+        setEvents(eventRows.map((event) => attachChapterName(event, chapterRows)))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load events')
       } finally {

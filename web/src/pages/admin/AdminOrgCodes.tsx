@@ -3,11 +3,8 @@ import { AddCircleOutline, PowerOutline, RefreshOutline, TrashBinTrashOutline } 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
 import { useChaptersStore } from '../../stores/useChaptersStore'
-
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 const generateCode = (): string => {
   const letters = Array.from({ length: 3 }, () =>
@@ -78,16 +75,8 @@ export default function AdminOrgCodes() {
   const load = async () => {
     setIsLoading(true)
     try {
-      if (USE_FIREBASE) {
-        const codesData = await apiFetch<OrgCode[]>('/api/org-codes')
-        setCodes(codesData)
-      } else {
-        const codesRes = await supabase
-          .from('organizer_codes')
-          .select('*, chapters(name)')
-          .order('created_at', { ascending: false })
-        setCodes((codesRes.data ?? []) as OrgCode[])
-      }
+      const codesData = await apiFetch<OrgCode[]>('/api/org-codes')
+      setCodes(codesData)
     } finally {
       setIsLoading(false)
     }
@@ -100,18 +89,10 @@ export default function AdminOrgCodes() {
 
   const handleToggle = async (id: string, current: boolean) => {
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/org-codes/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ is_active: !current }),
-        })
-      } else {
-        const { error: dbErr } = await supabase
-          .from('organizer_codes')
-          .update({ is_active: !current })
-          .eq('id', id)
-        if (dbErr) { setError(dbErr.message); return }
-      }
+      await apiFetch(`/api/org-codes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !current }),
+      })
       setCodes((prev) => prev.map((c) => c.id === id ? { ...c, is_active: !current } : c))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Toggle failed')
@@ -122,18 +103,10 @@ export default function AdminOrgCodes() {
     setRotatingId(id)
     const newCode = generateCode()
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/org-codes/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ code: newCode }),
-        })
-      } else {
-        const { error: dbErr } = await supabase
-          .from('organizer_codes')
-          .update({ code: newCode })
-          .eq('id', id)
-        if (dbErr) { setError(dbErr.message); return }
-      }
+      await apiFetch(`/api/org-codes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ code: newCode }),
+      })
       setCodes((prev) => prev.map((c) => c.id === id ? { ...c, code: newCode } : c))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Rotation failed')
@@ -148,15 +121,7 @@ export default function AdminOrgCodes() {
   const handleDelete = async (id: string) => {
     setDeletingId(id)
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/org-codes/${id}`, { method: 'DELETE' })
-      } else {
-        const { error: dbErr } = await supabase
-          .from('organizer_codes')
-          .delete()
-          .eq('id', id)
-        if (dbErr) { setError(dbErr.message); return }
-      }
+      await apiFetch(`/api/org-codes/${id}`, { method: 'DELETE' })
       setCodes((prev) => prev.filter((c) => c.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
@@ -169,35 +134,17 @@ export default function AdminOrgCodes() {
   const onSubmit = async (data: FormData) => {
     setError(null)
     try {
-      if (USE_FIREBASE) {
-        const inserted = await apiFetch<OrgCode>('/api/org-codes', {
-          method: 'POST',
-          body: JSON.stringify({
-            code:          data.code.toUpperCase(),
-            chapter_id:    data.chapter_id,
-            assigned_role: data.assigned_role,
-            usage_limit:   data.has_usage_limit ? (data.usage_limit ?? undefined) : undefined,
-            expires_at:    data.has_expiry ? (data.expires_at ?? undefined) : undefined,
-          }),
-        })
-        setCodes((prev) => [inserted, ...prev])
-      } else {
-        const { data: inserted, error: dbErr } = await supabase
-          .from('organizer_codes')
-          .insert({
-            code:          data.code.toUpperCase(),
-            chapter_id:    data.chapter_id,
-            assigned_role: data.assigned_role,
-            is_active:     true,
-            usage_limit:   data.has_usage_limit ? (data.usage_limit ?? null) : null,
-            usage_count:   0,
-            expires_at:    data.has_expiry ? (data.expires_at ?? null) : null,
-          })
-          .select('*, chapters(name)')
-          .single()
-        if (dbErr) { setError(dbErr.message); return }
-        setCodes((prev) => [inserted as OrgCode, ...prev])
-      }
+      const inserted = await apiFetch<OrgCode>('/api/org-codes', {
+        method: 'POST',
+        body: JSON.stringify({
+          code:          data.code.toUpperCase(),
+          chapter_id:    data.chapter_id,
+          assigned_role: data.assigned_role,
+          usage_limit:   data.has_usage_limit ? (data.usage_limit ?? undefined) : undefined,
+          expires_at:    data.has_expiry ? (data.expires_at ?? undefined) : undefined,
+        }),
+      })
+      setCodes((prev) => [inserted, ...prev])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed')
       return

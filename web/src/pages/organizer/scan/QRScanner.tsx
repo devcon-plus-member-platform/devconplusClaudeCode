@@ -251,44 +251,16 @@ export function OrgQRScanner() {
     isProcessingRef.current = true
 
     try {
-      const USE_FIREBASE = (import.meta.env.VITE_AUTH_PROVIDER as string) === 'firebase'
       type ScanData = {
         success: boolean; pending?: boolean; registration_id?: string
         member_name?: string; points_awarded?: number; event_title?: string
         already_checked_in?: boolean; error?: string
       }
-      let data: ScanData | null = null
-
-      if (USE_FIREBASE) {
-        const { apiFetch } = await import('../../../lib/api')
-        data = await apiFetch<ScanData>('/api/qr/scan', {
-          method: 'POST',
-          body: JSON.stringify({ token }),
-        })
-      } else {
-        const { supabase, getBridgeToken } = await import('../../../lib/supabase')
-        const accessToken = getBridgeToken()
-        if (!accessToken) {
-          showOverlay({ type: 'error', message: 'Session expired. Please sign in again.' })
-          isProcessingRef.current = false
-          return
-        }
-        const res = await supabase.functions.invoke<ScanData>('award-points-on-scan', {
-          body: { token },
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
-        if (res.error) {
-          let msg = 'Scan failed. Try again.'
-          try {
-            const body = await (res.error as unknown as { context: Response }).context.json() as { error?: string; message?: string }
-            if (body?.error) msg = body.error
-            else if (body?.message) msg = body.message
-          } catch { /* non-JSON */ }
-          showOverlay({ type: 'error', message: msg })
-          return
-        }
-        data = res.data
-      }
+      const { apiFetch } = await import('../../../lib/api')
+      const data = await apiFetch<ScanData>('/api/qr/scan', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      })
 
       if (data?.pending && data.registration_id) {
         showOverlay({
@@ -324,32 +296,15 @@ export function OrgQRScanner() {
 
   const handleDoorAction = async (registrationId: string, action: 'approve' | 'reject') => {
     try {
-      const USE_FIREBASE = (import.meta.env.VITE_AUTH_PROVIDER as string) === 'firebase'
       type DoorData = {
         success: boolean; rejected?: boolean; already_approved?: boolean
         member_name?: string; points_awarded?: number; event_title?: string; error?: string
       }
-      let data: DoorData | null = null
-
-      if (USE_FIREBASE) {
-        const { apiFetch } = await import('../../../lib/api')
-        data = await apiFetch<DoorData>('/api/qr/door-action', {
-          method: 'POST',
-          body: JSON.stringify({ registrationId, action }),
-        })
-      } else {
-        const { supabase, getBridgeToken } = await import('../../../lib/supabase')
-        const accessToken = getBridgeToken() ?? ''
-        const res = await supabase.functions.invoke<DoorData>('approve-at-door', {
-          body: { registration_id: registrationId, action },
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
-        if (res.error || !res.data?.success) {
-          showOverlay({ type: 'error', message: res.data?.error ?? 'Action failed. Try again.' })
-          return
-        }
-        data = res.data
-      }
+      const { apiFetch } = await import('../../../lib/api')
+      const data = await apiFetch<DoorData>('/api/qr/door-action', {
+        method: 'POST',
+        body: JSON.stringify({ registrationId, action }),
+      })
 
       if (!data?.success) {
         showOverlay({ type: 'error', message: data?.error ?? 'Action failed. Try again.' })

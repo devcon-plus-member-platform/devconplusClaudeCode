@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { UserSpeakOutline } from 'solar-icon-set'
-import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { toast } from 'sonner'
 import { useOrganizerUser } from '../stores/useOrgAuthStore'
-
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 interface Props {
   eventId: string
@@ -33,17 +30,10 @@ export default function SendAnnouncementSheet({ eventId, eventTitle, isOpen, onC
     setIsSending(true)
     setSendError(null)
     try {
-      if (USE_FIREBASE) {
-        await apiFetch('/api/announcements', {
-          method: 'POST',
-          body: JSON.stringify({ event_id: eventId, message: message.trim() }),
-        })
-      } else {
-        const { error } = await supabase
-          .from('event_announcements')
-          .insert({ event_id: eventId, organizer_id: organizerUser.id, message: message.trim() })
-        if (error) throw error
-      }
+      await apiFetch('/api/announcements', {
+        method: 'POST',
+        body: JSON.stringify({ event_id: eventId, message: message.trim() }),
+      })
     } catch {
       setSendError('Failed to send. Please try again.')
       setIsSending(false)

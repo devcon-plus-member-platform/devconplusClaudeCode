@@ -9,10 +9,8 @@ import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { resolveEventTheme } from '../../lib/eventTheme'
-import { supabase, getBridgeToken } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
-
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 // Animation variants
 const cardVariants: Variants = {
@@ -103,35 +101,17 @@ export default function EventTicket() {
       setIsRefreshing(true)
       setFetchError(false)
 
-      if (USE_FIREBASE) {
-        try {
-          const data = await apiFetch<{ token: string; expires_at: number }>(
-            '/api/qr/registration-token',
-            { method: 'POST', body: JSON.stringify({ registrationId: reg!.id }) },
-          )
-          if (cancelled) return
-          setToken(data.token)
-          setSecondsLeft(30)
-        } catch {
-          if (!cancelled) { setFetchError(true); inErrorState = true }
-        }
-        setIsRefreshing(false)
-        return
+      try {
+        const data = await apiFetch<{ token: string; expires_at: number }>(
+          '/api/qr/registration-token',
+          { method: 'POST', body: JSON.stringify({ registrationId: reg!.id }) },
+        )
+        if (cancelled) return
+        setToken(data.token)
+        setSecondsLeft(30)
+      } catch {
+        if (!cancelled) { setFetchError(true); inErrorState = true }
       }
-
-      // Legacy path
-      const accessToken = getBridgeToken()
-      if (!accessToken) {
-        navigate('/sign-in', { replace: true })
-        return
-      }
-      const { data, error } = await supabase.functions.invoke<{ token: string; expires_at: number }>(
-        'generate-qr-token',
-        { body: { registration_id: reg!.id }, headers: { Authorization: `Bearer ${accessToken}` } },
-      )
-      if (cancelled) return
-      if (error || !data?.token) { setFetchError(true); inErrorState = true }
-      else { setToken(data.token); setSecondsLeft(30) }
       setIsRefreshing(false)
     }
 

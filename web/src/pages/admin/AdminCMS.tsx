@@ -3,8 +3,6 @@ import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuot
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import AdminUpgradeRequests from './AdminUpgradeRequests'
-
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -633,17 +631,8 @@ function ArticlesTab() {
   const load = async () => {
     setLoading(true)
     try {
-      if (USE_FIREBASE) {
-        const data = await publicFetch<NewsPost[]>('/api/news')
-        setRows(data)
-      } else {
-        const { data, error: err } = await supabase
-          .from('news_posts')
-          .select('*')
-          .order('created_at', { ascending: false })
-        if (err) setError(err.message)
-        else setRows((data ?? []) as NewsPost[])
-      }
+      const data = await publicFetch<NewsPost[]>('/api/news')
+      setRows(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load articles')
     } finally {
@@ -684,21 +673,10 @@ function ArticlesTab() {
       is_promoted: form.is_promoted,
     }
     try {
-      if (USE_FIREBASE) {
-        if (slideOver === 'create') {
-          await apiFetch('/api/news', { method: 'POST', body: JSON.stringify(payload) })
-        } else if (editingItem) {
-          await apiFetch(`/api/news/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-        }
-      } else {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (slideOver === 'create') {
-          const { error: err } = await supabase.from('news_posts').insert({ ...payload, author_id: user?.id ?? null })
-          if (err) throw err
-        } else if (editingItem) {
-          const { error: err } = await supabase.from('news_posts').update(payload).eq('id', editingItem.id)
-          if (err) throw err
-        }
+      if (slideOver === 'create') {
+        await apiFetch('/api/news', { method: 'POST', body: JSON.stringify(payload) })
+      } else if (editingItem) {
+        await apiFetch(`/api/news/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
       }
       setSlideOver(null)
       await load()
@@ -711,12 +689,7 @@ function ArticlesTab() {
 
   const handleDelete = async (id: string) => {
     try {
-      if (USE_FIREBASE) {
-        await apiFetch<void>(`/api/news/${id}`, { method: 'DELETE' })
-      } else {
-        const { error: err } = await supabase.from('news_posts').delete().eq('id', id)
-        if (err) throw err
-      }
+      await apiFetch<void>(`/api/news/${id}`, { method: 'DELETE' })
       setRows((prev) => prev.filter((n) => n.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
@@ -937,18 +910,8 @@ function MissionsTab() {
   const loadMissions = async () => {
     setLoadingMissions(true)
     try {
-      if (USE_FIREBASE) {
-        const data = await apiFetch<MissionRow[]>('/api/missions/admin')
-        setRows(data)
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error: err } = await (supabase as any)
-          .from('missions')
-          .select('*')
-          .order('created_at', { ascending: false })
-        if (err) setError(err.message)
-        else setRows((data ?? []) as MissionRow[])
-      }
+      const data = await apiFetch<MissionRow[]>('/api/missions/admin')
+      setRows(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load missions')
     } finally {
@@ -959,19 +922,8 @@ function MissionsTab() {
   const loadQueue = async () => {
     setLoadingQueue(true)
     try {
-      if (USE_FIREBASE) {
-        const data = await apiFetch<MissionSubmissionRow[]>('/api/missions/queue')
-        setQueue(data)
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error: err } = await (supabase as any)
-          .from('mission_submissions')
-          .select('*, missions:mission_id(title), profiles:user_id(full_name, email)')
-          .eq('status', 'pending')
-          .order('submitted_at', { ascending: true })
-        if (err) setApproveError(err.message)
-        else setQueue((data ?? []) as MissionSubmissionRow[])
-      }
+      const data = await apiFetch<MissionSubmissionRow[]>('/api/missions/queue')
+      setQueue(data)
     } catch (err) {
       setApproveError(err instanceof Error ? err.message : 'Failed to load queue')
     } finally {
@@ -1014,22 +966,10 @@ function MissionsTab() {
       is_active:       form.is_active,
     }
     try {
-      if (USE_FIREBASE) {
-        if (slideOver === 'create') {
-          await apiFetch('/api/missions', { method: 'POST', body: JSON.stringify(payload) })
-        } else if (editingItem) {
-          await apiFetch(`/api/missions/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-        }
-      } else {
-        if (slideOver === 'create') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: err } = await (supabase as any).from('missions').insert(payload)
-          if (err) throw err
-        } else if (editingItem) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: err } = await (supabase as any).from('missions').update(payload).eq('id', editingItem.id)
-          if (err) throw err
-        }
+      if (slideOver === 'create') {
+        await apiFetch('/api/missions', { method: 'POST', body: JSON.stringify(payload) })
+      } else if (editingItem) {
+        await apiFetch(`/api/missions/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
       }
       setSlideOver(null)
       await loadMissions()
@@ -1042,13 +982,7 @@ function MissionsTab() {
 
   const handleDelete = async (id: string) => {
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/missions/${id}`, { method: 'DELETE' })
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: err } = await (supabase as any).from('missions').delete().eq('id', id)
-        if (err) { setError(err.message); return }
-      }
+      await apiFetch(`/api/missions/${id}`, { method: 'DELETE' })
       setRows((prev) => prev.filter((m) => m.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
@@ -1060,16 +994,10 @@ function MissionsTab() {
     setTogglingStatusId(m.id)
     const nextActive = !m.is_active
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/missions/${m.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ is_active: nextActive }),
-        })
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: err } = await (supabase as any).from('missions').update({ is_active: nextActive }).eq('id', m.id)
-        if (err) { setError(err.message); return }
-      }
+      await apiFetch(`/api/missions/${m.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: nextActive }),
+      })
       setRows((prev) => prev.map((r) => (r.id === m.id ? { ...r, is_active: nextActive } : r)))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Toggle failed')
@@ -1082,12 +1010,7 @@ function MissionsTab() {
     setApprovingId(subId)
     setApproveError(null)
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/missions/submissions/${subId}/approve`, { method: 'POST' })
-      } else {
-        const { error: err } = await supabase.rpc('approve_mission_winner' as never, { sub_id: subId } as never)
-        if (err) throw err
-      }
+      await apiFetch(`/api/missions/submissions/${subId}/approve`, { method: 'POST' })
       setQueue((prev) => prev.filter((s) => s.id !== subId))
       await loadMissions()
     } catch (err) {
@@ -1326,17 +1249,8 @@ function XpTiersTab() {
   const load = async () => {
     setLoading(true)
     try {
-      if (USE_FIREBASE) {
-        const data = await apiFetch<XpTier[]>('/api/points/tiers')
-        setRows(data)
-      } else {
-        const { data, error: err } = await supabase
-          .from('xp_tiers')
-          .select('*')
-          .order('min_points')
-        if (err) setError(err.message)
-        else setRows((data ?? []) as XpTier[])
-      }
+      const data = await apiFetch<XpTier[]>('/api/points/tiers')
+      setRows(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load tiers')
     } finally {
@@ -1375,20 +1289,10 @@ function XpTiersTab() {
       badge_color: form.badge_color.trim() || null,
     }
     try {
-      if (USE_FIREBASE) {
-        if (slideOver === 'create') {
-          await apiFetch('/api/points/tiers', { method: 'POST', body: JSON.stringify(payload) })
-        } else if (editingItem) {
-          await apiFetch(`/api/points/tiers/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
-        }
-      } else {
-        if (slideOver === 'create') {
-          const { error: err } = await supabase.from('xp_tiers').insert(payload)
-          if (err) throw err
-        } else if (editingItem) {
-          const { error: err } = await supabase.from('xp_tiers').update(payload).eq('id', editingItem.id)
-          if (err) throw err
-        }
+      if (slideOver === 'create') {
+        await apiFetch('/api/points/tiers', { method: 'POST', body: JSON.stringify(payload) })
+      } else if (editingItem) {
+        await apiFetch(`/api/points/tiers/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
       }
       setSlideOver(null)
       await load()
@@ -1401,14 +1305,8 @@ function XpTiersTab() {
 
   const handleDelete = async (id: string) => {
     try {
-      if (USE_FIREBASE) {
-        await apiFetch(`/api/points/tiers/${id}`, { method: 'DELETE' })
-        setRows((prev) => prev.filter((t) => t.id !== id))
-      } else {
-        const { error: err } = await supabase.from('xp_tiers').delete().eq('id', id)
-        if (err) setError(err.message)
-        else setRows((prev) => prev.filter((t) => t.id !== id))
-      }
+      await apiFetch(`/api/points/tiers/${id}`, { method: 'DELETE' })
+      setRows((prev) => prev.filter((t) => t.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
     }

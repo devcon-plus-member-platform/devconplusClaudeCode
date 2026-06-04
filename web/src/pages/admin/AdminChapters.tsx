@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PenOutline, CheckCircleOutline, CloseCircleLineDuotone, AddCircleOutline, TrashBinTrashOutline, AltArrowDownOutline } from 'solar-icon-set'
-import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Chapter, Region } from '@devcon-plus/supabase'
-
-const USE_FIREBASE = import.meta.env.VITE_AUTH_PROVIDER === 'firebase'
 
 const REGIONS: Region[] = ['Luzon', 'Visayas', 'Mindanao']
 
@@ -272,22 +269,12 @@ export default function AdminChapters() {
         let chapterRows: Chapter[] = []
         let xpRows: ChapterXpRow[] = []
 
-        if (USE_FIREBASE) {
-          const [chaptersData, xpData] = await Promise.all([
-            publicFetch<Chapter[]>('/api/chapters'),
-            apiFetch<ChapterXpRow[]>('/api/chapters/xp'),
-          ])
-          chapterRows = chaptersData
-          xpRows = xpData
-        } else {
-          const [chaptersRes, xpRes] = await Promise.all([
-            supabase.from('chapters').select('*').order('name'),
-            supabase.rpc('get_xp_by_chapter'),
-          ])
-          if (chaptersRes.error) throw chaptersRes.error
-          chapterRows = (chaptersRes.data ?? []) as Chapter[]
-          xpRows = ((xpRes.data ?? []) as ChapterXpRow[])
-        }
+        const [chaptersData, xpData] = await Promise.all([
+          publicFetch<Chapter[]>('/api/chapters'),
+          apiFetch<ChapterXpRow[]>('/api/chapters/xp'),
+        ])
+        chapterRows = chaptersData
+        xpRows = xpData
 
         setChapters(chapterRows)
         const lookup: Record<string, number> = {}
@@ -317,22 +304,11 @@ export default function AdminChapters() {
     setSaving(true)
     setError(null)
     try {
-      if (USE_FIREBASE) {
-        const updated = await apiFetch<Chapter>(`/api/chapters/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ name: editName, region: editRegion }),
-        })
-        setChapters((prev) => prev.map((c) => c.id === id ? updated : c))
-      } else {
-        const { error: dbErr } = await supabase
-          .from('chapters')
-          .update({ name: editName, region: editRegion })
-          .eq('id', id)
-        if (dbErr) throw dbErr
-        setChapters((prev) =>
-          prev.map((c) => c.id === id ? { ...c, name: editName, region: editRegion } : c)
-        )
-      }
+      const updated = await apiFetch<Chapter>(`/api/chapters/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: editName, region: editRegion }),
+      })
+      setChapters((prev) => prev.map((c) => c.id === id ? updated : c))
       setEditingId(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed')
@@ -346,21 +322,10 @@ export default function AdminChapters() {
     setAdding(true)
     setError(null)
     try {
-      let created: Chapter
-      if (USE_FIREBASE) {
-        created = await apiFetch<Chapter>('/api/chapters', {
-          method: 'POST',
-          body: JSON.stringify({ name: addName.trim(), region: addRegion }),
-        })
-      } else {
-        const { data, error: dbErr } = await supabase
-          .from('chapters')
-          .insert({ name: addName.trim(), region: addRegion })
-          .select()
-          .single()
-        if (dbErr) throw dbErr
-        created = data as Chapter
-      }
+      const created = await apiFetch<Chapter>('/api/chapters', {
+        method: 'POST',
+        body: JSON.stringify({ name: addName.trim(), region: addRegion }),
+      })
 
       setChapters((prev) =>
         [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
@@ -378,12 +343,7 @@ export default function AdminChapters() {
     setDeletingId(id)
     setError(null)
     try {
-      if (USE_FIREBASE) {
-        await apiFetch<void>(`/api/chapters/${id}`, { method: 'DELETE' })
-      } else {
-        const { error: dbErr } = await supabase.from('chapters').delete().eq('id', id)
-        if (dbErr) throw dbErr
-      }
+      await apiFetch<void>(`/api/chapters/${id}`, { method: 'DELETE' })
       setChapters((prev) => prev.filter((c) => c.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
