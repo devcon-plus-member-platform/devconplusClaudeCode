@@ -64,7 +64,7 @@ function EventCard({
         <div className="space-y-3">
           {/* Title and Meta */}
           <div className="space-y-1">
-            <p className="font-proxima font-bold text-white text-md3-title-lg leading-tight line-clamp-2 break-words">
+            <p className="font-proxima font-bold text-white text-md3-title-lg leading-tight line-clamp-2">
               {event.title}
             </p>
             <div className="flex items-center gap-1 min-w-0">
@@ -80,7 +80,7 @@ function EventCard({
 
           {/* Badges/Chips */}
           <div className="flex flex-wrap gap-2">
-            {event.is_featured && (
+            {isExternal && (
               <span className="backdrop-blur-[16px] bg-[rgba(248,198,48,0.95)] text-[#7a5c00] text-[9px] font-proxima font-semibold tracking-[0.9px] uppercase px-2 py-0.5 rounded-[100px] whitespace-nowrap inline-flex items-center gap-1 justify-center leading-[13.5px]">
                 <StarOutline className="w-[6px] h-[6px]" color="#7a5c00" />
                 Featured
