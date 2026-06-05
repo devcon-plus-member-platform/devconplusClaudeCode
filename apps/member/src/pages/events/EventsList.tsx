@@ -188,12 +188,22 @@ export default function EventsList() {
     ? (chapters.find((c) => c.id === selectedChapterId)?.name ?? null)
     : 'All Chapters'
 
-  // We use events.find on the FULL list to ensure tickets show even if they are for a different chapter
+  // We use events.find on the FULL list to ensure tickets show even if they are for a different chapter.
+  // Ordering: active tickets first (soonest event first), then expired tickets (most recent first).
   const allTickets: TicketEntry[] = useMemo(() => registrations
     .filter((r) => r.status === 'approved' || r.status === 'pending')
     .map((r) => ({ reg: r, event: events.find((e) => e.id === r.event_id) }))
     .filter((item): item is TicketEntry => item.event !== undefined)
-    .sort((a, b) => (a.reg.status === 'approved' ? -1 : 1) - (b.reg.status === 'approved' ? -1 : 1)),
+    .sort((a, b) => {
+      const aExpired = a.reg.checked_in || getEventLifecycleState(a.event) === 'done'
+      const bExpired = b.reg.checked_in || getEventLifecycleState(b.event) === 'done'
+      // Active tickets always sort above expired ones
+      if (aExpired !== bExpired) return aExpired ? 1 : -1
+      const aTime = a.event.event_date ? new Date(a.event.event_date).getTime() : 0
+      const bTime = b.event.event_date ? new Date(b.event.event_date).getTime() : 0
+      // Active: soonest upcoming first (asc). Expired: most recently passed first (desc).
+      return aExpired ? bTime - aTime : aTime - bTime
+    }),
   [registrations, events])
 
   const filteredTickets = useMemo(() => allTickets.filter(item =>
