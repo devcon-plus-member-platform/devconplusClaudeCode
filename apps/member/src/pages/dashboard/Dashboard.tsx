@@ -9,6 +9,7 @@ import { usePointsStore } from '../../stores/usePointsStore'
 import { useMissionsStore } from '../../stores/useMissionsStore'
 import { supabase } from '../../lib/supabase'
 import EventCard from '../../components/EventCard'
+import FeaturedBadge from '../../components/FeaturedBadge'
 import JobCard from '../../components/JobCard'
 import VolunteerXpCard from '../../components/VolunteerXpCard'
 import {
@@ -121,17 +122,26 @@ useEffect(() => {
     .filter((e) => e.status === 'upcoming' && !isEventArchived(e))
     .sort((a, b) => new Date(a.event_date ?? 0).getTime() - new Date(b.event_date ?? 0).getTime())
 
+  // Featured (external) events are surfaced in the banner first — ALL of them,
+  // then regular upcoming events fill the remaining slots.
+  const featuredUpcoming = upcomingByDate.filter((e) => e.is_external)
+  const regularUpcoming = upcomingByDate.filter((e) => !e.is_external)
+
+  const toBanner = (e: typeof upcomingByDate[number]) => ({
+    title: e.title,
+    sub:   e.location ?? 'DEVCON Philippines',
+    date:  e.event_date ? formatDate.compact(e.event_date) : undefined,
+    cta:   e.is_external ? 'Open Registration' : 'Register Now',
+    image: e.cover_image_url ?? '/photos/devcon-certificate-ceremony.jpg',
+    isExternal: e.is_external === true,
+    onClick: () => navigate(`/events/${e.slug}`),
+  })
+
   const banners = [
     { ...WELCOME_BANNER, onClick: () => navigate('/news/welcome') },
-    ...upcomingByDate.slice(0, 2).map((e) => ({
-      title: e.title,
-      sub:   e.location ?? 'DEVCON Philippines',
-      date:  e.event_date ? formatDate.compact(e.event_date) : undefined,
-      cta:   'Register Now',
-      image: e.cover_image_url ?? '/photos/devcon-certificate-ceremony.jpg',
-      onClick: () => navigate(`/events/${e.slug}`),
-    })),
-  ].slice(0, 3)
+    ...featuredUpcoming.map(toBanner),
+    ...regularUpcoming.slice(0, 2).map(toBanner),
+  ]
 
   bannersLengthRef.current = banners.length
   const safeIdx = bannerIdx % Math.max(banners.length, 1)
@@ -255,30 +265,37 @@ useEffect(() => {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.35 }}
               >
-                <div className="flex flex-col flex-1 gap-1 items-start w-full">
-                  <p className="font-proxima font-bold text-md3-headline-sm text-white leading-normal line-clamp-2 w-full">
-                    {banner.title}
-                  </p>
-                  
-                  <div className="flex flex-1 items-start w-full">
-                    <div className="flex gap-1 items-center flex-wrap">
+                {/* Featured badge — top-right of the banner (fills the empty right side) */}
+                {'isExternal' in banner && banner.isExternal && (
+                  <div className="absolute top-5 right-5 z-10">
+                    <FeaturedBadge />
+                  </div>
+                )}
+
+                <div className="flex flex-col justify-between items-start flex-1 w-full min-w-0">
+                  {/* Text block — limited to the left portion of the card */}
+                  <div className="w-full max-w-[55%] min-w-0">
+                    <p className="font-proxima font-bold text-md3-headline-sm text-white leading-normal line-clamp-2 break-words">
+                      {banner.title}
+                    </p>
+                    <div className="flex items-center gap-1 w-full min-w-0 mt-1">
                       {'date' in banner && banner.date && (
                         <>
-                          <p className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase">
+                          <span className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase shrink-0">
                             {banner.date}
-                          </p>
-                          <div className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
+                          </span>
+                          <span className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
                         </>
                       )}
-                      <p className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase line-clamp-1">
+                      <span className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase truncate min-w-0 flex-1">
                         {banner.sub}
-                      </p>
+                      </span>
                     </div>
                   </div>
 
                   <button
                     onClick={(e) => { e.stopPropagation(); banner?.onClick() }}
-                    className="bg-primary text-white text-md3-label-md font-semibold px-[18px] py-[12px] rounded-full flex items-center justify-center shrink-0 leading-none shadow-sm"
+                    className="bg-primary text-white text-md3-label-md font-semibold px-[18px] py-[12px] rounded-full flex items-center justify-center shrink-0 leading-none shadow-sm self-start"
                   >
                     {banner.cta}
                   </button>

@@ -474,22 +474,22 @@ export default function EventsList() {
                       {/* Right Side: Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
+                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate min-w-0 flex-1">
                             {event.title}
                           </p>
                           <AltArrowRightOutline className="w-3.5 h-3.5 shrink-0 text-slate-300 mt-0.5" />
                         </div>
 
                         {/* Date Text */}
-                        <p className="text-[11px] text-slate-500 mb-0.5">
+                        <p className="text-[11px] text-slate-500 mb-0.5 truncate">
                           {event.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No date set'}
                         </p>
 
                         {/* Location */}
                         {event.location && (
-                          <p className="text-[11px] text-slate-400 truncate mb-1.5 flex items-center gap-1">
-                            <MapPointOutline className="w-2.5 h-2.5" color="#94A3B8" />
-                            {event.location}
+                          <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1 min-w-0">
+                            <MapPointOutline className="w-2.5 h-2.5 shrink-0" color="#94A3B8" />
+                            <span className="truncate min-w-0">{event.location}</span>
                           </p>
                         )}
 
@@ -620,22 +620,22 @@ export default function EventsList() {
                       {/* Right Side: Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
+                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate min-w-0 flex-1">
                             {ev.title}
                           </p>
                           <AltArrowRightOutline className="w-3.5 h-3.5 shrink-0 text-slate-300 mt-0.5" />
                         </div>
 
                         {/* Date Text */}
-                        <p className="text-[11px] text-slate-500 mb-0.5">
+                        <p className="text-[11px] text-slate-500 mb-0.5 truncate">
                           {ev.event_date ? new Date(ev.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No date set'}
                         </p>
 
                         {/* Location */}
                         {ev.location && (
-                          <p className="text-[11px] text-slate-400 truncate mb-1.5 flex items-center gap-1">
-                            <MapPointOutline className="w-2.5 h-2.5" color="#94A3B8" />
-                            {ev.location}
+                          <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1 min-w-0">
+                            <MapPointOutline className="w-2.5 h-2.5 shrink-0" color="#94A3B8" />
+                            <span className="truncate min-w-0">{ev.location}</span>
                           </p>
                         )}
 

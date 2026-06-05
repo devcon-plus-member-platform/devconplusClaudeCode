@@ -4,6 +4,7 @@ import { CalendarOutline, StarOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import type { Event } from '@devcon-plus/supabase'
 import PromotedBadge from './PromotedBadge'
+import FeaturedBadge from './FeaturedBadge'
 import StatusPill from './StatusPill'
 import { formatDate, isEventArchived } from '../lib/dates'
 
@@ -67,12 +68,12 @@ function EventCard({
             <p className="font-proxima font-bold text-white text-md3-title-lg leading-tight line-clamp-2">
               {event.title}
             </p>
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-center gap-1 w-full min-w-0">
               <p className="font-proxima text-[#dfdfdf] text-[12px] tracking-[0.48px] uppercase shrink-0">
                 {dateStr}
               </p>
               <div className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
-              <p className="font-proxima text-[#dfdfdf] text-[12px] tracking-[0.48px] uppercase truncate min-w-0">
+              <p className="font-proxima text-[#dfdfdf] text-[12px] tracking-[0.48px] uppercase truncate min-w-0 flex-1">
                 {event.location ?? 'DEVCON Philippines'}
               </p>
             </div>
@@ -80,12 +81,7 @@ function EventCard({
 
           {/* Badges/Chips */}
           <div className="flex flex-wrap gap-2">
-            {isExternal && (
-              <span className="backdrop-blur-[16px] bg-[rgba(248,198,48,0.95)] text-[#7a5c00] text-[9px] font-proxima font-semibold tracking-[0.9px] uppercase px-2 py-0.5 rounded-[100px] whitespace-nowrap inline-flex items-center gap-1 justify-center leading-[13.5px]">
-                <StarOutline className="w-[6px] h-[6px]" color="#7a5c00" />
-                Featured
-              </span>
-            )}
+            {isExternal && <FeaturedBadge />}
             <StatusPill status={event.status as any} />
             {event.is_promoted && <PromotedBadge />}
             {!isExternal && (
