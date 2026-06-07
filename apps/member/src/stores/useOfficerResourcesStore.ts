@@ -9,7 +9,7 @@ import type { OfficerLink } from '../lib/officerResources'
 interface OfficerResourcesState {
   resources: OfficerLink[]      // category = 'resource'
   trainings: OfficerLink[]      // category = 'training'
-  seedFundsUrl: string          // first active 'seed_funds' href ('' if none)
+  planning: OfficerLink[]       // category = 'seed_funds' ("Plan Your Chapter Event")
   loaded: boolean
   isLoading: boolean
   fetch: () => Promise<void>
@@ -18,7 +18,7 @@ interface OfficerResourcesState {
 export const useOfficerResourcesStore = create<OfficerResourcesState>((set, get) => ({
   resources: [],
   trainings: [],
-  seedFundsUrl: '',
+  planning: [],
   loaded: false,
   isLoading: false,
 
@@ -47,7 +47,7 @@ export const useOfficerResourcesStore = create<OfficerResourcesState>((set, get)
     set({
       resources: rows.filter((r) => r.category === 'resource').map(toLink),
       trainings: rows.filter((r) => r.category === 'training').map(toLink),
-      seedFundsUrl: rows.find((r) => r.category === 'seed_funds')?.href ?? '',
+      planning: rows.filter((r) => r.category === 'seed_funds').map(toLink),
       loaded: true,
       isLoading: false,
     })

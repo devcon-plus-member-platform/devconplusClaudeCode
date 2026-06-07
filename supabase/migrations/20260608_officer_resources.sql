@@ -63,17 +63,3 @@ CREATE TRIGGER officer_resources_set_updated_at
   BEFORE UPDATE ON officer_resources
   FOR EACH ROW EXECUTE FUNCTION set_officer_resources_updated_at();
 
--- Seed the existing hardcoded entries so nothing is lost. hrefs are left blank
--- for HQ to fill in from the admin panel (inactive until a URL is set).
--- Idempotent: only seeds when the table is empty (no unique key to ON CONFLICT on).
-INSERT INTO officer_resources (category, title, sort_order, is_active, href)
-SELECT * FROM (VALUES
-  ('resource', 'HQ Preview — 2025 DEVCON Chapter Leaders Playbook & Quarterly Success Checklist', 0, false, ''),
-  ('resource', '2025 Community Strategy Playbook & Shared Best Practices',                          1, false, ''),
-  ('resource', 'DEVCON Leaders Oath Taking for incoming officers',                                  2, false, ''),
-  ('resource', 'External partners view — DEVCON 2025 Programs and Calendar',                        3, false, ''),
-  ('resource', 'Post Event OR Liquidation — updated for 2026',                                      4, false, ''),
-  ('resource', '2025 Nationwide Internal Calendar',                                                 5, false, ''),
-  ('seed_funds', 'Request for Chapter Event or Special Programs Support',                           0, false, '')
-) AS seed(category, title, sort_order, is_active, href)
-WHERE NOT EXISTS (SELECT 1 FROM officer_resources);

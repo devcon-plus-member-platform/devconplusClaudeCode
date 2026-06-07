@@ -21,5 +21,5 @@ export type OfficerResourceCategory = 'resource' | 'training' | 'seed_funds'
 export const OFFICER_CATEGORY_LABELS: Record<OfficerResourceCategory, string> = {
   resource: 'Review Resources',
   training: 'Training Archive',
-  seed_funds: 'Request Seed Funds',
+  seed_funds: 'Plan Your Chapter Event',
 }
