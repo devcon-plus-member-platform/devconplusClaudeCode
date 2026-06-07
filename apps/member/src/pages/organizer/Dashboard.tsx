@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline } from 'solar-icon-set'
+import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, HandMoneyOutline, SquareAcademicCapOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ApprovalCard, type Registration } from '../../components/ApprovalCard'
 import { VolunteerApprovalCard } from '../../components/VolunteerApprovalCard'
+import ResourceLinksSheet from '../../components/ResourceLinksSheet'
 import { useOrganizerUser } from '../../stores/useOrgAuthStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useOrgVolunteerStore } from '../../stores/useOrgVolunteerStore'
 import { supabase } from '../../lib/supabase'
 import { fadeUp, staggerContainer, cardItem } from '../../lib/animation'
+import { useOfficerResourcesStore } from '../../stores/useOfficerResourcesStore'
 import logoMark from '../../assets/logos/logo-mark.svg'
 
 type TabId = 'approvals' | 'volunteers'
+type SheetId = 'resources' | 'training' | null
 
 // Flower-of-life / Clover pattern matching Figma branding
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -30,8 +33,10 @@ export function OrgDashboard() {
     revertApplication,
     loadApplications: loadVolunteerApps,
   } = useOrgVolunteerStore()
+  const { resources: officerResources, trainings: officerTrainings, seedFundsUrl, fetch: fetchOfficerResources } = useOfficerResourcesStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabId>('approvals')
+  const [openSheet, setOpenSheet] = useState<SheetId>(null)
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [membersCount, setMembersCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -40,6 +45,7 @@ export function OrgDashboard() {
 
   useEffect(() => {
     void fetchEvents()
+    void fetchOfficerResources()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -101,6 +107,11 @@ export function OrgDashboard() {
   const pendingRegistrations = registrations.filter((r) => r.status === 'pending')
   const pendingVolunteers = volunteerApps.filter((a) => a.status === 'pending')
   const totalPending = pendingRegistrations.length + pendingVolunteers.length
+
+  const handleSeedFunds = () => {
+    if (!seedFundsUrl) return
+    window.open(seedFundsUrl, '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -198,6 +209,47 @@ export function OrgDashboard() {
         initial="hidden"
         animate="visible"
       >
+        {/* Quick Actions — mirrors the member dashboard's 3-up action row */}
+        <motion.section variants={fadeUp} className="mb-5">
+          <div className="grid grid-cols-3 gap-3">
+            {/* Review Resources → opens resource slider */}
+            <motion.button
+              onClick={() => setOpenSheet('resources')}
+              className="bg-[rgba(17,82,212,0.10)] border border-[rgba(17,82,212,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(0,16,56,0.08)] w-full py-4"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
+                <BookOutline color="#1152D4" size={24} />
+              </div>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Review Resources</span>
+            </motion.button>
+
+            {/* Request Seed Funds → direct link */}
+            <motion.button
+              onClick={handleSeedFunds}
+              className="bg-[rgba(115,178,9,0.15)] border border-[rgba(70,144,17,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(25,39,0,0.1)] w-full py-4"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
+                <HandMoneyOutline color="rgb(70,144,17)" size={24} />
+              </div>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Request Seed Funds</span>
+            </motion.button>
+
+            {/* View Training Archive → opens training slider */}
+            <motion.button
+              onClick={() => setOpenSheet('training')}
+              className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
+                <SquareAcademicCapOutline color="#D2AD19" size={24} />
+              </div>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">View Training Archive</span>
+            </motion.button>
+          </div>
+        </motion.section>
+
         <motion.div variants={fadeUp} className="bg-[#eef4ff] inline-flex self-start items-center p-1 rounded-full mb-4">
           {(['approvals', 'volunteers'] as const).map((tab) => (
             <button
@@ -335,6 +387,22 @@ export function OrgDashboard() {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* Quick-action sliders */}
+      <ResourceLinksSheet
+        isOpen={openSheet === 'resources'}
+        onClose={() => setOpenSheet(null)}
+        title="Officer Resources"
+        subtitle="First time here? Start with these."
+        links={officerResources}
+      />
+      <ResourceLinksSheet
+        isOpen={openSheet === 'training'}
+        onClose={() => setOpenSheet(null)}
+        title="Training Archive"
+        subtitle="Recorded sessions and playbooks."
+        links={officerTrainings}
+      />
     </div>
   )
 }

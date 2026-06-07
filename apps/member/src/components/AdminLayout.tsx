@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { path: '/admin/events',    label: 'Events',     Icon: CalendarOutline,    end: false, superOnly: false },
   { path: '/admin/chapters',  label: 'Chapters',          Icon: BuildingsOutline,   end: false, superOnly: false },
   { path: '/admin/upgrades',  label: 'Chapter Management', Icon: ShieldCheckOutline, end: false, superOnly: false },
+  { path: '/admin/officer-resources', label: 'Officer Resources', Icon: NotebookOutline, end: false, superOnly: false },
   { path: '/admin/kiosk',     label: 'Kiosk',      Icon: ScannerOutline,        end: false, superOnly: true  },
 ]
 
