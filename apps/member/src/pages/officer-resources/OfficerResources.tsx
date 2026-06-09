@@ -12,6 +12,7 @@ import {
 } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useOfficerResourcesStore } from '../../stores/useOfficerResourcesStore'
+import { useAuthStore, ORGANIZER_ROLES } from '../../stores/useAuthStore'
 import {
   OFFICER_CATEGORY_ORDER,
   officerCategoryFromSlug,
@@ -34,23 +35,39 @@ const CATEGORY_ICON: Record<OfficerResourceCategory, SolarIcon> = {
 }
 
 /**
- * Public, shareable officer-resource page (one per category).
+ * Internal officer-resource page (one per category) at /officer-resources/:slug.
  *
- * Reachable WITHOUT an account at /officer-resources/:slug so upcoming chapter
- * officers can open a single link. RLS on `officer_resources` allows anon reads
- * of active rows (see migration 20260609_officer_resources_public_read.sql).
+ * Access is restricted to chapter officers and HQ / super admins — NOT the public
+ * and NOT regular members. Enforced at two layers:
+ *   1. RLS on `officer_resources` (see 20260609_officer_resources_restrict_to_officers.sql)
+ *      — anon/member reads return nothing, even via the API.
+ *   2. The role guard below — redirects non-officers away so they never see the page.
  */
 export default function OfficerResources() {
   const { category: slug } = useParams<{ category: string }>()
   const navigate = useNavigate()
   const meta = officerCategoryFromSlug(slug)
 
+  const user = useAuthStore((s) => s.user)
+  const isOfficer = !!user && (ORGANIZER_ROLES as readonly string[]).includes(user.role)
+
   const { resources, trainings, planning, loaded, isLoading, fetch } = useOfficerResourcesStore()
   const [copied, setCopied] = useState(false)
 
+  // Role guard. Auth is already initialized before the router mounts (see App.tsx),
+  // so `user` is reliable here: signed-out visitors get sent to sign-in (preserving
+  // the destination), and signed-in members are bounced to their home dashboard.
   useEffect(() => {
-    void fetch()
-  }, [fetch])
+    if (!user) {
+      navigate(`/sign-in?returnTo=${encodeURIComponent(window.location.pathname)}`, { replace: true })
+    } else if (!isOfficer) {
+      navigate('/home', { replace: true })
+    }
+  }, [user, isOfficer, navigate])
+
+  useEffect(() => {
+    if (isOfficer) void fetch()
+  }, [isOfficer, fetch])
 
   // Reset scroll to the top whenever the category changes. The cross-links reuse
   // this same route component (only the :category param changes), so without this
@@ -62,6 +79,10 @@ export default function OfficerResources() {
 
   // Unknown slug → 404 (kept after hooks so hook order stays stable).
   if (!meta) return <NotFound />
+
+  // Non-officers are mid-redirect (see guard effect above) — render nothing to
+  // avoid flashing officer content before navigation completes.
+  if (!isOfficer) return null
 
   const linksByCategory: Record<OfficerResourceCategory, OfficerLink[]> = {
     resource: resources,
@@ -240,38 +261,6 @@ export default function OfficerResources() {
                 </button>
               )
             })}
-          </div>
-        </div>
-
-        {/* Sign-up CTA — these pages are public, so visitors may not have an account yet */}
-        <div className="pt-2">
-          <div className="rounded-2xl bg-[#1152D4] px-5 py-6 text-center overflow-hidden relative">
-            <div
-              className="absolute inset-0 opacity-60"
-              style={{
-                backgroundImage: PATTERN_BG,
-                backgroundSize: '60px 60px',
-                backgroundRepeat: 'repeat',
-              }}
-            />
-            <div className="relative z-10">
-              <p className="text-white text-md3-title-md font-bold font-proxima">New to DEVCON+?</p>
-              <p className="text-white/80 text-md3-body-md font-proxima leading-snug mt-1 mb-4">
-                Create a free account to register for events, earn points, and unlock rewards.
-              </p>
-              <button
-                onClick={() => navigate('/sign-up')}
-                className="w-full h-11 rounded-full bg-white text-[#1152D4] text-md3-label-lg font-bold font-proxima active:bg-white/90 transition-colors"
-              >
-                Sign up
-              </button>
-              <button
-                onClick={() => navigate('/sign-in')}
-                className="mt-2 text-white/80 text-md3-label-md font-proxima underline-offset-2 hover:underline"
-              >
-                I already have an account
-              </button>
-            </div>
           </div>
         </div>
       </div>
