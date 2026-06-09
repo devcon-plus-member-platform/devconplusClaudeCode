@@ -26,7 +26,7 @@ const EVENT_FILTERS: { id: EventFilter; label: string }[] = [
   { id: 'all', label: 'All Events' },
   { id: 'near_you', label: 'Near You' },
   { id: 'devcon_only', label: 'DEVCON' },
-  { id: 'featured', label: 'Featured' },
+  { id: 'featured', label: 'Community Featured' },
 ]
 
 function formatEventDate(iso: string): { month: string; day: string } {
@@ -376,7 +376,7 @@ export default function EventsList() {
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">
                   {eventFilter === 'near_you' && 'No upcoming events nearby'}
                   {eventFilter === 'devcon_only' && 'No DEVCON events right now'}
-                  {eventFilter === 'featured' && 'No featured events'}
+                  {eventFilter === 'featured' && 'No community featured events'}
                   {eventFilter === 'all' && `No events in ${selectedChapterName}`}
                 </h3>
                 <p className="text-md3-body-md text-slate-500 text-center mb-5">

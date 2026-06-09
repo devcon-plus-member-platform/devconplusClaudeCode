@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import LegalModal, { type LegalModalType } from '../../components/LegalModal'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeftOutline, PenNewSquareOutline } from 'solar-icon-set'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeftOutline } from 'solar-icon-set'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase } from '../../lib/supabase'
@@ -136,7 +136,6 @@ export default function EventRegister() {
   const [schoolValue, setSchoolValue] = useState<string>(
     (draft.schoolValue as string) ?? user?.school_or_company ?? ''
   )
-  const [schoolSaved, setSchoolSaved] = useState(false)
 
   // Sync school field if profile loads after mount and draft has no override
   useEffect(() => {
@@ -165,6 +164,7 @@ export default function EventRegister() {
   const externalUrl = event?.external_registration_url ?? ''
 
   const isChapterBlocked = !!(event && user && event.is_chapter_locked === true && event.chapter_id !== user.chapter_id)
+  const hasSchoolOnProfile = !!user?.school_or_company?.trim()
 
   useEffect(() => {
     if (!event || !user) return
@@ -224,7 +224,6 @@ export default function EventRegister() {
       const trimmedSchool = schoolValue.trim()
       if (trimmedSchool && trimmedSchool !== (user.school_or_company ?? '')) {
         await useAuthStore.getState().updateProfile({ school_or_company: trimmedSchool })
-        setSchoolSaved(true)
       }
 
       await register(eventId, user.id)
@@ -306,16 +305,7 @@ export default function EventRegister() {
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4 pb-24">
         {/* Pre-filled profile fields */}
-        <div className="flex items-center justify-between">
-          <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details</p>
-          <Link
-            to="/profile/edit"
-            className="flex items-center gap-1 text-md3-label-md text-primary font-medium"
-          >
-            <PenNewSquareOutline size={14} color="rgb(var(--color-primary))" />
-            Edit Profile
-          </Link>
-        </div>
+        <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details</p>
 
         {/* Read-only: Full Name */}
         <div>
@@ -337,35 +327,35 @@ export default function EventRegister() {
           />
         </div>
 
-        {/* Editable: School / Company */}
+        {/* School / Company — read-only if already on profile, editable only when empty */}
         <div>
           <label className="text-md3-body-md font-medium text-slate-700 block mb-1">
             School / Company
           </label>
-          <input
-            type="text"
-            value={schoolValue}
-            onChange={(e) => {
-              setSchoolValue(e.target.value)
-              saveDraft({ formResponses, agreed, schoolValue: e.target.value })
-            }}
-            placeholder="e.g. University of the Philippines"
-            className={`w-full border rounded-xl px-4 py-3 text-md3-body-md text-slate-900 focus:outline-none focus:ring-1 transition-colors ${
-              !schoolValue.trim()
-                ? 'border-amber-300 bg-amber-50 focus:border-amber-400 focus:ring-amber-200 placeholder:text-amber-400'
-                : 'border-slate-200 bg-white focus:border-primary focus:ring-primary/20'
-            }`}
-          />
-          {!schoolValue.trim() ? (
-            <p className="text-md3-label-md text-amber-600 mt-1.5 flex items-center gap-1">
-              <span>Add your School/Company</span>
-            </p>
-          ) : schoolSaved ? (
-            <p className="text-md3-label-md text-green mt-1.5">Saved to your profile.</p>
+          {hasSchoolOnProfile ? (
+            <input
+              value={user.school_or_company ?? ''}
+              readOnly
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
+            />
           ) : (
-            <p className="text-md3-label-md text-slate-400 mt-1.5">Saved to your profile when you register.</p>
+            <input
+              type="text"
+              value={schoolValue}
+              onChange={(e) => {
+                setSchoolValue(e.target.value)
+                saveDraft({ formResponses, agreed, schoolValue: e.target.value })
+              }}
+              placeholder="e.g. University of the Philippines"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:ring-1 focus:border-primary focus:ring-primary/20"
+            />
           )}
         </div>
+
+        {/* Reminder: details are managed in settings */}
+        <p className="text-md3-label-md text-slate-400">
+          Need to change a detail? Update it anytime in your profile settings.
+        </p>
 
         {/* Dynamic custom fields */}
         {customSchema.length > 0 && (

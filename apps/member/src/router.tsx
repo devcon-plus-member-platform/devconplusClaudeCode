@@ -20,6 +20,7 @@ import OAuthProfileComplete from './pages/auth/OAuthProfileComplete'
 import NotFound from './pages/NotFound'
 import TermsAndConditions from './pages/legal/TermsAndConditions'
 import PrivacyPolicy from './pages/legal/PrivacyPolicy'
+import OfficerResources from './pages/officer-resources/OfficerResources'
 
 // Member tab pages
 import Dashboard from './pages/dashboard/Dashboard'
@@ -67,6 +68,8 @@ export const router = createBrowserRouter([
 
   // Public routes — no layout, no auth required
   { path: '/events/:slug',         element: <EventDetail /> },
+  // Shareable officer-resource pages (one per category) — open without an account
+  { path: '/officer-resources/:category', element: <OfficerResources /> },
 
   // Auth routes — no layout
   { path: '/onboarding',           element: <Onboarding /> },
@@ -141,6 +144,10 @@ export const router = createBrowserRouter([
       {
         path: '/admin/upgrades',
         lazy: () => import('./pages/admin/AdminCMS').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/admin/officer-resources',
+        lazy: () => import('./pages/admin/AdminOfficerResources').then((m) => ({ Component: m.default })),
       },
       {
         path: '/admin/kiosk',

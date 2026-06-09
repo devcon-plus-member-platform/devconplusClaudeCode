@@ -895,7 +895,8 @@ export function OrgEventCreate() {
                 </p>
               </div>
 
-              <div>
+              {/* Volunteer XP — temporarily disabled. Default value (500) still submitted via form defaultValues. */}
+              {/* <div>
                 <label className={labelClass}>Volunteer XP</label>
                 <input
                   {...register('volunteer_points')}
@@ -911,7 +912,7 @@ export function OrgEventCreate() {
                 <p className="text-md3-label-md text-slate-400 mt-1">
                   XP awarded on top of attendance XP for members who volunteer at this event. Default: 500 pts.
                 </p>
-              </div>
+              </div> */}
             </div>
           </motion.div>
         )}

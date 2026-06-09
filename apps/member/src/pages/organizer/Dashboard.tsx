@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline } from 'solar-icon-set'
+import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ApprovalCard, type Registration } from '../../components/ApprovalCard'
 import { VolunteerApprovalCard } from '../../components/VolunteerApprovalCard'
@@ -10,6 +10,7 @@ import { useEventsStore } from '../../stores/useEventsStore'
 import { useOrgVolunteerStore } from '../../stores/useOrgVolunteerStore'
 import { supabase } from '../../lib/supabase'
 import { fadeUp, staggerContainer, cardItem } from '../../lib/animation'
+import { OFFICER_CATEGORY_META } from '../../lib/officerResources'
 import logoMark from '../../assets/logos/logo-mark.svg'
 
 type TabId = 'approvals' | 'volunteers'
@@ -198,6 +199,47 @@ export function OrgDashboard() {
         initial="hidden"
         animate="visible"
       >
+        {/* Quick Actions — mirrors the member dashboard's 3-up action row */}
+        <motion.section variants={fadeUp} className="mb-5">
+          <div className="grid grid-cols-3 gap-3">
+            {/* Review Resources → shareable officer-resources page */}
+            <motion.button
+              onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.resource.slug}`)}
+              className="bg-[rgba(17,82,212,0.10)] border border-[rgba(17,82,212,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(0,16,56,0.08)] w-full py-4"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
+                <BookOutline color="#1152D4" size={24} />
+              </div>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Review Resources</span>
+            </motion.button>
+
+            {/* Seed Fund Request → shareable officer-resources page */}
+            <motion.button
+              onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.seed_funds.slug}`)}
+              className="bg-[rgba(115,178,9,0.15)] border border-[rgba(70,144,17,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(25,39,0,0.1)] w-full py-4"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
+                <ClipboardListOutline color="rgb(70,144,17)" size={24} />
+              </div>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Seed Fund Request</span>
+            </motion.button>
+
+            {/* Training and Policy → shareable officer-resources page */}
+            <motion.button
+              onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.training.slug}`)}
+              className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
+              whileTap={{ scale: 0.95 }}
+            >
+              <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
+                <SquareAcademicCapOutline color="#D2AD19" size={24} />
+              </div>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Training and Policy</span>
+            </motion.button>
+          </div>
+        </motion.section>
+
         <motion.div variants={fadeUp} className="bg-[#eef4ff] inline-flex self-start items-center p-1 rounded-full mb-4">
           {(['approvals', 'volunteers'] as const).map((tab) => (
             <button
