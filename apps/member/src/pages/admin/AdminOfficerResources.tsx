@@ -20,6 +20,7 @@ interface ResourceRow {
   title: string
   subtitle: string | null
   href: string
+  group_label: string | null
   sort_order: number
   is_active: boolean
 }
@@ -30,6 +31,7 @@ interface Draft {
   title: string
   subtitle: string
   href: string
+  group: string                // subgroup heading; '' = ungrouped
   is_active: boolean
 }
 
@@ -47,8 +49,25 @@ const emptyDraft = (category: OfficerResourceCategory): Draft => ({
   title: '',
   subtitle: '',
   href: '',
+  group: '',
   is_active: true,
 })
+
+// Bucket a category's rows into subgroups by group_label, preserving sort_order
+// (first-appearance) order. Ungrouped rows lead, under a null label.
+const groupRows = (items: ResourceRow[]): { label: string | null; rows: ResourceRow[] }[] => {
+  const order: string[] = []
+  const map = new Map<string, ResourceRow[]>()
+  const ungrouped: ResourceRow[] = []
+  for (const r of items) {
+    const g = r.group_label?.trim()
+    if (!g) { ungrouped.push(r); continue }
+    if (!map.has(g)) { map.set(g, []); order.push(g) }
+    map.get(g)!.push(r)
+  }
+  const labelled = order.map((label) => ({ label, rows: map.get(label)! }))
+  return ungrouped.length ? [{ label: null, rows: ungrouped }, ...labelled] : labelled
+}
 
 const isValidUrl = (value: string): boolean => {
   try {
@@ -72,7 +91,7 @@ export default function AdminOfficerResources() {
     setIsLoading(true)
     const { data, error: dbErr } = await supabase
       .from('officer_resources')
-      .select('id, category, title, subtitle, href, sort_order, is_active')
+      .select('id, category, title, subtitle, href, group_label, sort_order, is_active')
       .order('category', { ascending: true })
       .order('sort_order', { ascending: true })
     if (dbErr) setError(dbErr.message)
@@ -110,10 +129,11 @@ export default function AdminOfficerResources() {
           title: draft.title.trim(),
           subtitle: draft.subtitle.trim() || null,
           href: draft.href.trim(),
+          group_label: draft.group.trim() || null,
           is_active: draft.is_active,
         })
         .eq('id', draft.id)
-        .select('id, category, title, subtitle, href, sort_order, is_active')
+        .select('id, category, title, subtitle, href, group_label, sort_order, is_active')
         .single()
       setSaving(false)
       if (dbErr) { setError(dbErr.message); return }
@@ -129,10 +149,11 @@ export default function AdminOfficerResources() {
           title: draft.title.trim(),
           subtitle: draft.subtitle.trim() || null,
           href: draft.href.trim(),
+          group_label: draft.group.trim() || null,
           is_active: draft.is_active,
           sort_order: nextOrder,
         })
-        .select('id, category, title, subtitle, href, sort_order, is_active')
+        .select('id, category, title, subtitle, href, group_label, sort_order, is_active')
         .single()
       setSaving(false)
       if (dbErr) { setError(dbErr.message); return }
@@ -226,102 +247,120 @@ export default function AdminOfficerResources() {
                   </button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card divide-y divide-slate-100">
-                  {items.map((row, idx) => (
-                    <div key={row.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                      {/* Reorder */}
-                      <div className="flex flex-col">
-                        <button
-                          onClick={() => void handleMove(row, -1)}
-                          disabled={idx === 0 || busyId === row.id}
-                          className="text-slate-300 hover:text-blue disabled:opacity-30 disabled:hover:text-slate-300 transition-colors"
-                          title="Move up"
-                        >
-                          <AltArrowUpOutline className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => void handleMove(row, 1)}
-                          disabled={idx === items.length - 1 || busyId === row.id}
-                          className="text-slate-300 hover:text-blue disabled:opacity-30 disabled:hover:text-slate-300 transition-colors"
-                          title="Move down"
-                        >
-                          <AltArrowDownOutline className="w-4 h-4" />
-                        </button>
-                      </div>
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+                  {groupRows(items).map((group) => (
+                    <div key={group.label ?? '__ungrouped__'}>
+                      {group.label && (
+                        <div className="px-4 py-2 bg-slate-50 border-y border-slate-100 first:border-t-0">
+                          <p className="text-md3-label-sm font-bold text-slate-500 uppercase tracking-wide">{group.label}</p>
+                        </div>
+                      )}
+                      <div className="divide-y divide-slate-100">
+                        {group.rows.map((row) => {
+                          // Global index within the category — the reorder swap and
+                          // its bounds operate on the whole category's sort_order, not
+                          // the subgroup, so a row can be nudged across a group edge.
+                          const idx = items.indexOf(row)
+                          return (
+                            <div key={row.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                              {/* Reorder */}
+                              <div className="flex flex-col">
+                                <button
+                                  onClick={() => void handleMove(row, -1)}
+                                  disabled={idx === 0 || busyId === row.id}
+                                  className="text-slate-300 hover:text-blue disabled:opacity-30 disabled:hover:text-slate-300 transition-colors"
+                                  title="Move up"
+                                >
+                                  <AltArrowUpOutline className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => void handleMove(row, 1)}
+                                  disabled={idx === items.length - 1 || busyId === row.id}
+                                  className="text-slate-300 hover:text-blue disabled:opacity-30 disabled:hover:text-slate-300 transition-colors"
+                                  title="Move down"
+                                >
+                                  <AltArrowDownOutline className="w-4 h-4" />
+                                </button>
+                              </div>
 
-                      <div className="flex-1 min-w-0">
-                        <p className="text-md3-body-md font-semibold text-slate-900 truncate">{row.title}</p>
-                        {row.subtitle && (
-                          <p className="text-md3-label-md text-slate-400 truncate">{row.subtitle}</p>
-                        )}
-                        {row.href ? (
-                          <a
-                            href={row.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-md3-label-md text-blue hover:underline truncate max-w-full"
-                          >
-                            <LinkOutline className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{row.href}</span>
-                          </a>
-                        ) : (
-                          <span className="text-md3-label-md text-promoted">No URL set</span>
-                        )}
-                      </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-md3-body-md font-semibold text-slate-900 truncate">{row.title}</p>
+                                {row.subtitle && (
+                                  <p className="text-md3-label-md text-slate-400 truncate">{row.subtitle}</p>
+                                )}
+                                {row.href ? (
+                                  <a
+                                    href={row.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-md3-label-md text-blue hover:underline truncate max-w-full"
+                                  >
+                                    <LinkOutline className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{row.href}</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-md3-label-md text-promoted">No URL set</span>
+                                )}
+                              </div>
 
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                        row.is_active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'
-                      }`}>
-                        {row.is_active ? 'Active' : 'Hidden'}
-                      </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                row.is_active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'
+                              }`}>
+                                {row.is_active ? 'Active' : 'Hidden'}
+                              </span>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => void handleToggle(row)}
-                          disabled={busyId === row.id}
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-40 transition-colors"
-                          title={row.is_active ? 'Hide from officers' : 'Show to officers'}
-                        >
-                          <PowerOutline className="w-5 h-5" color={row.is_active ? '#21C45D' : undefined} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setError(null)
-                            setDraft({
-                              id: row.id,
-                              category: row.category,
-                              title: row.title,
-                              subtitle: row.subtitle ?? '',
-                              href: row.href,
-                              is_active: row.is_active,
-                            })
-                          }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
-                          title="Edit"
-                        >
-                          <PenNewSquareOutline className="w-4 h-4" />
-                        </button>
-                        {confirmDeleteId === row.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="text-md3-label-md px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                            >Cancel</button>
-                            <button
-                              onClick={() => void handleDelete(row.id)}
-                              disabled={busyId === row.id}
-                              className="text-md3-label-md px-2 py-1 rounded-lg bg-red text-white disabled:opacity-50 hover:bg-red/80 transition-colors"
-                            >{busyId === row.id ? '…' : 'Delete'}</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDeleteId(row.id)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                            title="Delete"
-                          >
-                            <TrashBinTrashOutline className="w-4 h-4" />
-                          </button>
-                        )}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => void handleToggle(row)}
+                                  disabled={busyId === row.id}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-40 transition-colors"
+                                  title={row.is_active ? 'Hide from officers' : 'Show to officers'}
+                                >
+                                  <PowerOutline className="w-5 h-5" color={row.is_active ? '#21C45D' : undefined} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setError(null)
+                                    setDraft({
+                                      id: row.id,
+                                      category: row.category,
+                                      title: row.title,
+                                      subtitle: row.subtitle ?? '',
+                                      href: row.href,
+                                      group: row.group_label ?? '',
+                                      is_active: row.is_active,
+                                    })
+                                  }}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
+                                  title="Edit"
+                                >
+                                  <PenNewSquareOutline className="w-4 h-4" />
+                                </button>
+                                {confirmDeleteId === row.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => setConfirmDeleteId(null)}
+                                      className="text-md3-label-md px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                                    >Cancel</button>
+                                    <button
+                                      onClick={() => void handleDelete(row.id)}
+                                      disabled={busyId === row.id}
+                                      className="text-md3-label-md px-2 py-1 rounded-lg bg-red text-white disabled:opacity-50 hover:bg-red/80 transition-colors"
+                                    >{busyId === row.id ? '…' : 'Delete'}</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setConfirmDeleteId(row.id)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
+                                    title="Delete"
+                                  >
+                                    <TrashBinTrashOutline className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
@@ -367,6 +406,34 @@ export default function AdminOfficerResources() {
                 placeholder="Short context line"
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
               />
+            </div>
+
+            <div>
+              <label className="text-md3-label-md font-medium text-slate-700 block mb-1">
+                Group <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                value={draft.group}
+                onChange={(e) => setDraft({ ...draft, group: e.target.value })}
+                list="officer-resource-groups"
+                placeholder="e.g. Funding Requests"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
+              />
+              {/* Existing group names in this category — pick one to keep links together. */}
+              <datalist id="officer-resource-groups">
+                {Array.from(
+                  new Set(
+                    byCategory(draft.category)
+                      .map((r) => r.group_label)
+                      .filter((g): g is string => !!g),
+                  ),
+                ).map((g) => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
+              <p className="text-md3-label-sm text-slate-400 mt-1">
+                Links with the same group name are shown together under that heading. Leave blank to keep ungrouped.
+              </p>
             </div>
 
             <div>

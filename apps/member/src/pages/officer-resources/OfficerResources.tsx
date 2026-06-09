@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeftOutline,
@@ -16,6 +16,7 @@ import { useAuthStore, ORGANIZER_ROLES } from '../../stores/useAuthStore'
 import {
   OFFICER_CATEGORY_ORDER,
   officerCategoryFromSlug,
+  groupOfficerLinks,
   type OfficerResourceCategory,
   type OfficerLink,
 } from '../../lib/officerResources'
@@ -210,26 +211,47 @@ export default function OfficerResources() {
             initial="hidden"
             animate="visible"
           >
-            {links.map((link) => (
-              <motion.button
-                key={link.title}
-                variants={cardItem}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => openLink(link.href)}
-                className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-card hover:bg-slate-50 transition-colors text-left"
-              >
-                <div className="w-10 h-10 rounded-xl bg-blue/10 flex items-center justify-center shrink-0">
-                  <DocumentTextOutline color="#1152D4" size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-md3-body-md font-semibold text-slate-900 leading-snug">{link.title}</p>
-                  {link.subtitle && (
-                    <p className="text-md3-label-md text-slate-400 mt-0.5">{link.subtitle}</p>
-                  )}
-                </div>
-                <ArrowRightUpOutline color="#94A3B8" size={16} />
-              </motion.button>
-            ))}
+            {/* Subgroups are flattened into one stream of motion children
+                (headers + cards) so the staggered entrance still cascades —
+                see the file-level note: wrapping groups in <div>s would sever
+                framer-motion's direct-child stagger. */}
+            {groupOfficerLinks(links).flatMap((group) => {
+              const nodes: ReactNode[] = []
+              if (group.label) {
+                nodes.push(
+                  <motion.h2
+                    key={`group-${group.label}`}
+                    variants={cardItem}
+                    className="text-md3-label-md font-bold text-slate-500 uppercase tracking-wide px-1 pt-2 first:pt-0"
+                  >
+                    {group.label}
+                  </motion.h2>
+                )
+              }
+              for (const link of group.items) {
+                nodes.push(
+                  <motion.button
+                    key={`${group.label ?? 'ungrouped'}-${link.title}`}
+                    variants={cardItem}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => openLink(link.href)}
+                    className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 shadow-card hover:bg-slate-50 transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue/10 flex items-center justify-center shrink-0">
+                      <DocumentTextOutline color="#1152D4" size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-md3-body-md font-semibold text-slate-900 leading-snug">{link.title}</p>
+                      {link.subtitle && (
+                        <p className="text-md3-label-md text-slate-400 mt-0.5">{link.subtitle}</p>
+                      )}
+                    </div>
+                    <ArrowRightUpOutline color="#94A3B8" size={16} />
+                  </motion.button>
+                )
+              }
+              return nodes
+            })}
           </motion.div>
         )}
 

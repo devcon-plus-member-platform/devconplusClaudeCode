@@ -12,6 +12,41 @@ export interface OfficerLink {
   subtitle?: string
   /** Destination URL (opens in a new tab) */
   href: string
+  /** Optional subgroup heading within the category (e.g. "Funding Requests"). */
+  group?: string
+}
+
+/** A subgroup of links within a category. `label` is null for ungrouped links. */
+export interface OfficerLinkGroup {
+  label: string | null
+  items: OfficerLink[]
+}
+
+/**
+ * Bucket a category's links into subgroups by `group`, preserving the order in
+ * which each group first appears (i.e. sort_order). Links with no group are
+ * collected into a single leading, label-less group so they never disappear.
+ */
+export function groupOfficerLinks(links: OfficerLink[]): OfficerLinkGroup[] {
+  const order: string[] = []
+  const byLabel = new Map<string, OfficerLink[]>()
+  const ungrouped: OfficerLink[] = []
+
+  for (const link of links) {
+    const label = link.group?.trim()
+    if (!label) {
+      ungrouped.push(link)
+      continue
+    }
+    if (!byLabel.has(label)) {
+      byLabel.set(label, [])
+      order.push(label)
+    }
+    byLabel.get(label)!.push(link)
+  }
+
+  const labelled = order.map((label) => ({ label, items: byLabel.get(label)! }))
+  return ungrouped.length ? [{ label: null, items: ungrouped }, ...labelled] : labelled
 }
 
 /** Which officer-dashboard CTA a link belongs to. */

@@ -27,7 +27,7 @@ export const useOfficerResourcesStore = create<OfficerResourcesState>((set, get)
     set({ isLoading: !get().loaded })
     const { data, error } = await supabase
       .from('officer_resources')
-      .select('category, title, subtitle, href, sort_order')
+      .select('category, title, subtitle, href, sort_order, group_label')
       .eq('is_active', true)
       .order('category', { ascending: true })
       .order('sort_order', { ascending: true })
@@ -42,6 +42,7 @@ export const useOfficerResourcesStore = create<OfficerResourcesState>((set, get)
       title: r.title,
       subtitle: r.subtitle ?? undefined,
       href: r.href,
+      group: r.group_label ?? undefined,
     })
 
     set({
