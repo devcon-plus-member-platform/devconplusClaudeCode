@@ -4,18 +4,16 @@ import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOu
 import { motion, AnimatePresence } from 'framer-motion'
 import { ApprovalCard, type Registration } from '../../components/ApprovalCard'
 import { VolunteerApprovalCard } from '../../components/VolunteerApprovalCard'
-import ResourceLinksSheet from '../../components/ResourceLinksSheet'
 import { useOrganizerUser } from '../../stores/useOrgAuthStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useOrgVolunteerStore } from '../../stores/useOrgVolunteerStore'
 import { supabase } from '../../lib/supabase'
 import { fadeUp, staggerContainer, cardItem } from '../../lib/animation'
-import { useOfficerResourcesStore } from '../../stores/useOfficerResourcesStore'
+import { OFFICER_CATEGORY_META } from '../../lib/officerResources'
 import logoMark from '../../assets/logos/logo-mark.svg'
 
 type TabId = 'approvals' | 'volunteers'
-type SheetId = 'resources' | 'training' | 'planning' | null
 
 // Flower-of-life / Clover pattern matching Figma branding
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -33,10 +31,8 @@ export function OrgDashboard() {
     revertApplication,
     loadApplications: loadVolunteerApps,
   } = useOrgVolunteerStore()
-  const { resources: officerResources, trainings: officerTrainings, planning: officerPlanning, fetch: fetchOfficerResources } = useOfficerResourcesStore()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabId>('approvals')
-  const [openSheet, setOpenSheet] = useState<SheetId>(null)
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [membersCount, setMembersCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -45,7 +41,6 @@ export function OrgDashboard() {
 
   useEffect(() => {
     void fetchEvents()
-    void fetchOfficerResources()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -207,9 +202,9 @@ export function OrgDashboard() {
         {/* Quick Actions — mirrors the member dashboard's 3-up action row */}
         <motion.section variants={fadeUp} className="mb-5">
           <div className="grid grid-cols-3 gap-3">
-            {/* Review Resources → opens resource slider */}
+            {/* Review Resources → shareable officer-resources page */}
             <motion.button
-              onClick={() => setOpenSheet('resources')}
+              onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.resource.slug}`)}
               className="bg-[rgba(17,82,212,0.10)] border border-[rgba(17,82,212,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(0,16,56,0.08)] w-full py-4"
               whileTap={{ scale: 0.95 }}
             >
@@ -219,9 +214,9 @@ export function OrgDashboard() {
               <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Review Resources</span>
             </motion.button>
 
-            {/* Plan Your Chapter Event → opens planning slider */}
+            {/* Plan Your Chapter Event → shareable officer-resources page */}
             <motion.button
-              onClick={() => setOpenSheet('planning')}
+              onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.seed_funds.slug}`)}
               className="bg-[rgba(115,178,9,0.15)] border border-[rgba(70,144,17,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(25,39,0,0.1)] w-full py-4"
               whileTap={{ scale: 0.95 }}
             >
@@ -231,9 +226,9 @@ export function OrgDashboard() {
               <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Plan Your Chapter Event</span>
             </motion.button>
 
-            {/* View Training Archive → opens training slider */}
+            {/* View Training Archive → shareable officer-resources page */}
             <motion.button
-              onClick={() => setOpenSheet('training')}
+              onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.training.slug}`)}
               className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
               whileTap={{ scale: 0.95 }}
             >
@@ -382,29 +377,6 @@ export function OrgDashboard() {
           )}
         </AnimatePresence>
       </motion.div>
-
-      {/* Quick-action sliders */}
-      <ResourceLinksSheet
-        isOpen={openSheet === 'resources'}
-        onClose={() => setOpenSheet(null)}
-        title="Officer Resources"
-        subtitle="First time here? Start with these."
-        links={officerResources}
-      />
-      <ResourceLinksSheet
-        isOpen={openSheet === 'training'}
-        onClose={() => setOpenSheet(null)}
-        title="Training Archive"
-        subtitle="Recorded sessions and playbooks."
-        links={officerTrainings}
-      />
-      <ResourceLinksSheet
-        isOpen={openSheet === 'planning'}
-        onClose={() => setOpenSheet(null)}
-        title="Plan Your Chapter Event"
-        subtitle="Seed funds, liquidation, and event planning guides."
-        links={officerPlanning}
-      />
     </div>
   )
 }
