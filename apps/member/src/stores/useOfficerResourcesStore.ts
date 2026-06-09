@@ -9,7 +9,7 @@ import type { OfficerLink } from '../lib/officerResources'
 interface OfficerResourcesState {
   resources: OfficerLink[]      // category = 'resource'
   trainings: OfficerLink[]      // category = 'training'
-  planning: OfficerLink[]       // category = 'seed_funds' ("Plan Your Chapter Event")
+  planning: OfficerLink[]       // category = 'seed_funds' ("Seed Fund Request")
   loaded: boolean
   isLoading: boolean
   fetch: () => Promise<void>

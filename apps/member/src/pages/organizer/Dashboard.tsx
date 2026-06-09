@@ -214,7 +214,7 @@ export function OrgDashboard() {
               <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Review Resources</span>
             </motion.button>
 
-            {/* Plan Your Chapter Event → shareable officer-resources page */}
+            {/* Seed Fund Request → shareable officer-resources page */}
             <motion.button
               onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.seed_funds.slug}`)}
               className="bg-[rgba(115,178,9,0.15)] border border-[rgba(70,144,17,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(25,39,0,0.1)] w-full py-4"
@@ -223,10 +223,10 @@ export function OrgDashboard() {
               <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
                 <ClipboardListOutline color="rgb(70,144,17)" size={24} />
               </div>
-              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Plan Your Chapter Event</span>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Seed Fund Request</span>
             </motion.button>
 
-            {/* View Training Archive → shareable officer-resources page */}
+            {/* Training and Policy → shareable officer-resources page */}
             <motion.button
               onClick={() => navigate(`/officer-resources/${OFFICER_CATEGORY_META.training.slug}`)}
               className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
@@ -235,7 +235,7 @@ export function OrgDashboard() {
               <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
                 <SquareAcademicCapOutline color="#D2AD19" size={24} />
               </div>
-              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">View Training Archive</span>
+              <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Training and Policy</span>
             </motion.button>
           </div>
         </motion.section>

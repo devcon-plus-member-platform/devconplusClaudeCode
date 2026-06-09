@@ -20,8 +20,8 @@ export type OfficerResourceCategory = 'resource' | 'training' | 'seed_funds'
 /** Human labels for each category (used in the admin panel). */
 export const OFFICER_CATEGORY_LABELS: Record<OfficerResourceCategory, string> = {
   resource: 'Review Resources',
-  training: 'Training Archive',
-  seed_funds: 'Plan Your Chapter Event',
+  training: 'Training and Policy',
+  seed_funds: 'Seed Fund Request',
 }
 
 /**
@@ -44,22 +44,22 @@ export interface OfficerCategoryMeta {
 export const OFFICER_CATEGORY_META: Record<OfficerResourceCategory, OfficerCategoryMeta> = {
   resource: {
     category: 'resource',
-    slug: 'resources',
+    slug: 'review-resources',
     title: 'Officer Resources',
     subtitle: 'First time here? Start with these.',
     accent: '#1152D4',
   },
   training: {
     category: 'training',
-    slug: 'training',
-    title: 'Training Archive',
-    subtitle: 'Recorded sessions and playbooks.',
+    slug: 'training-and-policy',
+    title: 'Training and Policy',
+    subtitle: 'Recorded sessions, playbooks, and chapter policies.',
     accent: '#D2AD19',
   },
   seed_funds: {
     category: 'seed_funds',
-    slug: 'plan-your-event',
-    title: 'Plan Your Chapter Event',
+    slug: 'seed-fund-request',
+    title: 'Seed Fund Request',
     subtitle: 'Seed funds, liquidation, and event planning guides.',
     accent: '#46900D',
   },

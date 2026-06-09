@@ -37,8 +37,8 @@ const CATEGORIES: OfficerResourceCategory[] = ['resource', 'training', 'seed_fun
 
 const CATEGORY_HINT: Record<OfficerResourceCategory, string> = {
   resource: 'Cards shown in the "Review Resources" slider on the officer dashboard.',
-  training: 'Cards shown in the "View Training Archive" slider.',
-  seed_funds: 'Cards shown in the "Plan Your Chapter Event" slider (seed funds, liquidation, planning guides).',
+  training: 'Cards shown in the "Training and Policy" slider.',
+  seed_funds: 'Cards shown in the "Seed Fund Request" slider (seed funds, liquidation, planning guides).',
 }
 
 const emptyDraft = (category: OfficerResourceCategory): Draft => ({
@@ -196,7 +196,7 @@ export default function AdminOfficerResources() {
       <div className="mb-6">
         <h1 className="text-md3-headline-sm font-black text-slate-900">Officer Resources</h1>
         <p className="text-md3-body-md text-slate-500 mt-0.5">
-          Manage the links shown in the officer dashboard's Review Resources, Training Archive, and Request Seed Funds actions.
+          Manage the links shown in the officer dashboard's Review Resources, Training and Policy, and Seed Fund Request actions.
         </p>
       </div>
 
