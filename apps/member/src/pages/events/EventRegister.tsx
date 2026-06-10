@@ -163,7 +163,12 @@ export default function EventRegister() {
   const isExternal = event?.is_external === true
   const externalUrl = event?.external_registration_url ?? ''
 
-  const isChapterBlocked = !!(event && user && event.is_chapter_locked === true && event.chapter_id !== user.chapter_id)
+  const isChapterBlocked = !!(
+    event && user &&
+    event.is_chapter_locked === true &&
+    event.chapter_id !== null &&
+    event.chapter_id !== user.chapter_id
+  )
   const hasSchoolOnProfile = !!user?.school_or_company?.trim()
 
   useEffect(() => {

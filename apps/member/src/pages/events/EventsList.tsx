@@ -146,12 +146,14 @@ export default function EventsList() {
       case 'near_you':
         if (regionChapterIds.size > 0) {
           return events.filter((e) =>
+            e.chapter_id === null ||
             (e.is_external && e.visibility === 'public') ||
             (e.chapter_id && regionChapterIds.has(e.chapter_id))
           )
         }
         return user?.chapter_id
           ? events.filter((e) =>
+              e.chapter_id === null ||
               (e.is_external && e.visibility === 'public') ||
               e.chapter_id === user.chapter_id
             )

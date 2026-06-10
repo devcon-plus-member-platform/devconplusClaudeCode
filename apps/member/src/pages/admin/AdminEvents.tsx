@@ -53,7 +53,7 @@ interface AttendanceExportRow extends Record<string, string | number | boolean |
 
 const eventSchema = z
   .object({
-    chapter_id: z.string().min(1, 'Select a chapter'),
+    chapter_id: z.string(),
     title: z.string().min(3, 'Title must be at least 3 characters'),
     description: z.string().min(10, 'Description must be at least 10 characters'),
     location: z.string().min(2, 'Location is required'),
@@ -317,7 +317,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     resolver: zodResolver(eventSchema),
     defaultValues: event
       ? {
-          chapter_id:        event.chapter_id,
+          chapter_id:        event.chapter_id === null ? '__hq__' : event.chapter_id,
           title:             event.title,
           description:       event.description ?? '',
           location:          event.location ?? '',
@@ -372,11 +372,18 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   const onSubmit = async (data: EventFormData) => {
     setSubmitError(null)
     setCoverUploadError(null)
+    if (!data.chapter_id) {
+      setSubmitError('Please select a chapter or HQ.')
+      return
+    }
     try {
       const schema = customFields.length > 0 ? customFields : null
       const isExternalEvent = data.is_external === true
       const externalUrl = data.url_is_tba ? 'tba' : (data.external_registration_url?.trim() || null)
       const { url_is_tba: _urlIsTba, ...rest } = data
+
+      const isHqEvent = rest.chapter_id === '__hq__'
+      const chapterId = isHqEvent ? null : rest.chapter_id
 
       let cover_image_url: string | null = coverPreview
         ? (coverFile ? null : (event?.cover_image_url ?? null))
@@ -403,6 +410,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
       const payload = {
         ...rest,
+        chapter_id: chapterId,
+        is_chapter_locked: isHqEvent ? false : true,
         end_date: data.end_date ?? null,
         capacity: data.capacity ?? null,
         external_registration_url: isExternalEvent ? externalUrl : null,
@@ -478,6 +487,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           </label>
           <select {...register('chapter_id')} className={inputClass}>
             <option value="">Select chapter…</option>
+            <option value="__hq__">HQ — All Chapters</option>
             {chapters.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -1372,7 +1382,7 @@ export default function AdminEvents() {
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-600 text-md3-label-md">{event.chapters?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 text-md3-label-md">{event.chapter_id === null ? 'HQ — All Chapters' : (event.chapters?.name ?? '—')}</td>
                   <td className="px-4 py-3 text-slate-500 text-md3-label-md whitespace-nowrap">
                     {event.event_date
                       ? new Date(event.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })

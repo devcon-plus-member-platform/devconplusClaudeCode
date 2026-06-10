@@ -60,7 +60,7 @@ export default function EventDetail() {
   const reg = registrations.find((r) => r.event_id === eventId)
   // const volunteerApp = user && eventId ? getApplicationByEventId(eventId) : undefined // disabled: volunteer-for-event feature
 
-  const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== user?.chapter_id
+  const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== null && event.chapter_id !== user?.chapter_id
   const isExternal = event?.is_external === true
 
   const [shareToast, setShareToast] = useState(false)
