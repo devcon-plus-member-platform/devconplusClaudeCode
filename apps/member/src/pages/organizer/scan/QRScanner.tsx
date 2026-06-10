@@ -2,14 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeftOutline, CameraRotateOutline, CheckCircleOutline, InfoCircleOutline, CloseCircleOutline, BoltOutline, ClockCircleOutline, UserCheckOutline, UserCrossOutline, FlipHorizontalOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, AltArrowDownOutline, CameraRotateOutline, CheckCircleOutline, InfoCircleOutline, CloseCircleOutline, BoltOutline, ClockCircleOutline, UserCheckOutline, UserCrossOutline, FlipHorizontalOutline, SettingsOutline } from 'solar-icon-set'
+import { formatDate } from '../../../lib/dates'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type CameraStatus = 'starting' | 'active' | 'permission_denied' | 'error'
 
+interface EventContext {
+  id: string
+  title: string
+  event_date: string | null
+}
+
 interface ResultOverlay {
-  type: 'success' | 'already_checked_in' | 'error' | 'pending' | 'rejected'
+  type: 'success' | 'already_checked_in' | 'error' | 'pending' | 'rejected' | 'wrong_event'
   memberName?: string
   eventTitle?: string
   pointsAwarded?: number
@@ -60,8 +67,21 @@ export function OrgQRScanner() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [isSwitching, setIsSwitching] = useState(false)
 
-  // Mirror
-  const [isMirrored, setIsMirrored] = useState(false)
+  // Mirror defaults to true — most organisers face the member (front camera / mirrored rear)
+  const [isMirrored, setIsMirrored] = useState(true)
+
+  // Event context — which event is being scanned at this door
+  const [availableEvents, setAvailableEvents] = useState<EventContext[]>([])
+  const [eventCtx, setEventCtx] = useState<EventContext | null>(null)
+  const [checkedInCount, setCheckedInCount] = useState(0)
+  const [loadingCtx, setLoadingCtx] = useState(true)
+  const [showEventPicker, setShowEventPicker] = useState(false)
+
+  // Settings panel (mirror + lens controls)
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Live clock for the header
+  const [now, setNow] = useState(() => new Date())
 
   // QR detection indicator — true when zxing has a code in frame
   const [isDetecting, setIsDetecting] = useState(false)
@@ -78,8 +98,10 @@ export function OrgQRScanner() {
   const isProcessingRef = useRef(false)         // scan lock — prevents duplicate API calls
   const overlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cameraAbortRef = useRef(false)
+  // Stable ref for stale camera callback closures — synced to eventCtx state via useEffect
+  const eventCtxRef = useRef<EventContext | null>(null)
 
-  // ── CameraOutline helpers ────────────────────────────────────────────────────────────
+  // ── Camera helpers ────────────────────────────────────────────────────────────────
 
   const stopCamera = useCallback(() => {
     controlsRef.current?.stop()
@@ -90,6 +112,20 @@ export function OrgQRScanner() {
       videoEl.srcObject = null
     }
   }, [videoEl])
+
+  // ── Event context helpers ─────────────────────────────────────────────────────────
+
+  const selectEvent = useCallback(async (event: EventContext) => {
+    setEventCtx(event)
+    setShowEventPicker(false)
+    const { supabase } = await import('../../../lib/supabase')
+    const { count } = await supabase
+      .from('event_registrations')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', event.id)
+      .eq('checked_in', true)
+    setCheckedInCount(count ?? 0)
+  }, [])
 
   const initCamera = async (el: HTMLVideoElement, deviceId?: string): Promise<void> => {
     const { BrowserQRCodeReader } = await import('@zxing/browser')
@@ -115,8 +151,6 @@ export function OrgQRScanner() {
       const reader = new BrowserQRCodeReader(hints)
 
       // Request the highest resolution the camera supports.
-      // decodeFromConstraints passes these directly to getUserMedia instead of
-      // the browser's default (often 640x480 on Android).
       const videoConstraints: MediaTrackConstraints = {
         width: { ideal: 1920, max: 3840 },
         height: { ideal: 1080, max: 2160 },
@@ -125,7 +159,6 @@ export function OrgQRScanner() {
       if (activeId) {
         videoConstraints.deviceId = { exact: activeId }
       } else {
-        // Prefer the back camera when possible.
         videoConstraints.facingMode = { ideal: 'environment' }
       }
 
@@ -134,17 +167,13 @@ export function OrgQRScanner() {
         el,
         (res) => {
           if (res) {
-            // QR code is in frame — light up the corners immediately
             setIsDetecting(true)
             if (detectingTimerRef.current) clearTimeout(detectingTimerRef.current)
-            // Keep green for 600 ms after the last positive frame (debounce the off-transition)
             detectingTimerRef.current = setTimeout(() => {
               setIsDetecting(false)
               detectingTimerRef.current = null
             }, 600)
             void handleScannedToken(res.getText())
-          } else {
-            // No code in frame — let the debounce above handle the off-transition naturally
           }
         }
       )
@@ -153,18 +182,12 @@ export function OrgQRScanner() {
       const stream = el.srcObject as MediaStream | null
       const track = stream?.getVideoTracks?.()[0]
       if (track) {
-        // Hint to the browser this stream is for fast motion/scan usage.
         track.contentHint = 'motion'
-
-        // On some Android devices, advanced constraints are required to escape 640x480.
         try {
           const capabilities = track.getCapabilities?.() as Record<string, unknown> | undefined
           const advanced: Record<string, unknown> = {}
           const focusModes = capabilities?.focusMode as string[] | undefined
-
-          if (focusModes?.includes('continuous')) {
-            advanced.focusMode = 'continuous'
-          }
+          if (focusModes?.includes('continuous')) advanced.focusMode = 'continuous'
           if (Object.keys(advanced).length > 0) {
             await track.applyConstraints({ advanced: [advanced] } as MediaTrackConstraints)
           }
@@ -191,22 +214,17 @@ export function OrgQRScanner() {
       try {
         await initCamera(el, deviceId)
         setCameraStatus('active')
-        return // success
+        return
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e))
-
-        // Permission denied — no retry, immediate terminal state
         if (err.name === 'NotAllowedError' || err.message.includes('Permission denied')) {
           setCameraStatus('permission_denied')
           return
         }
-
-        // Final attempt failed — show error state
         if (attempt === MAX_ATTEMPTS) {
           setCameraStatus('error')
           return
         }
-        // Otherwise loop to next attempt
       }
     }
   }
@@ -221,27 +239,22 @@ export function OrgQRScanner() {
   }
 
   const showOverlay = (next: ResultOverlay) => {
-    // Replace any existing overlay immediately (cancel its timer first)
     if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current)
-    overlayKeyCounterRef.current += 1   // new key forces AnimatePresence to remount the node
+    overlayKeyCounterRef.current += 1
     setOverlayEntry({ data: next, key: overlayKeyCounterRef.current })
-    // Pending overlay stays until the organizer taps Approve or Reject
     if (next.type !== 'pending') {
       overlayTimerRef.current = setTimeout(dismissOverlay, OVERLAY_DURATION_MS)
     }
   }
 
   const handleScannedToken = async (token: string) => {
-    // Scan lock — zxing fires this callback many times/second for the same code
     if (isProcessingRef.current) return
 
-    // Validate token format before sending to server (compact JWT: 3 base64url segments)
     if (!/^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/.test(token)) {
       showOverlay({ type: 'error', message: 'Invalid QR format.' })
       return
     }
 
-    // Dynamic imports are cached after first load — no repeated network cost
     const { supabase } = await import('../../../lib/supabase')
     const { useAuthStore } = await import('../../../stores/useAuthStore')
     const user = useAuthStore.getState().user
@@ -263,9 +276,6 @@ export function OrgQRScanner() {
         return
       }
 
-      // Proactively force-refresh if token expires within 5 minutes.
-      // getSession() reads from localStorage without a network call, so the stored
-      // token may be expired if the background auto-refresh timer failed silently.
       const expiresAt = sessionData.session?.expires_at
       if (!expiresAt || expiresAt - Math.floor(Date.now() / 1000) < 300) {
         const { data: refreshed } = await supabase.auth.refreshSession()
@@ -274,7 +284,6 @@ export function OrgQRScanner() {
         }
       }
 
-      // Keep the functions client in sync so any retry paths also use the fresh token
       supabase.functions.setAuth(accessToken)
 
       const { data, error } = await supabase.functions.invoke<{
@@ -292,8 +301,6 @@ export function OrgQRScanner() {
       })
 
       if (error) {
-        // FunctionsHttpError stores the raw Response as error.context (body unread).
-        // Read it to surface the actual gateway or function error message.
         let errorMessage = 'Scan failed. Try again.'
         try {
           const body = await (error as unknown as { context: Response }).context.json() as { error?: string; message?: string }
@@ -305,7 +312,6 @@ export function OrgQRScanner() {
       }
 
       if (data?.pending && data.registration_id) {
-        // Member is pending — show approve/reject overlay (keeps scan lock held)
         showOverlay({
           type: 'pending',
           memberName: data.member_name ?? 'Member',
@@ -330,17 +336,26 @@ export function OrgQRScanner() {
         return
       }
 
+      // Detect wrong-event scan — edge function awarded for a different event than selected
+      const currentEventCtx = eventCtxRef.current
+      if (currentEventCtx && data.event_title && data.event_title !== currentEventCtx.title) {
+        showOverlay({
+          type: 'wrong_event',
+          memberName: data.member_name ?? 'Member',
+          eventTitle: data.event_title,
+        })
+        return
+      }
+
       showOverlay({
         type: 'success',
         memberName: data.member_name ?? 'Member',
         eventTitle: data.event_title ?? '',
         pointsAwarded: data.points_awarded ?? 0,
       })
+      setCheckedInCount((n) => n + 1)
     } catch {
-      showOverlay({
-        type: 'error',
-        message: 'Scan failed. Try again.',
-      })
+      showOverlay({ type: 'error', message: 'Scan failed. Try again.' })
     }
   }
 
@@ -378,6 +393,7 @@ export function OrgQRScanner() {
         eventTitle: data.event_title ?? '',
         pointsAwarded: data.points_awarded ?? 0,
       })
+      setCheckedInCount((n) => n + 1)
     } catch (e) {
       showOverlay({
         type: 'error',
@@ -386,7 +402,7 @@ export function OrgQRScanner() {
     }
   }
 
-  // ── CameraOutline switching helpers ──────────────────────────────────────────────────
+  // ── Camera switching helpers ──────────────────────────────────────────────────────────────
 
   const switchCamera = useCallback(async (nextDeviceId: string) => {
     if (isSwitching || nextDeviceId === selectedDeviceId || !videoEl) return
@@ -404,7 +420,7 @@ export function OrgQRScanner() {
     void switchCamera(devices[nextIndex].deviceId)
   }, [devices, selectedDeviceId, switchCamera])
 
-  // Start camera when video element mounts (callback ref fires after DOM commit)
+  // Start camera when video element mounts
   useEffect(() => {
     if (!videoEl) return
     void startCameraWithRetry(videoEl)
@@ -416,10 +432,58 @@ export function OrgQRScanner() {
     }
   }, [videoEl]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep eventCtxRef in sync so stale camera-callback closures always read the current event
+  useEffect(() => {
+    eventCtxRef.current = eventCtx
+  }, [eventCtx])
+
+  // Live clock — tick every second
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Fetch organizer's upcoming non-external events on mount
+  useEffect(() => {
+    const fetchEventContext = async () => {
+      const { supabase } = await import('../../../lib/supabase')
+      const { useAuthStore } = await import('../../../stores/useAuthStore')
+      const user = useAuthStore.getState().user
+      if (!user?.chapter_id) {
+        setLoadingCtx(false)
+        return
+      }
+      // Only show events that started in the last 12h or haven't started yet —
+      // avoids stale entries when the status field isn't auto-updated.
+      // Exclude external events — no QR check-in for those.
+      const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
+      const { data: eventsData } = await supabase
+        .from('events')
+        .select('id, title, event_date')
+        .eq('chapter_id', user.chapter_id)
+        .eq('is_external', false)
+        .gte('event_date', cutoff)
+        .order('event_date', { ascending: true })
+        .limit(10)
+      const events = (eventsData ?? []) as EventContext[]
+      setAvailableEvents(events)
+      if (events.length === 1) {
+        await selectEvent(events[0])
+        setLoadingCtx(false)
+      } else if (events.length > 1) {
+        setShowEventPicker(true)
+        setLoadingCtx(false)
+      } else {
+        setLoadingCtx(false)
+      }
+    }
+    void fetchEventContext()
+  }, [selectEvent])
+
   return createPortal(
     <div className="fixed inset-0 z-[100] bg-black overflow-hidden">
 
-      {/* Live camera feed — contrast boost sharpens QR module edges on low-res cameras */}
+      {/* Live camera feed */}
       <video
         ref={videoCallbackRef}
         className="absolute inset-0 w-full h-full object-cover"
@@ -505,54 +569,122 @@ export function OrgQRScanner() {
         </div>
       )}
 
-      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <div className="absolute top-0 left-0 right-0 z-[110] flex items-center justify-between px-4 pt-14 pb-4">
+      {/* ── Top bar — solid white header ─────────────────────────────────────── */}
+      <div className="absolute top-0 left-0 right-0 z-[110] bg-white grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 pt-12 pb-3">
+        {/* Back */}
         <motion.button
           type="button"
           aria-label="Go back"
           whileTap={{ scale: 0.9 }}
           onClick={() => navigate(-1)}
-          className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-lg"
+          className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
         >
-          <ArrowLeftOutline className="w-5 h-5" color="white" />
+          <ArrowLeftOutline color="#334155" size={18} />
         </motion.button>
 
-        <div className="flex items-center gap-2">
-          {/* Mirror toggle */}
-          <motion.button
-            type="button"
-            aria-label="Mirror camera"
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsMirrored((m) => !m)}
-            disabled={isSwitching}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-full backdrop-blur-md border shadow-lg transition-colors disabled:opacity-40 ${isMirrored ? 'bg-white/40 border-white/60' : 'bg-white/20 border-white/30'}`}
-          >
-            <FlipHorizontalOutline size={16} color="white" />
-            <span className="text-white text-md3-label-md font-medium">Mirror</span>
-          </motion.button>
+        {/* Centre — event name + live date/time (tappable when multiple events available) */}
+        <motion.button
+          type="button"
+          aria-label="Change event"
+          whileTap={availableEvents.length > 1 ? { scale: 0.97 } : undefined}
+          onClick={() => { if (availableEvents.length > 1) setShowEventPicker(true) }}
+          className="text-center min-w-0"
+        >
+          <div className="flex items-center justify-center gap-1 min-w-0">
+            <p className="text-slate-900 font-black text-md3-title-md leading-tight truncate min-w-0">
+              {eventCtx?.title ?? (loadingCtx ? '' : 'QR Scanner')}
+            </p>
+            {availableEvents.length > 1 && (
+              <AltArrowDownOutline color="#64748B" size={14} className="shrink-0" />
+            )}
+          </div>
+          <p className="text-slate-500 text-md3-label-md mt-0.5">
+            {formatDate.short(now)}
+            {' | '}
+            {now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+          </p>
+        </motion.button>
 
-          {devices.length >= 2 && (
-            <motion.button
-              type="button"
-              aria-label="Switch camera lens"
-              whileTap={{ scale: 0.9 }}
-              onClick={cycleCamera}
-              disabled={isSwitching}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/20 backdrop-blur-md border border-white/30 disabled:opacity-40 shadow-lg transition-colors"
-            >
-              <CameraRotateOutline className="w-4 h-4" color="white" />
-              <span className="text-white text-md3-label-md font-medium">Lens</span>
-            </motion.button>
-          )}
-        </div>
+        {/* Settings icon */}
+        <motion.button
+          type="button"
+          aria-label="Camera settings"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setShowSettings((s) => !s)}
+          className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
+        >
+          <SettingsOutline color="#334155" size={18} />
+        </motion.button>
       </div>
 
-      {/* ── iOS info chip ────────────────────────────────────────────────────── */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-1.5 bg-amber-500/20 border border-amber-400/30 backdrop-blur rounded-full px-3 py-1.5 pointer-events-none">
-        <InfoCircleOutline className="w-3 h-3 shrink-0" color="#FCD34D" />
-        <p className="text-amber-200 text-[10px] font-medium whitespace-nowrap">
-          For best results, use Chrome on Android
-        </p>
+      {/* ── Settings panel backdrop (click-away dismiss) ─────────────────────── */}
+      {showSettings && (
+        <div
+          className="absolute inset-0 z-[114]"
+          onClick={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* ── Settings dropdown ─────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-24 right-4 z-[115] w-56 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden"
+          >
+            {/* Mirror toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMirrored((m) => !m)}
+              className="w-full flex items-center justify-between px-4 py-3.5 border-b border-slate-100 active:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <FlipHorizontalOutline color="#334155" size={18} />
+                <span className="text-slate-900 text-md3-body-md font-medium">Mirror</span>
+              </div>
+              {/* Toggle switch */}
+              <div className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors ${isMirrored ? 'bg-blue' : 'bg-slate-200'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${isMirrored ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
+            {/* Lens switcher — only shown when multiple cameras are detected */}
+            {devices.length >= 2 && (
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.98 }}
+                disabled={isSwitching}
+                onClick={() => { cycleCamera(); setShowSettings(false) }}
+                className="w-full flex items-center gap-2.5 px-4 py-3.5 active:bg-slate-50 transition-colors disabled:opacity-40"
+              >
+                <CameraRotateOutline color="#334155" size={18} />
+                <span className="text-slate-900 text-md3-body-md font-medium">
+                  {isSwitching ? 'Switching…' : 'Switch Lens'}
+                </span>
+              </motion.button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Bottom attendee count card ─────────────────────────────────────── */}
+      <div className="absolute bottom-6 left-4 right-4 z-[110] pointer-events-none">
+        <div className="bg-white rounded-2xl px-5 py-4 flex items-center gap-3 shadow-card">
+          <div className="w-9 h-9 rounded-full bg-green/15 flex items-center justify-center shrink-0">
+            <CheckCircleOutline color="#21C45D" size={18} />
+          </div>
+          {loadingCtx ? (
+            <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
+          ) : (
+            <p className="text-slate-900 font-black text-md3-title-md leading-none">
+              {checkedInCount} checked in
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ── Result overlay (slides up, camera stays live behind) ─────────────── */}
@@ -565,7 +697,7 @@ export function OrgQRScanner() {
             exit={{ y: 120, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={dismissOverlay}
-            className="absolute bottom-0 left-0 right-0 z-[110] px-4 pb-10 cursor-pointer"
+            className="absolute bottom-0 left-0 right-0 z-[110] px-4 pb-28 cursor-pointer"
           >
             {overlayEntry.data.type === 'success' && (
               <div className="bg-green rounded-2xl p-5">
@@ -701,6 +833,36 @@ export function OrgQRScanner() {
               </div>
             )}
 
+            {overlayEntry.data.type === 'wrong_event' && (
+              <div className="bg-amber-500 rounded-2xl p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                    <InfoCircleOutline className="w-5 h-5" color="white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white font-black text-md3-body-lg truncate">{overlayEntry.data.memberName}</p>
+                    <p className="text-white/80 text-md3-label-md">
+                      QR is for <span className="font-bold">"{overlayEntry.data.eventTitle}"</span> — wrong event
+                    </p>
+                  </div>
+                </div>
+                <div className="h-1 bg-white/30 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-white rounded-full"
+                    ref={(el) => {
+                      if (!el) return
+                      el.style.transition = 'none'
+                      el.style.width = '100%'
+                      requestAnimationFrame(() => {
+                        el.style.transition = `width ${OVERLAY_DURATION_MS}ms linear`
+                        el.style.width = '0%'
+                      })
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {overlayEntry.data.type === 'error' && (
               <div className="bg-red rounded-2xl p-5">
                 <div className="flex items-center gap-3 mb-3">
@@ -729,6 +891,58 @@ export function OrgQRScanner() {
               </div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Event picker top sheet ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showEventPicker && (
+          <>
+            <motion.div
+              key="picker-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => { if (eventCtx) setShowEventPicker(false) }}
+              className="absolute inset-0 z-[104] bg-black/50"
+            />
+            <motion.div
+              key="picker-sheet"
+              initial={{ y: '-100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '-100%' }}
+              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              className="absolute top-0 left-0 right-0 z-[105] bg-white rounded-b-3xl px-4 pt-14 pb-6 max-h-[70vh] overflow-y-auto"
+            >
+              <p className="font-black text-md3-title-md text-slate-900 mb-4">Select Event to Scan</p>
+              <div className="flex flex-col gap-2">
+                {availableEvents.map((ev) => (
+                  <motion.button
+                    key={ev.id}
+                    type="button"
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => void selectEvent(ev)}
+                    className={`w-full text-left px-4 py-3.5 rounded-2xl border transition-colors ${
+                      eventCtx?.id === ev.id
+                        ? 'bg-blue/10 border-blue/30'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <p className="font-bold text-md3-body-md text-slate-900 truncate">{ev.title}</p>
+                    {ev.event_date && (
+                      <p className="text-md3-label-md text-slate-500 mt-0.5">
+                        {formatDate.compact(ev.event_date)}
+                        {' · '}
+                        {new Date(ev.event_date).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </p>
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-5" />
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
