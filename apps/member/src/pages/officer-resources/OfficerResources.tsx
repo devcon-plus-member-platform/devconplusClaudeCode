@@ -125,7 +125,7 @@ export default function OfficerResources() {
           <div className="relative z-10 px-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <button
-                onClick={() => navigate('/home')}
+                onClick={() => navigate('/organizer')}
                 className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
                 aria-label="Go back"
               >
