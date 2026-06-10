@@ -579,7 +579,7 @@ export function OrgQRScanner() {
           onClick={() => navigate(-1)}
           className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
         >
-          <ArrowLeftOutline color="#334155" width={18} height={18} />
+          <ArrowLeftOutline color="#334155" size={18} />
         </motion.button>
 
         {/* Centre — event name + live date/time (tappable when multiple events available) */}
@@ -595,7 +595,7 @@ export function OrgQRScanner() {
               {eventCtx?.title ?? (loadingCtx ? '' : 'QR Scanner')}
             </p>
             {availableEvents.length > 1 && (
-              <AltArrowDownOutline color="#64748B" width={14} height={14} className="shrink-0" />
+              <AltArrowDownOutline color="#64748B" size={14} className="shrink-0" />
             )}
           </div>
           <p className="text-slate-500 text-md3-label-md mt-0.5">
@@ -613,7 +613,7 @@ export function OrgQRScanner() {
           onClick={() => setShowSettings((s) => !s)}
           className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
         >
-          <SettingsOutline color="#334155" width={18} height={18} />
+          <SettingsOutline color="#334155" size={18} />
         </motion.button>
       </div>
 
@@ -643,7 +643,7 @@ export function OrgQRScanner() {
               className="w-full flex items-center justify-between px-4 py-3.5 border-b border-slate-100 active:bg-slate-50 transition-colors"
             >
               <div className="flex items-center gap-2.5">
-                <FlipHorizontalOutline color="#334155" width={18} height={18} />
+                <FlipHorizontalOutline color="#334155" size={18} />
                 <span className="text-slate-900 text-md3-body-md font-medium">Mirror</span>
               </div>
               {/* Toggle switch */}
@@ -661,7 +661,7 @@ export function OrgQRScanner() {
                 onClick={() => { cycleCamera(); setShowSettings(false) }}
                 className="w-full flex items-center gap-2.5 px-4 py-3.5 active:bg-slate-50 transition-colors disabled:opacity-40"
               >
-                <CameraRotateOutline color="#334155" width={18} height={18} />
+                <CameraRotateOutline color="#334155" size={18} />
                 <span className="text-slate-900 text-md3-body-md font-medium">
                   {isSwitching ? 'Switching…' : 'Switch Lens'}
                 </span>
@@ -675,7 +675,7 @@ export function OrgQRScanner() {
       <div className="absolute bottom-6 left-4 right-4 z-[110] pointer-events-none">
         <div className="bg-white rounded-2xl px-5 py-4 flex items-center gap-3 shadow-card">
           <div className="w-9 h-9 rounded-full bg-green/15 flex items-center justify-center shrink-0">
-            <CheckCircleOutline color="#21C45D" width={18} height={18} />
+            <CheckCircleOutline color="#21C45D" size={18} />
           </div>
           {loadingCtx ? (
             <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
