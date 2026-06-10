@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, CheckSquareOutline, GiftOutline, HandHeartOutline, StarOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, CheckSquareOutline, HandHeartOutline, StarOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
@@ -201,17 +201,17 @@ useEffect(() => {
                 <span className="font-proxima font-semibold text-[#0d121b] text-[10px]">Volunteer</span>
               </motion.button>
 
-              {/* Redeem Card */}
+              {/* Earn Points Card */}
               <motion.button
                 variants={cardItem}
-                onClick={() => navigate('/rewards')}
+                onClick={() => navigate('/jobs?tab=missions')}
                 className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
                 whileTap={{ scale: 0.95 }}
               >
                 <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
-                  <GiftOutline color="#D2AD19" size={24} />
+                  <StarOutline color="#D2AD19" size={24} />
                 </div>
-                <span className="font-proxima font-semibold text-[#0d121b] text-[10px]">Redeem</span>
+                <span className="font-proxima font-semibold text-[#0d121b] text-[10px]">Earn Points</span>
               </motion.button>
             </div>
           </motion.section>

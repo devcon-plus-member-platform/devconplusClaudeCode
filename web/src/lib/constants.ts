@@ -4,6 +4,7 @@ export const EVENT_XP: Record<string, number> = {
   tech_talk:  5,
   social:     5,
   networking: 5,
+  code_camp:  50,
   workshop:   150,
   brown_bag:  150,
   hackathon:  150,

@@ -118,7 +118,12 @@ export default function SignIn() {
       await signIn(data.email, data.password, turnstileToken ?? undefined)
       failedAttempts.current = 0
       clearDraft()
-      navigate(isSafeReturnTo(returnTo) ? returnTo : '/home')
+      if (isSafeReturnTo(returnTo)) {
+        navigate(returnTo)
+      } else {
+        const role = useAuthStore.getState().user?.role
+        navigate(role === 'super_admin' || role === 'hq_admin' ? '/admin' : '/home')
+      }
     } catch (err) {
       // Firebase path: user signed up but hasn't clicked the verification link.
       // Redirect to /email-sent so they can resend — don't count as a failed attempt.
@@ -204,7 +209,12 @@ export default function SignIn() {
               // silently dismissed. Navigate to home if auth succeeded (user is set),
               // otherwise just reset the button.
               setGoogleLoading(false)
-              navigate(isSafeReturnTo(returnTo) ? returnTo : '/home')
+              if (isSafeReturnTo(returnTo)) {
+                navigate(returnTo)
+              } else {
+                const role = useAuthStore.getState().user?.role
+                navigate(role === 'super_admin' || role === 'hq_admin' ? '/admin' : '/home')
+              }
             } catch (err) {
               setGoogleLoading(false)
               if (isOverloadError(err)) {

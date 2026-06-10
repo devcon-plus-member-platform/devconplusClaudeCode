@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MapPointOutline } from 'solar-icon-set'
@@ -6,13 +6,16 @@ import type { Job } from '@devcon-plus/supabase'
 import { WORK_TYPE_LABELS } from '../lib/constants'
 
 function CompanyAvatar({ logoUrl, company }: { logoUrl: string | null; company: string }) {
-  if (logoUrl) {
+  const [imgError, setImgError] = useState(false)
+
+  if (logoUrl && !imgError) {
     return (
-      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl">
+      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl bg-white">
         <img
           src={logoUrl}
           alt={company}
           className="w-full h-full object-contain"
+          onError={() => setImgError(true)}
         />
       </div>
     )

@@ -69,6 +69,7 @@ const eventSchema = z
       'summit',
       'social',
       'networking',
+      'code_camp',
     ]),
     is_external: z.boolean().default(false),
     external_registration_url: z

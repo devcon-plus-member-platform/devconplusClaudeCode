@@ -27,6 +27,32 @@ const DIFF_CONFIG: Record<MissionDifficulty, { label: string; bg: string; text: 
   hard:   { label: 'Hard',   bg: 'rgba(127,8,255,0.2)',   text: '#7f08ff' },
 }
 
+// ── Company logo with fallback ────────────────────────────────────────────────
+
+function CompanyLogo({ logoUrl, company }: { logoUrl: string | null; company: string }) {
+  const [imgError, setImgError] = useState(false)
+
+  if (logoUrl && !imgError) {
+    return (
+      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl bg-white">
+        <img
+          src={logoUrl}
+          alt={company}
+          className="w-full h-full object-contain"
+          onError={() => setImgError(true)}
+        />
+      </div>
+    )
+  }
+  return (
+    <div className="w-12 h-12 bg-primary rounded-full shrink-0 flex items-center justify-center">
+      <span className="text-white font-proxima font-bold text-md3-title-lg uppercase">
+        {company[0] ?? 'J'}
+      </span>
+    </div>
+  )
+}
+
 // ── Jobs tab ──────────────────────────────────────────────────────────────────
 
 function JobsTab({ initialExpandId, searchQuery }: { initialExpandId: string | null; searchQuery: string }) {
@@ -115,17 +141,7 @@ function JobsTab({ initialExpandId, searchQuery }: { initialExpandId: string | n
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
                   {/* Logo */}
-                  {job.logo_url ? (
-                    <div className="w-12 h-12 shrink-0">
-                      <img src={job.logo_url} alt={job.company} className="w-full h-full object-contain rounded-xl" />
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 bg-primary rounded-full shrink-0 flex items-center justify-center">
-                      <span className="text-white font-proxima font-bold text-md3-title-lg uppercase">
-                        {job.company[0] ?? 'J'}
-                      </span>
-                    </div>
-                  )}
+                  <CompanyLogo logoUrl={job.logo_url} company={job.company} />
 
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-col gap-[2px]">

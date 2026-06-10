@@ -16,6 +16,7 @@ export type EventCategory =
   | 'summit'
   | 'social'
   | 'networking'
+  | 'code_camp'
 
 export type DevconCategory = 'devcon' | 'she' | 'kids' | 'campus'
 

@@ -885,7 +885,7 @@ export function OrgEventCreate() {
                   <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
                 )}
                 <p className="text-md3-label-md text-slate-400 mt-1">
-                  Auto-set based on category — Tech Talk/Social/Networking = 5 pts, Workshop/Brown Bag/Hackathon = 150 pts.
+                  Auto-set based on category — Tech Talk/Social/Networking = 5 pts, Code Camp = 50 pts, Workshop/Brown Bag/Hackathon = 150 pts.
                 </p>
               </div>
 

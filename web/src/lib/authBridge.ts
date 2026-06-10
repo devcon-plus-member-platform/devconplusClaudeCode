@@ -10,6 +10,7 @@ export interface BridgeSession {
   access_token: string
   refresh_token: string
   profile: Profile
+  firebase_custom_token?: string
 }
 
 const BRIDGE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000'

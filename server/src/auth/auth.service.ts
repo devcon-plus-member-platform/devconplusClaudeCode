@@ -79,7 +79,7 @@ export class AuthService {
       );
     }
 
-    return this.buildSession(profile);
+    return this.buildSession(profile, true);
   }
 
   // ── /auth/refresh ────────────────────────────────────────────────────────
@@ -398,7 +398,7 @@ export class AuthService {
       throw new UnauthorizedException('Email not verified.');
     }
 
-    return this.buildSession(linked);
+    return this.buildSession(linked, true);
   }
 
   // ── /auth/email/reset ────────────────────────────────────────────────────
@@ -579,15 +579,27 @@ export class AuthService {
     );
   }
 
-  private buildSession(profile: Profile): BridgeSession {
+  private async buildSession(profile: Profile, includeCustomToken = false): Promise<BridgeSession> {
     const accessToken = this.jwt.signBridgeJwt({
       sub: profile.id,
       email: profile.email,
     });
+
+    let firebase_custom_token: string | undefined;
+    if (includeCustomToken && profile.auth_uid) {
+      try {
+        firebase_custom_token = await this.firebase.auth.createCustomToken(profile.auth_uid);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`createCustomToken failed for profile ${profile.id}: ${msg}`);
+      }
+    }
+
     return {
       access_token: accessToken,
       refresh_token: randomUUID(),
       profile,
+      ...(firebase_custom_token ? { firebase_custom_token } : {}),
     };
   }
 

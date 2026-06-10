@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Event, EventRegistration, DevconCategory, Json } from '@devcon-plus/supabase'
+import type { Event, EventCategory, EventRegistration, DevconCategory, Json } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
 
@@ -28,7 +28,7 @@ interface CreateEventPayload {
   location: string
   event_date: string
   end_date: string | null
-  category: 'tech_talk' | 'hackathon' | 'workshop' | 'brown_bag' | 'summit' | 'social' | 'networking'
+  category: EventCategory
   devcon_category: DevconCategory | null
   tags: string[]
   visibility: 'public' | 'unlisted' | 'draft'
@@ -53,7 +53,7 @@ export interface UpdateEventPayload {
   location?: string
   event_date?: string
   end_date?: string | null
-  category?: 'tech_talk' | 'hackathon' | 'workshop' | 'brown_bag' | 'summit' | 'social' | 'networking'
+  category?: EventCategory
   devcon_category?: DevconCategory | null
   tags?: string[]
   visibility?: 'public' | 'unlisted' | 'draft'
