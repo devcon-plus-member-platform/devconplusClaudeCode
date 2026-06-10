@@ -53,7 +53,7 @@ const CornerBrackets = ({ detecting }: { detecting: boolean }) => (
 export function OrgQRScanner() {
   const navigate = useNavigate()
 
-  // CameraOutline lifecycle — independent of result display
+  // Camera lifecycle — independent of result display
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('starting')
   const [retryAttempt, setRetryAttempt] = useState(1)   // 1–3, shown in spinner
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
