@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { createPortal } from 'react-dom'
 import { StarOutline, CupFirstOutline, LockOutline, GiftOutline, AltArrowRightOutline, MedalStarCircleBoldDuotone } from 'solar-icon-set'
@@ -126,7 +127,18 @@ function RedemptionModal({ reward, spendablePoints, onClose }: RedemptionModalPr
                       <p className="text-[14px] font-semibold text-red mb-1 flex items-center gap-2">
                         <LockOutline className="size-4" color="#EF4444" /> Not Enough Points
                       </p>
-                      <p className="text-[12px] text-red/80">You need {(reward.points_cost - spendablePoints).toLocaleString()} more points to redeem this item.</p>
+                      <p className="text-[12px] text-red/80">
+                        You need {(reward.points_cost - spendablePoints).toLocaleString()} more points to redeem this item. To Earn More{' '}
+                        <span className="font-semibold text-red">Points</span>
+                        , Accomplish{' '}
+                        <Link
+                          to="/jobs?tab=missions"
+                          className="font-semibold underline underline-offset-2 text-red"
+                        >
+                          Missions
+                        </Link>
+                        <StarOutline color="#F8C630" size={11} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '2px' }} />
+                      </p>
                     </div>
                   )}
 
@@ -593,33 +605,50 @@ export default function Rewards() {
       {/* ── Content ── */}
       <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
         {activeTab === 'redeem' ? (
-          isLoading ? (
-            <div className="grid grid-cols-2 gap-x-[6px] gap-y-[10px]">
-              {[1, 2, 3, 4].map((i) => <SkeletonRewardCard key={i} />)}
+          <>
+            {isLoading ? (
+              <div className="grid grid-cols-2 gap-x-[6px] gap-y-[10px]">
+                {[1, 2, 3, 4].map((i) => <SkeletonRewardCard key={i} />)}
+              </div>
+            ) : rewards.length === 0 ? (
+              <div className="flex flex-col items-center justify-center pt-10 px-8 text-center">
+                <RewardPlaceholder className="w-16 h-16 rounded-full mb-4" iconSize="w-8 h-8" />
+                <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">No rewards yet</h3>
+                <p className="text-md3-body-md text-slate-500">Check back soon — exciting rewards are coming!</p>
+              </div>
+            ) : (
+              <motion.div
+                className="grid grid-cols-2 gap-x-[6px] gap-y-[10px]"
+                variants={staggerContainer}
+                initial="hidden"
+                animate="visible"
+              >
+                {rewards.map((reward) => (
+                  <RewardCard
+                    key={reward.id}
+                    reward={reward}
+                    spendablePoints={spendablePoints}
+                    onRedeem={handleRedeem}
+                  />
+                ))}
+              </motion.div>
+            )}
+
+            {/* Earn More Points CTA */}
+            <div className="mt-6 rounded-[16px] bg-primary/5 border border-primary/10 px-4 py-3.5 flex items-center justify-center gap-2">
+              <StarOutline color="#F8C630" size={16} />
+              <p className="text-md3-body-sm text-slate-600 text-center">
+                Earn more points! Accomplish{' '}
+                <Link
+                  to="/jobs?tab=missions"
+                  className="font-semibold underline underline-offset-2"
+                  style={{ color: 'rgb(var(--color-primary))' }}
+                >
+                  Missions
+                </Link>
+              </p>
             </div>
-          ) : rewards.length === 0 ? (
-            <div className="flex flex-col items-center justify-center pt-10 px-8 text-center">
-              <RewardPlaceholder className="w-16 h-16 rounded-full mb-4" iconSize="w-8 h-8" />
-              <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">No rewards yet</h3>
-              <p className="text-md3-body-md text-slate-500">Check back soon — exciting rewards are coming!</p>
-            </div>
-          ) : (
-            <motion.div
-              className="grid grid-cols-2 gap-x-[6px] gap-y-[10px]"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              {rewards.map((reward) => (
-                <RewardCard
-                  key={reward.id}
-                  reward={reward}
-                  spendablePoints={spendablePoints}
-                  onRedeem={handleRedeem}
-                />
-              ))}
-            </motion.div>
-          )
+          </>
         ) : activeTab === 'receipts' ? (
           <ClaimReceiptsTab onSelectReceipt={setSelectedReceipt} />
         ) : null}
