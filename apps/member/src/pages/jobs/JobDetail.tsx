@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeftOutline, MapPointOutline, ShareOutline } from 'solar-icon-set'
 import { useJobsStore } from '../../stores/useJobsStore'
 import { WORK_TYPE_LABELS } from '../../lib/constants'
+import { logoStatusCache } from '../../lib/logoCache'
 import NotFound from '../NotFound'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
@@ -20,6 +21,10 @@ export default function JobDetail() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const job = jobs.find((j) => j.id === id)
+
+  const [logoStatus, setLogoStatus] = useState<'ok' | 'error' | 'pending'>(
+    () => (job?.logo_url ? (logoStatusCache.get(job.logo_url) ?? 'pending') : 'error')
+  )
 
   if (isLoading) {
     return (
@@ -73,12 +78,14 @@ export default function JobDetail() {
 
       {/* ── Company identity card ── */}
       <div className="px-4 pt-4 mb-2 flex items-center gap-3">
-        {job.logo_url ? (
+        {job.logo_url && logoStatus !== 'error' ? (
           <div className="w-14 h-14 shrink-0">
             <img
               src={job.logo_url}
               alt={job.company}
               className="w-full h-full object-contain rounded-2xl"
+              onLoad={() => { logoStatusCache.set(job.logo_url!, 'ok'); setLogoStatus('ok') }}
+              onError={() => { logoStatusCache.set(job.logo_url!, 'error'); setLogoStatus('error') }}
             />
           </div>
         ) : (

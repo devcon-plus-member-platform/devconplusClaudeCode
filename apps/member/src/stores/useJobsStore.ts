@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Job } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
+import { logoStatusCache } from '../lib/logoCache'
 
 interface JobsState {
   jobs: Job[]
@@ -34,7 +35,17 @@ export const useJobsStore = create<JobsState>((set, get) => ({
         .order('posted_at', { ascending: true })
         .limit(50)
       if (error) throw error
-      set({ jobs: (data ?? []) as Job[] })
+      const jobs = (data ?? []) as Job[]
+      set({ jobs })
+      for (const job of jobs) {
+        if (job.logo_url && !logoStatusCache.has(job.logo_url)) {
+          const img = new Image()
+          const url = job.logo_url
+          img.onload  = () => logoStatusCache.set(url, 'ok')
+          img.onerror = () => logoStatusCache.set(url, 'error')
+          img.src = url
+        }
+      }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {

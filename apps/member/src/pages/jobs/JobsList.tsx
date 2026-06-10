@@ -9,9 +9,33 @@ import { SkeletonJobCard } from '../../components/Skeleton'
 import { WORK_TYPE_LABELS } from '../../lib/constants'
 import { staggerContainer, cardItem } from '../../lib/animation'
 import { fuzzySearchFilter } from '../../lib/utils'
+import { logoStatusCache } from '../../lib/logoCache'
 import SearchBar from '../../components/SearchBar'
 import SearchEmptyState from '../../components/SearchEmptyState'
 import type { MissionDifficulty } from '@devcon-plus/supabase'
+
+function JobLogoAvatar({ logoUrl, company }: { logoUrl: string | null; company: string }) {
+  const [imgStatus, setImgStatus] = useState<'ok' | 'error' | 'pending'>(
+    () => (logoUrl ? (logoStatusCache.get(logoUrl) ?? 'pending') : 'error')
+  )
+  if (logoUrl && imgStatus !== 'error') {
+    return (
+      <div className="w-12 h-12 shrink-0">
+        <img src={logoUrl} alt={company} className="w-full h-full object-contain rounded-xl"
+          onLoad={() => { logoStatusCache.set(logoUrl, 'ok'); setImgStatus('ok') }}
+          onError={() => { logoStatusCache.set(logoUrl, 'error'); setImgStatus('error') }}
+        />
+      </div>
+    )
+  }
+  return (
+    <div className="w-12 h-12 bg-primary rounded-full shrink-0 flex items-center justify-center">
+      <span className="text-white font-proxima font-bold text-md3-title-lg uppercase">
+        {company[0] ?? 'J'}
+      </span>
+    </div>
+  )
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -115,17 +139,7 @@ function JobsTab({ initialExpandId, searchQuery }: { initialExpandId: string | n
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
                   {/* Logo */}
-                  {job.logo_url ? (
-                    <div className="w-12 h-12 shrink-0">
-                      <img src={job.logo_url} alt={job.company} className="w-full h-full object-contain rounded-xl" />
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 bg-primary rounded-full shrink-0 flex items-center justify-center">
-                      <span className="text-white font-proxima font-bold text-md3-title-lg uppercase">
-                        {job.company[0] ?? 'J'}
-                      </span>
-                    </div>
-                  )}
+                  <JobLogoAvatar logoUrl={job.logo_url} company={job.company} />
 
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-col gap-[2px]">
