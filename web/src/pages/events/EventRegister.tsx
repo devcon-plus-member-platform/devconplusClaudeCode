@@ -124,6 +124,7 @@ export default function EventRegister() {
   const { draft, saveDraft, clearDraft } = useFormDraft<{
     formResponses: Record<string, string | string[]>
     agreed: boolean
+    schoolValue: string
   }>(`event-register:${slug ?? ''}`, 'local')
   const navigate = useNavigate()
   const { events, registrations, register } = useEventsStore()
@@ -132,6 +133,17 @@ export default function EventRegister() {
   const [legalModal, setLegalModal] = useState<LegalModalType | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [schoolValue, setSchoolValue] = useState<string>(
+    (draft.schoolValue as string) ?? user?.school_or_company ?? ''
+  )
+
+  // Sync school field if profile loads after mount and draft has no override
+  useEffect(() => {
+    if (user?.school_or_company && !(draft.schoolValue as string)) {
+      setSchoolValue(user.school_or_company)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.school_or_company])
 
   const [formResponses, setFormResponses] = useState<Record<string, string | string[]>>(
     (draft.formResponses as Record<string, string | string[]>) ?? {},
@@ -151,7 +163,13 @@ export default function EventRegister() {
   const isExternal = event?.is_external === true
   const externalUrl = event?.external_registration_url ?? ''
 
-  const isChapterBlocked = !!(event && user && event.is_chapter_locked === true && event.chapter_id !== user.chapter_id)
+  const isChapterBlocked = !!(
+    event && user &&
+    event.is_chapter_locked === true &&
+    event.chapter_id !== null &&
+    event.chapter_id !== user.chapter_id
+  )
+  const hasSchoolOnProfile = !!user?.school_or_company?.trim()
 
   useEffect(() => {
     if (!event || !user) return
@@ -183,7 +201,7 @@ export default function EventRegister() {
     const next = { ...formResponses, [fieldId]: value }
     setFormResponses(next)
     if (fieldErrors[fieldId]) setFieldErrors(prev => ({ ...prev, [fieldId]: '' }))
-    saveDraft({ formResponses: next, agreed })
+    saveDraft({ formResponses: next, agreed, schoolValue })
   }
 
   const validateCustomFields = (): boolean => {
@@ -207,6 +225,12 @@ export default function EventRegister() {
     setSubmitting(true)
     setError(null)
     try {
+      // Persist school/company to profile if the user added or changed it
+      const trimmedSchool = schoolValue.trim()
+      if (trimmedSchool && trimmedSchool !== (user.school_or_company ?? '')) {
+        await useAuthStore.getState().updateProfile({ school_or_company: trimmedSchool })
+      }
+
       await register(eventId, user.id)
       const reg = useEventsStore.getState().registrations.find((r) => r.event_id === eventId)
       const destination = reg?.status === 'approved'
@@ -286,22 +310,57 @@ export default function EventRegister() {
 
       <form onSubmit={handleSubmit} className="p-4 space-y-4 pb-24">
         {/* Pre-filled profile fields */}
-        <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details (pre-filled)</p>
+        <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details</p>
 
-        {[
-          { label: 'Full Name',         value: user.full_name },
-          { label: 'Email',             value: user.email },
-          { label: 'School / Company',  value: user.school_or_company ?? '' },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <label className="text-md3-body-md font-medium text-slate-700 block mb-1">{label}</label>
+        {/* Read-only: Full Name */}
+        <div>
+          <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Full Name</label>
+          <input
+            value={user.full_name}
+            readOnly
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
+          />
+        </div>
+
+        {/* Read-only: Email */}
+        <div>
+          <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Email</label>
+          <input
+            value={user.email}
+            readOnly
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
+          />
+        </div>
+
+        {/* School / Company — read-only if already on profile, editable only when empty */}
+        <div>
+          <label className="text-md3-body-md font-medium text-slate-700 block mb-1">
+            School / Company
+          </label>
+          {hasSchoolOnProfile ? (
             <input
-              value={value}
+              value={user.school_or_company ?? ''}
               readOnly
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
             />
-          </div>
-        ))}
+          ) : (
+            <input
+              type="text"
+              value={schoolValue}
+              onChange={(e) => {
+                setSchoolValue(e.target.value)
+                saveDraft({ formResponses, agreed, schoolValue: e.target.value })
+              }}
+              placeholder="e.g. University of the Philippines"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:ring-1 focus:border-primary focus:ring-primary/20"
+            />
+          )}
+        </div>
+
+        {/* Reminder: details are managed in settings */}
+        <p className="text-md3-label-md text-slate-400">
+          Need to change a detail? Update it anytime in your profile settings.
+        </p>
 
         {/* Dynamic custom fields */}
         {customSchema.length > 0 && (

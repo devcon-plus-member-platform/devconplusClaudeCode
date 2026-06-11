@@ -1,18 +1,25 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MapPointOutline } from 'solar-icon-set'
 import type { Job } from '@devcon-plus/supabase'
 import { WORK_TYPE_LABELS } from '../lib/constants'
+import { logoStatusCache } from '../lib/logoCache'
 
 function CompanyAvatar({ logoUrl, company }: { logoUrl: string | null; company: string }) {
-  if (logoUrl) {
+  const [imgStatus, setImgStatus] = useState<'ok' | 'error' | 'pending'>(
+    () => (logoUrl ? (logoStatusCache.get(logoUrl) ?? 'pending') : 'error')
+  )
+
+  if (logoUrl && imgStatus !== 'error') {
     return (
       <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl">
         <img
           src={logoUrl}
           alt={company}
           className="w-full h-full object-contain"
+          onLoad={() => { logoStatusCache.set(logoUrl, 'ok'); setImgStatus('ok') }}
+          onError={() => { logoStatusCache.set(logoUrl, 'error'); setImgStatus('error') }}
         />
       </div>
     )

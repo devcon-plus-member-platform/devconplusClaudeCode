@@ -42,7 +42,7 @@ interface CreateEventPayload {
   cover_image_url: string | null
   is_external?: boolean
   external_registration_url?: string | null
-  chapter_id: string
+  chapter_id: string | null
   /** JSONB: array of CustomFormField objects */
   custom_form_schema?: Json | null
 }

@@ -239,8 +239,12 @@ export function OrgEventCreate() {
       setSubmitError('Please select a DEVCON Program.')
       return
     }
-    if (!user?.chapter_id) {
+    if (!isAdmin && !user?.chapter_id) {
       setSubmitError('Your account is not linked to a chapter. Contact an admin.')
+      return
+    }
+    if (isAdmin && !data.chapter_id) {
+      setSubmitError('Please select a chapter or HQ.')
       return
     }
     if (isExternal && !urlIsTba) {
@@ -279,7 +283,9 @@ export function OrgEventCreate() {
       }
     }
 
-    const chapterId = isAdmin ? data.chapter_id : user.chapter_id
+    const rawChapterId = isAdmin ? data.chapter_id : (user?.chapter_id ?? '')
+    const chapterId = isAdmin && rawChapterId === '__hq__' ? null : rawChapterId
+    const isHqEvent = isAdmin && chapterId === null
 
     try {
       await createEvent({
@@ -298,7 +304,7 @@ export function OrgEventCreate() {
         points_value:                isExternal ? 0 : data.points_value,
         volunteer_points:            isExternal ? 0 : data.volunteer_points,
         requires_approval:           data.requires_approval,
-        is_chapter_locked:           data.is_chapter_locked,
+        is_chapter_locked:           isHqEvent ? false : data.is_chapter_locked,
         is_external:                 isExternal,
         external_registration_url:   isExternal ? (urlIsTba ? 'tba' : externalUrl.trim()) : null,
         cover_image_url,
@@ -453,6 +459,7 @@ export function OrgEventCreate() {
                 {isAdmin && (
                   <>
                     <option value="">Select chapter…</option>
+                    <option value="__hq__">HQ — All Chapters</option>
                     {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
                       const group = chapters
                         .filter((c) => c.region === region)
@@ -889,7 +896,8 @@ export function OrgEventCreate() {
                 </p>
               </div>
 
-              <div>
+              {/* Volunteer XP — temporarily disabled. Default value (500) still submitted via form defaultValues. */}
+              {/* <div>
                 <label className={labelClass}>Volunteer XP</label>
                 <input
                   {...register('volunteer_points')}
@@ -905,7 +913,7 @@ export function OrgEventCreate() {
                 <p className="text-md3-label-md text-slate-400 mt-1">
                   XP awarded on top of attendance XP for members who volunteer at this event. Default: 500 pts.
                 </p>
-              </div>
+              </div> */}
             </div>
           </motion.div>
         )}
