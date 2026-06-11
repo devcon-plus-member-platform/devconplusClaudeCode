@@ -75,7 +75,13 @@ jobs:
       - name: Pull Vercel project settings and env
         if: steps.token.outputs.present == 'true'
         working-directory: web
-        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+        # vercel build does NOT inject the pulled env into the Vite build
+        # (verified empirically — bundles came out without VITE_* values and
+        # the app white-screened with "supabaseUrl is required"). Copy the
+        # pulled file to .env.production, which Vite loads natively.
+        run: |
+          npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          cp .vercel/.env.production.local .env.production
 
       - name: Build (runs tsc -b && vite build via project settings)
         if: steps.token.outputs.present == 'true'
