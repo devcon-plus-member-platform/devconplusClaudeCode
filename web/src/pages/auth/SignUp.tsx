@@ -303,8 +303,20 @@ export default function SignUp() {
               disabled={googleLoading}
               onClick={async () => {
                 setGoogleLoading(true)
+                setFormError(null)
                 if (isSafeReturnTo(returnTo)) sessionStorage.setItem('devcon_returnTo', returnTo)
-                try { await signInWithGoogle() } catch { setGoogleLoading(false) }
+                try {
+                  // signInWithGoogle swallows popup failures (sets store error and
+                  // resolves) — surface that error here or the button hangs on
+                  // "Redirecting…" with no feedback.
+                  await signInWithGoogle()
+                  const storeError = useAuthStore.getState().error
+                  if (storeError) setFormError(storeError)
+                } catch {
+                  setFormError('Unable to connect to Google Sign-In. Please try again or use email.')
+                } finally {
+                  setGoogleLoading(false)
+                }
               }}
               className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white border border-slate-200 rounded-xl text-md3-body-md font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-5 shadow-card disabled:opacity-60"
             >
