@@ -1,25 +1,28 @@
-# Deploys the NestJS backend (server/) on dev to the staging slot of the EC2
-# host (container devcon-plus-api, port 8000, https://api.cloud-engineer.dev).
+# Deploys the NestJS backend (server/) on master to the PRODUCTION slot of the
+# EC2 host (container devcon-plus-api-prod, port 8010, https://api.devcon.ph).
 #
-# Flow: tests gate -> Docker image built in CI and pushed to GHCR -> EC2 pulls
-# the image via SSM and restarts the container. Building in CI keeps the small
-# instance from doing heavy compiles; `pull || build` falls back to an on-host
-# build if GHCR is unavailable (e.g. before the package is made public).
+# DORMANT until the dev -> master structural merge: master has no server/
+# folder yet, so the preflight guard skips every run cleanly. After the merge,
+# deploys additionally require:
+#   - the prod slot provisioned on EC2 (/opt/devcon-plus/prod-repo + .env.prod)
+#   - api.devcon.ph DNS + certbot + nginx block (see merge-day runbook)
+#   - a reviewer approval via the GitHub "production" environment
 #
-# Auth: GitHub OIDC -> scoped IAM role (infra/github-oidc.tf), no stored AWS
-# secrets. master deploys are handled by deploy-backend-production.yml.
-name: Deploy backend (staging)
+# Same architecture as the staging workflow: tests gate -> image built in CI,
+# pushed to GHCR (:prod tags) -> EC2 pulls via SSM. OIDC trust already covers
+# refs/heads/master (infra/github-oidc.tf).
+name: Deploy backend (production)
 
 on:
   push:
-    branches: [dev]
+    branches: [master]
     paths:
       - 'server/**'
-      - '.github/workflows/deploy-backend-staging.yml'
+      - '.github/workflows/deploy-backend-production.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-backend-staging
+  group: deploy-backend-production
   cancel-in-progress: false
 
 permissions:
@@ -29,7 +32,19 @@ env:
   IMAGE: ghcr.io/rocketwolf98/devcon-plus-api
 
 jobs:
+  # master keeps the old repo layout (no server/) until the structural merge.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      has-server: ${{ steps.detect.outputs.has-server }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: echo "has-server=$([ -d server ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: preflight
+    if: needs.preflight.outputs.has-server == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,13 +73,16 @@ jobs:
       - name: Build and push image
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
-          docker build server -t "$IMAGE:staging" -t "$IMAGE:staging-$SHORT_SHA"
-          docker push "$IMAGE:staging"
-          docker push "$IMAGE:staging-$SHORT_SHA"
-          echo "Pushed $IMAGE:staging and :staging-$SHORT_SHA" >> "$GITHUB_STEP_SUMMARY"
+          docker build server -t "$IMAGE:prod" -t "$IMAGE:prod-$SHORT_SHA"
+          docker push "$IMAGE:prod"
+          docker push "$IMAGE:prod-$SHORT_SHA"
+          echo "Pushed $IMAGE:prod and :prod-$SHORT_SHA" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: build-image
+    # Pauses for manual approval once a required reviewer is configured on the
+    # "production" environment (GitHub repo Settings -> Environments).
+    environment: production
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -72,13 +90,11 @@ jobs:
     env:
       AWS_REGION: ap-southeast-1
       INSTANCE_ID: i-02e08aceb6d701d77
-      HEALTH_URL: https://api.cloud-engineer.dev/api/health
+      HEALTH_URL: https://api.devcon.ph/api/health
     steps:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # The role ARN is an identifier, not a secret — access is gated by
-          # the role's trust policy (this repo, dev/master refs only).
           role-to-assume: arn:aws:iam::484907520476:role/devcon-plus-api-github-deploy
           aws-region: ap-southeast-1
 
@@ -86,20 +102,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          # git runs as ec2-user (repo owner); running it as root fails with
-          # "dubious ownership" and would silently deploy stale code.
-          # Staging always deploys origin/dev regardless of how the workflow
-          # was invoked.
           SCRIPT=$(cat <<EOF
           set -euo pipefail
-          sudo -u ec2-user git -C /opt/devcon-plus/repo fetch origin dev
-          sudo -u ec2-user git -C /opt/devcon-plus/repo reset --hard FETCH_HEAD
-          cd /opt/devcon-plus/repo/server
-          docker compose -f docker-compose.ec2.yml pull || docker compose -f docker-compose.ec2.yml build
-          docker compose -f docker-compose.ec2.yml up -d
+          if [ ! -d /opt/devcon-plus/prod-repo ]; then
+            echo "Production slot not provisioned on this host - follow the merge-day runbook (clone master to /opt/devcon-plus/prod-repo and create server/.env.prod) before deploying."
+            exit 1
+          fi
+          sudo -u ec2-user git -C /opt/devcon-plus/prod-repo fetch origin master
+          sudo -u ec2-user git -C /opt/devcon-plus/prod-repo reset --hard FETCH_HEAD
+          cd /opt/devcon-plus/prod-repo/server
+          docker compose -f docker-compose.prod.yml pull || docker compose -f docker-compose.prod.yml build
+          docker compose -f docker-compose.prod.yml up -d
           docker image prune -f
           sleep 10
-          curl -fsS --retry 5 --retry-delay 5 --retry-connrefused http://127.0.0.1:8000/api/health
+          curl -fsS --retry 5 --retry-delay 5 --retry-connrefused http://127.0.0.1:8010/api/health
           EOF
           )
 
@@ -114,8 +130,6 @@ jobs:
             --query 'Command.CommandId' --output text)
           echo "SSM command: $CMD_ID"
 
-          # Custom poll loop: the built-in command-executed waiter caps at
-          # ~100s, shorter than a worst-case fallback build.
           STATUS=InProgress
           for _ in $(seq 1 60); do
             STATUS=$(aws ssm get-command-invocation \
