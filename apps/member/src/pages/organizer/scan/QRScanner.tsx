@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeftOutline, AltArrowDownOutline, CameraRotateOutline, CheckCircleOutline, InfoCircleOutline, CloseCircleOutline, BoltOutline, ClockCircleOutline, UserCheckOutline, UserCrossOutline, FlipHorizontalOutline, SettingsOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, AltArrowDownOutline, CalendarOutline, CameraRotateOutline, CheckCircleOutline, InfoCircleOutline, CloseCircleOutline, BoltOutline, ClockCircleOutline, UserCheckOutline, UserCrossOutline, FlipHorizontalOutline, SettingsOutline } from 'solar-icon-set'
 import { formatDate } from '../../../lib/dates'
 
 // ── Types ────────────────────────────────────────────────────────────────────
