@@ -74,6 +74,7 @@ export default function ForgotPassword() {
             <input
               {...register('email')}
               type="email"
+              autoComplete="email"
               placeholder="juan@devcon.ph"
               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
             />

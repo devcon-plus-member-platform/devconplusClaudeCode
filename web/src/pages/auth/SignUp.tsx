@@ -337,6 +337,7 @@ export default function SignUp() {
             <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Full Name</label>
             <input
               {...register('full_name')}
+              autoComplete="name"
               placeholder="Juan dela Cruz"
               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
             />
@@ -351,6 +352,7 @@ export default function SignUp() {
                 {...register('username', {
                   onChange: (e) => handleUsernameChange(e.target.value),
                 })}
+                autoComplete="username"
                 placeholder="juan_delacruz"
                 className="w-full border border-slate-200 rounded-xl pl-8 pr-10 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
               />
@@ -378,6 +380,7 @@ export default function SignUp() {
                 <input
                   {...register('email')}
                   type="email"
+                  autoComplete="email"
                   placeholder="juan@devcon.ph"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
                 />
@@ -392,6 +395,7 @@ export default function SignUp() {
               <input
                 {...register('password')}
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 placeholder="••••••••"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-11 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
               />

@@ -74,6 +74,7 @@ export default function PasswordConfirmModal({
             <div className="relative mb-3">
               <input
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your current password"
