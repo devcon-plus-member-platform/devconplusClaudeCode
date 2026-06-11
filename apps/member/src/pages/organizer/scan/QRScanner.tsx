@@ -569,17 +569,17 @@ export function OrgQRScanner() {
         </div>
       )}
 
-      {/* ── Top bar — solid white header ─────────────────────────────────────── */}
-      <div className="absolute top-0 left-0 right-0 z-[110] bg-white grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 pt-12 pb-3">
+      {/* ── Top bar — floating rounded header ────────────────────────────────── */}
+      <div className={`absolute top-12 left-4 right-4 z-[110] rounded-3xl grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3.5 transition-all duration-200 ${showEventPicker ? 'bg-white/90 backdrop-blur-xl' : 'bg-white shadow-xl'}`}>
         {/* Back */}
         <motion.button
           type="button"
           aria-label="Go back"
           whileTap={{ scale: 0.9 }}
           onClick={() => navigate(-1)}
-          className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
+          className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
         >
-          <ArrowLeftOutline color="#334155" size={18} />
+          <ArrowLeftOutline color="#334155" size={20} />
         </motion.button>
 
         {/* Centre — event name + live date/time (tappable when multiple events available) */}
@@ -611,9 +611,9 @@ export function OrgQRScanner() {
           aria-label="Camera settings"
           whileTap={{ scale: 0.9 }}
           onClick={() => setShowSettings((s) => !s)}
-          className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
+          className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0"
         >
-          <SettingsOutline color="#334155" size={18} />
+          <SettingsOutline color="#334155" size={20} />
         </motion.button>
       </div>
 
@@ -634,7 +634,7 @@ export function OrgQRScanner() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-24 right-4 z-[115] w-56 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden"
+            className="absolute top-[7rem] right-4 z-[115] w-56 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden"
           >
             {/* Mirror toggle */}
             <button
@@ -913,34 +913,76 @@ export function OrgQRScanner() {
               animate={{ y: 0 }}
               exit={{ y: '-100%' }}
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-              className="absolute top-0 left-0 right-0 z-[105] bg-white rounded-b-3xl px-4 pt-14 pb-6 max-h-[70vh] overflow-y-auto"
+              className="absolute top-0 left-0 right-0 z-[105] bg-white rounded-b-3xl max-h-[70vh] flex flex-col"
             >
-              <p className="font-black text-md3-title-md text-slate-900 mb-4">Select Event to Scan</p>
-              <div className="flex flex-col gap-2">
-                {availableEvents.map((ev) => (
-                  <motion.button
-                    key={ev.id}
-                    type="button"
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => void selectEvent(ev)}
-                    className={`w-full text-left px-4 py-3.5 rounded-2xl border transition-colors ${
-                      eventCtx?.id === ev.id
-                        ? 'bg-blue/10 border-blue/30'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <p className="font-bold text-md3-body-md text-slate-900 truncate">{ev.title}</p>
-                    {ev.event_date && (
-                      <p className="text-md3-label-md text-slate-500 mt-0.5">
-                        {formatDate.compact(ev.event_date)}
-                        {' · '}
-                        {new Date(ev.event_date).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                      </p>
-                    )}
-                  </motion.button>
-                ))}
+              {/* Sheet header — clears the floating top bar */}
+              <div className="px-5 pt-32 pb-3 shrink-0">
+                <p className="font-black text-md3-headline-sm text-slate-900">Select Event</p>
+                <p className="text-md3-label-md text-slate-500 mt-0.5">
+                  {availableEvents.length} event{availableEvents.length !== 1 ? 's' : ''} at your chapter
+                </p>
               </div>
-              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-5" />
+              <div className="h-px bg-slate-100 mx-5 shrink-0" />
+
+              {/* Scrollable list */}
+              <div className="flex flex-col gap-2.5 px-4 py-3 overflow-y-auto pb-6">
+                {availableEvents.map((ev) => {
+                  const isSelected = eventCtx?.id === ev.id
+                  const eventDate = ev.event_date ? new Date(ev.event_date) : null
+                  const isToday = eventDate
+                    ? eventDate.toDateString() === new Date().toDateString()
+                    : false
+
+                  return (
+                    <motion.button
+                      key={ev.id}
+                      type="button"
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => void selectEvent(ev)}
+                      className={`w-full text-left flex items-center gap-3.5 px-4 py-3.5 rounded-2xl border transition-colors ${
+                        isSelected
+                          ? 'bg-blue/10 border-blue/25'
+                          : 'bg-slate-50 border-transparent'
+                      }`}
+                    >
+                      {/* Date bubble */}
+                      <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shrink-0 ${isSelected ? 'bg-blue' : 'bg-slate-200'}`}>
+                        {eventDate ? (
+                          <>
+                            <span className={`text-[9px] font-bold uppercase leading-none tracking-wide ${isSelected ? 'text-white/75' : 'text-slate-500'}`}>
+                              {eventDate.toLocaleDateString('en-PH', { month: 'short' })}
+                            </span>
+                            <span className={`text-lg font-black leading-tight ${isSelected ? 'text-white' : 'text-slate-700'}`}>
+                              {eventDate.getDate()}
+                            </span>
+                          </>
+                        ) : (
+                          <CalendarOutline size={20} color={isSelected ? 'white' : '#64748B'} />
+                        )}
+                      </div>
+
+                      {/* Event info */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-bold text-md3-body-md truncate ${isSelected ? 'text-blue' : 'text-slate-900'}`}>
+                          {ev.title}
+                        </p>
+                        <p className="text-md3-label-md text-slate-500 mt-0.5">
+                          {isToday ? 'Today' : eventDate ? formatDate.compact(ev.event_date!) : '—'}
+                          {eventDate && <> · {eventDate.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })}</>}
+                        </p>
+                      </div>
+
+                      {/* Selection indicator */}
+                      {isSelected && (
+                        <CheckCircleOutline size={22} color="#1152D4" className="shrink-0" />
+                      )}
+                    </motion.button>
+                  )
+                })}
+              </div>
+
+              {/* Bottom handle */}
+              <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4 shrink-0" />
             </motion.div>
           </>
         )}

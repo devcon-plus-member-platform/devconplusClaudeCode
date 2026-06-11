@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftOutline, RefreshOutline, QRCodeOutline, StarOutline } from 'solar-icon-set'
 import { QRCodeSVG } from 'qrcode.react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { usePointsStore } from '../../stores/usePointsStore'
 import { supabase } from '../../lib/supabase'
@@ -34,6 +34,7 @@ export default function MyQR() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [fetchError, setFetchError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
+  const [qrFullscreen, setQrFullscreen] = useState(false)
 
   useEffect(() => {
     loadTotalPoints()
@@ -194,10 +195,11 @@ export default function MyQR() {
                 />
               </svg>
 
-              {/* QR container */}
+              {/* QR container — tap to zoom */}
               <div
-                className="p-4 bg-white rounded-2xl shadow-[0_8px_32px_rgba(30,42,86,0.12)]"
+                className="p-4 bg-white rounded-2xl shadow-[0_8px_32px_rgba(30,42,86,0.12)] cursor-pointer active:scale-[0.97] transition-transform"
                 style={{ opacity: isRefreshing || !token ? 0.4 : 1, transition: 'opacity 0.3s' }}
+                onClick={() => { if (token && !isRefreshing) setQrFullscreen(true) }}
               >
                 {token ? (
                   <QRCodeSVG
@@ -229,12 +231,17 @@ export default function MyQR() {
                 Tap to retry
               </motion.button>
             ) : (
-              <p
-                className="text-md3-label-md font-medium"
-                style={{ color: secondsLeft <= 30 ? '#F8C630' : 'rgb(var(--color-primary))' }}
-              >
-                {isRefreshing ? 'Refreshing…' : `Refreshes in ${countdownLabel}`}
-              </p>
+              <div className="flex flex-col items-center gap-0.5">
+                <p
+                  className="text-md3-label-md font-medium"
+                  style={{ color: secondsLeft <= 30 ? '#F8C630' : 'rgb(var(--color-primary))' }}
+                >
+                  {isRefreshing ? 'Refreshing…' : `Refreshes in ${countdownLabel}`}
+                </p>
+                {token && !isRefreshing && (
+                  <p className="text-[10px] text-slate-400">Tap QR to enlarge</p>
+                )}
+              </div>
             )}
           </div>
 
@@ -281,6 +288,43 @@ export default function MyQR() {
         </motion.div>
 
       </div>
+
+      {/* ── Fullscreen QR overlay ── */}
+      <AnimatePresence>
+        {qrFullscreen && token && (
+          <motion.div
+            key="qr-fullscreen"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-5"
+            onClick={() => setQrFullscreen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.82 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.82 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+            >
+              <QRCodeSVG
+                value={token}
+                size={300}
+                level="M"
+                fgColor="#1E2A56"
+                bgColor="#FFFFFF"
+              />
+            </motion.div>
+            <p
+              className="text-lg font-semibold"
+              style={{ color: secondsLeft <= 30 ? '#F8C630' : 'rgb(var(--color-primary))' }}
+            >
+              {isRefreshing ? 'Refreshing…' : `Refreshes in ${countdownLabel}`}
+            </p>
+            <p className="absolute bottom-10 text-slate-300 text-md3-label-sm">Tap anywhere to close</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
