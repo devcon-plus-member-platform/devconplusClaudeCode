@@ -25,7 +25,20 @@ permissions:
   contents: read
 
 jobs:
+  # master keeps the old repo layout (no server/) until the structural merge.
+  # This guard skips the run cleanly there instead of failing red.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      has-server: ${{ steps.detect.outputs.has-server }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: echo "has-server=$([ -d server ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: preflight
+    if: needs.preflight.outputs.has-server == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
