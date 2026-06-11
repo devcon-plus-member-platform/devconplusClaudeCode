@@ -1,0 +1,121 @@
+# Deploys the NestJS backend (server/) to the staging EC2 host whenever it
+# changes. Auth: GitHub OIDC -> scoped IAM role (infra/github-oidc.tf), no
+# stored AWS secrets. The deploy itself runs on the instance via SSM, so the
+# host needs no inbound SSH from GitHub runners.
+#
+# NOTE for master: this file also lives on master so CI/CD activates
+# automatically after the dev -> master structural merge. Until master has a
+# server/ folder the path filter keeps it dormant. Both branches deploy to the
+# SAME staging instance — revisit before merging dev into master.
+name: Deploy backend (staging)
+
+on:
+  push:
+    branches: [dev, master]
+    paths:
+      - 'server/**'
+      - '.github/workflows/deploy-backend-staging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ap-southeast-1
+      INSTANCE_ID: i-02e08aceb6d701d77
+      HEALTH_URL: https://api.cloud-engineer.dev/api/health
+      BRANCH: ${{ github.ref_name }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # The role ARN is an identifier, not a secret — access is gated by
+          # the role's trust policy (this repo, dev/master refs only).
+          role-to-assume: arn:aws:iam::484907520476:role/devcon-plus-api-github-deploy
+          aws-region: ap-southeast-1
+
+      - name: Deploy on EC2 via SSM
+        run: |
+          set -euo pipefail
+
+          # git runs as ec2-user (repo owner); running it as root fails with
+          # "dubious ownership" and would silently deploy stale code.
+          SCRIPT=$(cat <<EOF
+          set -euo pipefail
+          sudo -u ec2-user git -C /opt/devcon-plus/repo fetch origin ${BRANCH}
+          sudo -u ec2-user git -C /opt/devcon-plus/repo reset --hard FETCH_HEAD
+          cd /opt/devcon-plus/repo/server
+          docker compose -f docker-compose.ec2.yml up -d --build
+          docker image prune -f
+          sleep 10
+          curl -fsS --retry 5 --retry-delay 5 --retry-connrefused http://127.0.0.1:8000/api/health
+          EOF
+          )
+
+          PARAMS=$(jq -n --arg s "$SCRIPT" \
+            '{commands: ($s | split("\n")), executionTimeout: ["600"]}')
+
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' --output text)
+          echo "SSM command: $CMD_ID"
+
+          # Custom poll loop: the built-in command-executed waiter caps at
+          # ~100s, shorter than a docker build on a t3.micro.
+          STATUS=InProgress
+          for _ in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation \
+              --region "$AWS_REGION" \
+              --command-id "$CMD_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query 'Status' --output text)
+            case "$STATUS" in
+              InProgress|Pending|Delayed) sleep 10 ;;
+              *) break ;;
+            esac
+          done
+
+          echo "=== status: $STATUS ==="
+          echo "=== stdout ==="
+          aws ssm get-command-invocation --region "$AWS_REGION" \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query 'StandardOutputContent' --output text
+          echo "=== stderr ==="
+          aws ssm get-command-invocation --region "$AWS_REGION" \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query 'StandardErrorContent' --output text
+
+          test "$STATUS" = "Success"
+
+      - name: Smoke test public endpoint
+        run: curl --fail --silent --show-error --retry 3 --retry-delay 5 "$HEALTH_URL"
