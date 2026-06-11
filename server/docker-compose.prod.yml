@@ -5,7 +5,7 @@
 services:
   api:
     container_name: devcon-plus-api-prod
-    image: ghcr.io/rocketwolf98/devcon-plus-api:prod
+    image: ghcr.io/devcon-plus-member-platform/devcon-plus-api:prod
     build:
       context: .
       dockerfile: Dockerfile

@@ -61,7 +61,7 @@ variable "cloudwatch_log_retention_days" {
 variable "github_repository" {
   description = "GitHub repository (owner/name) allowed to assume the deploy role via OIDC."
   type        = string
-  default     = "rocketwolf98/devconplusClaudeCode"
+  default     = "devcon-plus-member-platform/devconplusClaudeCode"
 }
 
 variable "alarm_email" {
