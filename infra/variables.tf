@@ -58,6 +58,12 @@ variable "cloudwatch_log_retention_days" {
   default     = 14
 }
 
+variable "github_repository" {
+  description = "GitHub repository (owner/name) allowed to assume the deploy role via OIDC."
+  type        = string
+  default     = "rocketwolf98/devconplusClaudeCode"
+}
+
 variable "alarm_email" {
   description = "Optional email address subscribed to backend CloudWatch alarm notifications."
   type        = string

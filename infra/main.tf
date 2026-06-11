@@ -215,6 +215,13 @@ resource "aws_instance" "backend" {
     docker_logrotate = templatefile("${path.module}/templates/logrotate-docker.conf.tftpl", {})
   })
 
+  # The AMI data source tracks the latest AL2023 image; without this guard a
+  # routine `terraform apply` would replace (destroy) the live instance every
+  # time Amazon publishes a new AMI. OS updates are handled in-place via dnf.
+  lifecycle {
+    ignore_changes = [ami, user_data]
+  }
+
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
