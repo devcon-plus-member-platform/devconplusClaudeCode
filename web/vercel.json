@@ -40,7 +40,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; worker-src 'self' blob:; connect-src 'self' https://api.cloud-engineer.dev https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com https://challenges.cloudflare.com; img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com; frame-src https://accounts.google.com https://*.firebaseapp.com https://challenges.cloudflare.com; font-src 'self' https://fonts.gstatic.com;"
+          "value": "default-src 'self'; script-src 'self' 'sha256-Ab0vts0+tyC2mlXBo/ndKwCt+WCRb1sBFKEb1mUePGE=' https://challenges.cloudflare.com https://apis.google.com https://*.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; worker-src 'self' blob:; connect-src 'self' https://api.cloud-engineer.dev https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com https://challenges.cloudflare.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://*.google-analytics.com https://*.googletagmanager.com; frame-src https://accounts.google.com https://*.firebaseapp.com https://challenges.cloudflare.com; font-src 'self' https://fonts.gstatic.com;"
         }
       ]
     }
