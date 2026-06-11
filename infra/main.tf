@@ -190,7 +190,7 @@ resource "aws_cloudwatch_log_group" "nginx_error" {
 
 resource "aws_instance" "backend" {
   ami                         = data.aws_ami.amazon_linux_2023.id
-  instance_type               = "t3.micro"
+  instance_type               = "t3.small"
   subnet_id                   = local.selected_subnet_id
   vpc_security_group_ids      = [aws_security_group.backend.id]
   iam_instance_profile        = aws_iam_instance_profile.backend.name
