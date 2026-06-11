@@ -16,13 +16,14 @@ const BRIDGE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http
 
 async function bridgeFetch<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const url = `${BRIDGE_URL}${path}`
-  console.log(`[bridge] → POST ${url}`)
+  // Request tracing is dev-only noise; errors below always log.
+  if (import.meta.env.DEV) console.log(`[bridge] → POST ${url}`)
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  console.log(`[bridge] ← ${res.status} ${path}`)
+  if (import.meta.env.DEV) console.log(`[bridge] ← ${res.status} ${path}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { message?: string }
     console.error(`[bridge] error from ${path}:`, err.message)
