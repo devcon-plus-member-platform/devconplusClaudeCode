@@ -1,14 +1,9 @@
 import { create } from 'zustand'
 import type { Reward, RewardRedemption } from '@devcon-plus/supabase'
-import { supabase } from '../lib/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
-import { toast } from 'sonner'
 import { useAuthStore } from './useAuthStore'
 import { usePointsStore } from './usePointsStore'
 import type { RewardFormData } from '../pages/organizer/rewards/rewardFormConstants'
-
-let _chanSeq = 0
-const nextChan = (base: string) => `${base}-${++_chanSeq}`
 
 export interface RewardRedemptionWithDetails extends RewardRedemption {
   member_name: string
@@ -47,7 +42,6 @@ interface RewardsState {
   fetchAllRedemptions: () => Promise<void>
   approveClaim: (redemptionId: string) => Promise<{ success: boolean; error?: string }>
   refundClaim: (redemptionId: string) => Promise<{ success: boolean; error?: string }>
-  subscribeToRedemptions: () => () => void
   markClaimsAsSeen: () => void
 }
 
@@ -240,37 +234,8 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
     set({ unseenClaimCount: 0 })
   },
 
-  // ── Realtime redemption subscriptions ────────────────────────────────────
-  subscribeToRedemptions: () => {
-    // Debounce timer: coalesces rapid back-to-back inserts into one bulk refetch
-    // instead of firing one per-row SELECT+JOIN per insert (N+1).
-    let refetchTimer: number | null = null
-    const channel = supabase
-      .channel(nextChan('reward-redemptions-realtime'))
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'reward_redemptions' },
-        (payload) => {
-          const row = payload.new as RewardRedemption
-          const reward = get().allRewards.find((r) => r.id === row.reward_id)
-          toast.info(`New reward claim — ${reward?.name ?? 'Unknown Reward'}`)
-          if (refetchTimer !== null) window.clearTimeout(refetchTimer)
-          refetchTimer = window.setTimeout(() => {
-            refetchTimer = null
-            void get().fetchAllRedemptions()
-          }, 500)
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.error('[reward-redemptions-realtime] channel error:', err)
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[reward-redemptions-realtime] timed out — Supabase will retry')
-        }
-      })
-    return () => {
-      if (refetchTimer !== null) window.clearTimeout(refetchTimer)
-      void supabase.removeChannel(channel)
-    }
-  },
+  // NOTE: a `reward_redemptions` realtime subscription was removed 2026-06-12 —
+  // that table was never in the supabase_realtime publication, so it never fired.
+  // The organizer redemption queue stays fresh via fetchAllRedemptions() on the
+  // OrganizerLayout recovery cycle (mount + focus/online + 300 s poll).
 }))

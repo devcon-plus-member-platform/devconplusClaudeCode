@@ -118,22 +118,10 @@ export const usePointsStore = create<PointsState>((set, get) => ({
           void get().loadTotalPoints()
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          // Profile updated (points changed via trigger or admin)
-          const updated = payload.new as Profile
-          if (updated.spendable_points !== undefined || updated.lifetime_points !== undefined) {
-            void get().loadTotalPoints()
-          }
-        }
-      )
+      // NOTE: a second subscription on `profiles` (UPDATE) was removed 2026-06-12 —
+      // `profiles` was never in the supabase_realtime publication, so it never
+      // fired. Point totals already refresh via the point_transactions INSERT
+      // above (which calls loadTotalPoints), plus loadTotalPoints on recovery.
       .subscribe((status, err) => {
         if (status === 'CHANNEL_ERROR') {
           console.error('[points-realtime] channel error:', err)

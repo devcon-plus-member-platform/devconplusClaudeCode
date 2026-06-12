@@ -37,7 +37,6 @@ export default function OrganizerLayout() {
   const fetchEvents = useEventsStore((s) => s.fetchEvents)
   const subscribeToEventChanges = useEventsStore((s) => s.subscribeToChanges)
   const fetchAllRewards = useRewardsStore((s) => s.fetchAllRewards)
-  const subscribeToRedemptions = useRewardsStore((s) => s.subscribeToRedemptions)
   const fetchAllRedemptions = useRewardsStore((s) => s.fetchAllRedemptions)
   const loadOrgVolunteerApps = useOrgVolunteerStore((s) => s.loadApplications)
 
@@ -53,7 +52,6 @@ export default function OrganizerLayout() {
   // Fetches data and subscribes to realtime on mount; recovers and re-subscribes
   // on visibility/online/idle-timeout events.
   const unsubEventsRef = useRef<(() => void) | null>(null)
-  const unsubRedemptionsRef = useRef<(() => void) | null>(null)
   const recoverRef = useRef<(() => void) | null>(null)
   const resubscribeRef = useRef<((opts?: { force?: boolean }) => void) | null>(null)
   const lastRecoveryRef = useRef(0)
@@ -99,9 +97,7 @@ export default function OrganizerLayout() {
       if (socketState === 'closed') supabase.realtime.connect()
 
       unsubEventsRef.current?.()
-      unsubRedemptionsRef.current?.()
       unsubEventsRef.current = subscribeToEventChanges()
-      unsubRedemptionsRef.current = subscribeToRedemptions()
     }
     resubscribeRef.current = resubscribe
 
@@ -141,7 +137,6 @@ export default function OrganizerLayout() {
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = []
       unsubEventsRef.current?.()
-      unsubRedemptionsRef.current?.()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
