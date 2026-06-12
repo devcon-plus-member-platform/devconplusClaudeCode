@@ -214,7 +214,7 @@ useEffect(() => {
               {/* Earn Points Card */}
               <motion.button
                 variants={cardItem}
-                onClick={() => navigate('/jobs?tab=missions')}
+                onClick={() => navigate('/missions')}
                 className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
                 whileTap={{ scale: 0.95 }}
               >
@@ -407,7 +407,7 @@ useEffect(() => {
         <section>
           <div className="flex items-center justify-between mb-4">
             <p className="font-proxima font-bold text-[18px] text-black">Missions</p>
-            <button onClick={() => navigate('/jobs?tab=missions')} className="flex gap-1 items-center">
+            <button onClick={() => navigate('/missions')} className="flex gap-1 items-center">
               <p className="font-proxima text-[#464646] text-[12px] tracking-[0.96px] uppercase">MORE</p>
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />
             </button>
@@ -461,7 +461,7 @@ useEffect(() => {
                   <motion.button
                     key={mission.id}
                     variants={cardItem}
-                    onClick={() => navigate('/jobs?tab=missions')}
+                    onClick={() => navigate('/missions')}
                     className="w-full bg-white border border-[rgba(156,163,175,0.3)] rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] text-left"
                     whileTap={{ scale: 0.98 }}
                   >

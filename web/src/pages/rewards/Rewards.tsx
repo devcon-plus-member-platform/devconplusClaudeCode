@@ -130,7 +130,7 @@ function RedemptionModal({ reward, spendablePoints, onClose }: RedemptionModalPr
                       <p className="text-[12px] text-red/80">
                         You need {(reward.points_cost - spendablePoints).toLocaleString()} more points to redeem this item. To Earn More Points, Accomplish{' '}
                         <Link
-                          to="/jobs?tab=missions"
+                          to="/missions"
                           className="font-semibold underline underline-offset-2"
                           style={{ color: 'rgb(var(--color-primary))' }}
                         >
@@ -639,7 +639,7 @@ export default function Rewards() {
               <p className="text-[13px] font-proxima text-slate-600 text-center">
                 Earn more points! Accomplish{' '}
                 <Link
-                  to="/jobs?tab=missions"
+                  to="/missions"
                   className="font-semibold underline underline-offset-2"
                   style={{ color: 'rgb(var(--color-primary))' }}
                 >
