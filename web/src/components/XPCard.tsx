@@ -68,7 +68,7 @@ export default function XPCard() {
         className="font-proxima font-semibold w-full bg-primary text-white text-[16px] h-12 rounded-[80px]"
         whileTap={{ scale: 0.95 }}
       >
-        Attend Our Events
+        Join Our Events
       </motion.button>
     </div>
   )

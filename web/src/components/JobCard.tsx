@@ -13,7 +13,7 @@ function CompanyAvatar({ logoUrl, company }: { logoUrl: string | null; company: 
 
   if (logoUrl && imgStatus !== 'error') {
     return (
-      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl">
+      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl bg-white">
         <img
           src={logoUrl}
           alt={company}

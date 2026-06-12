@@ -14,4 +14,8 @@ export interface BridgeSession {
   access_token: string;
   refresh_token: string;
   profile: Profile;
+  /** Firebase custom token — included so the frontend can call signInWithCustomToken()
+   *  and populate firebaseAuth.currentUser for apiFetch ID-token generation.
+   *  Only present on exchange/signin responses; omitted on token refresh. */
+  firebase_custom_token?: string;
 }

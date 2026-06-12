@@ -32,6 +32,7 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
+      envFilePath: ['.env.local', '.env'],
     }),
     // Coarse per-IP flood guard (in-memory, single-instance EC2).
     // Identity-keyed security buckets (qr_scan, org_upgrade, etc.) use the

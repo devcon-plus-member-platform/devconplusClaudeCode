@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { EmailAuthProvider, GoogleAuthProvider, getIdToken as getFirebaseIdToken, onAuthStateChanged, onIdTokenChanged, reauthenticateWithCredential, signInWithPopup, updateEmail as firebaseUpdateEmail, updatePassword as firebaseUpdatePassword } from 'firebase/auth'
+import { EmailAuthProvider, GoogleAuthProvider, getIdToken as getFirebaseIdToken, onAuthStateChanged, onIdTokenChanged, reauthenticateWithCredential, signInWithCustomToken, signInWithPopup, updateEmail as firebaseUpdateEmail, updatePassword as firebaseUpdatePassword } from 'firebase/auth'
 import type { Profile } from '@devcon-plus/supabase'
 import { supabase, setBridgeToken } from '../lib/supabase'
 import { firebaseAuth } from '../lib/firebase'
@@ -265,6 +265,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const session = await emailSigninViaBridge(email, password)
+      // Establish firebaseAuth.currentUser so apiFetch can obtain ID tokens.
+      // onIdTokenChanged fires but skips the redundant exchange because
+      // get().user is null at this point (applyProfile hasn't run yet).
+      if (session.firebase_custom_token) {
+        await signInWithCustomToken(firebaseAuth, session.firebase_custom_token)
+      }
       await applyProfile(session.profile, set)
       setupSupabaseSession(session)
     } catch (err) {

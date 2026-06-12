@@ -8,10 +8,11 @@ export const ATTENDANCE_PTS = {
   tech_talk:   5,
   networking:  5,
   social:      5,
-  summit:      500,
+  code_camp:   50,
   workshop:    150,
   brown_bag:   150,
   hackathon:   150,
+  summit:      500,
 } as const
 
 export const DEFAULT_VOLUNTEER_POINTS = 500
@@ -48,6 +49,7 @@ export const schema = z
       'summit',
       'social',
       'networking',
+      'code_camp',
     ], { required_error: 'Category is required' }),
     devcon_category: z.enum(['devcon', 'she', 'kids', 'campus']).optional().nullable(),
     tags: z.array(z.string().max(TAG_MAX_LENGTH)).max(10).default([]),
@@ -97,6 +99,7 @@ export const CATEGORY_OPTIONS: { value: FormData['category']; label: string }[] 
   { value: 'hackathon',  label: 'Hackathon'  },
   { value: 'workshop',   label: 'Workshop'   },
   { value: 'brown_bag',  label: 'Brown Bag'  },
+  { value: 'code_camp',  label: 'Code Camp'  },
   { value: 'summit',     label: 'Summit'     },
   { value: 'social',     label: 'Social'     },
   { value: 'networking', label: 'Networking' },
