@@ -15,18 +15,32 @@ export interface Notification {
   read: boolean
 }
 
+export interface UserNotification {
+  id: string
+  user_id: string
+  title: string
+  message: string
+  type: 'points_approved' | 'points_rejected' | 'system'
+  read: boolean
+  created_at: string
+}
+
 interface NotificationsState {
   notifications: Notification[]
+  userNotifications: UserNotification[]
   unreadCount: number
   fetchRecent: (approvedIds: string[], eventTitles: Record<string, string>) => Promise<void>
+  fetchUserNotifications: (userId: string) => Promise<void>
   subscribe: (approvedIds: string[], eventTitles: Record<string, string>) => () => void
+  subscribeUserNotifications: (userId: string) => () => void
   markAllRead: () => void
   dismiss: (id: string) => void
   clearAll: () => void
 }
 
-export const useNotificationsStore = create<NotificationsState>((set) => ({
+export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
+  userNotifications: [],
   unreadCount: 0,
 
   fetchRecent: async (approvedIds, eventTitles) => {
@@ -106,9 +120,57 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
     return () => { void supabase.removeChannel(channel) }
   },
 
+  fetchUserNotifications: async (userId: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from('user_notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(30)
+    if (!data) return
+    const notifs = data as UserNotification[]
+    const unreadUser = notifs.filter((n: UserNotification) => !n.read).length
+    set((state) => ({
+      userNotifications: notifs,
+      unreadCount: state.notifications.filter((n) => !n.read).length + unreadUser,
+    }))
+  },
+
+  subscribeUserNotifications: (userId: string) => {
+    const channel = supabase
+      .channel(nextChan('user-notifications'))
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'user_notifications', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const row = payload.new as UserNotification
+          set((state) => ({
+            userNotifications: [row, ...state.userNotifications],
+            unreadCount: state.unreadCount + 1,
+          }))
+          const icon = row.type === 'points_approved' ? '🎉' : '❌'
+          toast.info(`${icon} ${row.title}: ${row.message.slice(0, 60)}…`)
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[user-notifications] channel error', status, err)
+        }
+      })
+    return () => { void supabase.removeChannel(channel) }
+  },
+
   markAllRead: () => {
+    const { userNotifications } = get()
+    const unreadIds = userNotifications.filter((n) => !n.read).map((n) => n.id)
+    if (unreadIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      void (supabase as any).from('user_notifications').update({ read: true }).in('id', unreadIds)
+    }
     set((state) => ({
       notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      userNotifications: state.userNotifications.map((n) => ({ ...n, read: true })),
       unreadCount: 0,
     }))
   },

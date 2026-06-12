@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, StarOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
+import { supabase } from '../lib/supabase'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
 
 const NAV_ITEMS = [
-  { path: '/admin',           label: 'Dashboard', Icon: WidgetOutline, end: true,  superOnly: false },
-  { path: '/admin/users',     label: 'Users',      Icon: UsersGroupRoundedOutline,           end: false, superOnly: false },
-  { path: '/admin/org-codes', label: 'Org Codes',  Icon: KeyOutline,        end: false, superOnly: false },
-  { path: '/admin/chapter-officers', label: 'Chapter Officers', Icon: UserCheckOutline, end: false, superOnly: false },
-  { path: '/admin/events',    label: 'Events',     Icon: CalendarOutline,    end: false, superOnly: false },
-  { path: '/admin/chapters',  label: 'Chapters',          Icon: BuildingsOutline,   end: false, superOnly: false },
-  { path: '/admin/upgrades',  label: 'Chapter Management', Icon: ShieldCheckOutline, end: false, superOnly: false },
-  { path: '/admin/kiosk',     label: 'Kiosk',      Icon: ScannerOutline,        end: false, superOnly: true  },
+  { path: '/admin',           label: 'Dashboard',         Icon: WidgetOutline,           end: true,  superOnly: false },
+  { path: '/admin/users',     label: 'Users',             Icon: UsersGroupRoundedOutline, end: false, superOnly: false },
+  { path: '/admin/org-codes', label: 'Org Codes',         Icon: KeyOutline,              end: false, superOnly: false },
+  { path: '/admin/chapter-officers', label: 'Chapter Officers', Icon: UserCheckOutline,  end: false, superOnly: false },
+  { path: '/admin/events',    label: 'Events',            Icon: CalendarOutline,         end: false, superOnly: false },
+  { path: '/admin/chapters',  label: 'Chapters',          Icon: BuildingsOutline,        end: false, superOnly: false },
+  { path: '/admin/upgrades',  label: 'Chapter Management', Icon: ShieldCheckOutline,     end: false, superOnly: false },
+  { path: '/admin/points',    label: 'Points Approval',   Icon: StarOutline,             end: false, superOnly: false },
+  { path: '/admin/kiosk',     label: 'Kiosk',             Icon: ScannerOutline,          end: false, superOnly: true  },
 ]
 
 const ADMIN_ROLES = ['super_admin', 'hq_admin'] as const
@@ -23,6 +25,19 @@ export default function AdminLayout() {
   const navigate = useNavigate()
   const [recoveryKey, setRecoveryKey] = useState(0)
   const lastHiddenRef = useRef(0)
+  const [pendingPointsCount, setPendingPointsCount] = useState(0)
+
+  useEffect(() => {
+    const fetchPending = async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { count } = await (supabase as any)
+        .from('mission_submissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending')
+      setPendingPointsCount((count as number | null) ?? 0)
+    }
+    void fetchPending()
+  }, [recoveryKey])
 
   useEffect(() => {
     if (!user) {
@@ -88,7 +103,12 @@ export default function AdminLayout() {
               }
             >
               <Icon className="w-4 h-4 shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {path === '/admin/points' && pendingPointsCount > 0 && (
+                <span className="w-5 h-5 bg-red rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0">
+                  {pendingPointsCount > 9 ? '9+' : pendingPointsCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

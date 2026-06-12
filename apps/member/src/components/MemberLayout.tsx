@@ -46,7 +46,7 @@ export default function MemberLayout() {
   const loadReferralData = useReferralsStore((s) => s.loadReferralData)
   const fetchMissions = useMissionsStore((s) => s.fetchAll)
   const subscribeMissions = useMissionsStore((s) => s.subscribeToChanges)
-  const { fetchRecent, subscribe: subscribeNotifications } = useNotificationsStore()
+  const { fetchRecent, subscribe: subscribeNotifications, fetchUserNotifications, subscribeUserNotifications } = useNotificationsStore()
 
 
   useEffect(() => {
@@ -91,6 +91,7 @@ export default function MemberLayout() {
   const unsubMissionsRef = useRef<(() => void) | null>(null)
   const unsubPointsRef = useRef<(() => void) | null>(null)
   const unsubNotifsRef = useRef<(() => void) | null>(null)
+  const unsubUserNotifsRef = useRef<(() => void) | null>(null)
 
   // Stable refs so async handlers/event listeners (empty deps or stale closures)
   // always call the current store-aware logic.
@@ -132,6 +133,7 @@ export default function MemberLayout() {
         if (approvedIds.length > 0) {
           void fetchRecent(approvedIds, eventTitles)
         }
+        void fetchUserNotifications(user.id)
       }, 0)
     }
     recoverRef.current = recover
@@ -149,6 +151,7 @@ export default function MemberLayout() {
       unsubMissionsRef.current?.()
       unsubPointsRef.current?.()
       unsubNotifsRef.current?.()
+      unsubUserNotifsRef.current?.()
       
       // Re-establish general subscriptions
       unsubEventsRef.current = subscribeToEventChanges()
@@ -164,6 +167,7 @@ export default function MemberLayout() {
       if (approvedIds.length > 0) {
         unsubNotifsRef.current = subscribeNotifications(approvedIds, eventTitles)
       }
+      unsubUserNotifsRef.current = subscribeUserNotifications(user.id)
     }
     resubscribeRef.current = resubscribe
 
@@ -215,6 +219,7 @@ export default function MemberLayout() {
       unsubMissionsRef.current?.()
       unsubPointsRef.current?.()
       unsubNotifsRef.current?.()
+      unsubUserNotifsRef.current?.()
     }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 

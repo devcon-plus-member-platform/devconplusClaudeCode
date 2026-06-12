@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, BellOffOutline, CloseCircleLineDuotone, TrashBinTrashOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, BellOffOutline, CloseCircleLineDuotone, TrashBinTrashOutline, StarOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNotificationsStore } from '../../stores/useNotificationsStore'
+import type { UserNotification } from '../../stores/useNotificationsStore'
 import { formatDate } from '../../lib/dates'
 import { cardItem, staggerContainer } from '../../lib/animation'
 
@@ -17,12 +18,14 @@ interface NotificationsInboxProps {
 
 export default function NotificationsInbox({ isOrganizer = false }: NotificationsInboxProps) {
   const navigate = useNavigate()
-  const { notifications, markAllRead, dismiss, clearAll } = useNotificationsStore()
+  const { notifications, userNotifications, markAllRead, dismiss, clearAll } = useNotificationsStore()
 
   // Mark all as read when inbox is opened
   useEffect(() => {
     markAllRead()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasAny = notifications.length > 0 || userNotifications.length > 0
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -55,8 +58,8 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
               </h1>
             </div>
 
-            {notifications.length > 0 && (
-              <button 
+            {hasAny && (
+              <button
                 onClick={clearAll}
                 className="bg-white/20 backdrop-blur-md size-[42px] flex items-center justify-center rounded-full border border-white/30 transition-colors active:bg-white/40 shadow-lg"
                 aria-label="Clear all"
@@ -69,14 +72,14 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
       </header>
 
       <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
-        {notifications.length === 0 ? (
+        {!hasAny ? (
           <div className="flex flex-col items-center justify-center px-8 pt-20 text-center">
             <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-5">
               <BellOffOutline className="w-9 h-9" color="#CBD5E1" />
             </div>
-            <p className="text-md3-body-lg font-bold text-slate-700">No announcements yet</p>
+            <p className="text-md3-body-lg font-bold text-slate-700">No notifications yet</p>
             <p className="text-md3-body-md text-slate-400 mt-2 leading-relaxed">
-              Event updates from organizers will appear here.
+              Event announcements and points updates will appear here.
             </p>
           </div>
         ) : (
@@ -87,6 +90,37 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
             className="flex flex-col"
           >
             <AnimatePresence mode="popLayout">
+              {/* Points / system notifications */}
+              {userNotifications.map((n: UserNotification) => (
+                <motion.div
+                  key={`user-${n.id}`}
+                  variants={cardItem}
+                  exit={{ x: 40, opacity: 0, transition: { duration: 0.2 } }}
+                  className={`relative bg-white rounded-2xl border shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 mb-3 overflow-hidden ${
+                    n.type === 'points_approved' ? 'border-green/30' : n.type === 'points_rejected' ? 'border-red/30' : 'border-[rgba(156,163,175,0.3)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <StarOutline
+                        className="w-3 h-3"
+                        color={n.type === 'points_approved' ? '#21C45D' : n.type === 'points_rejected' ? '#EF4444' : '#94A3B8'}
+                      />
+                      <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${
+                        n.type === 'points_approved' ? 'bg-green/10 text-green' : n.type === 'points_rejected' ? 'bg-red/10 text-red' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {n.title}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-proxima">
+                      {formatDate.compact(n.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-md3-body-md text-slate-700 leading-relaxed font-proxima">{n.message}</p>
+                </motion.div>
+              ))}
+
+              {/* Event announcement notifications */}
               {notifications.map((n) => (
                 <motion.div
                   key={n.id}
