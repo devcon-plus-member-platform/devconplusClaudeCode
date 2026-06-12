@@ -243,6 +243,7 @@ export default function SignIn() {
             <input
               {...register('email')}
               type="email"
+              autoComplete="email"
               placeholder="juan@devcon.ph"
               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
             />
@@ -260,6 +261,7 @@ export default function SignIn() {
               <input
                 {...register('password')}
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-11 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
               />

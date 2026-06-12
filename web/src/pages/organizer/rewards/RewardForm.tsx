@@ -416,7 +416,7 @@ export function RewardForm({ reward, onSuccess, dangerZone }: RewardFormProps) {
             </div>
             <div>
               <label className={labelClass}>
-                Max / UserOutline{' '}
+                Max / User{' '}
                 <span className="text-slate-300 normal-case font-normal">optional</span>
               </label>
               <input

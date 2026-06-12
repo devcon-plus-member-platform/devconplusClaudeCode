@@ -87,6 +87,7 @@ export default function EventTicket() {
   const [cancelStep, setCancelStep] = useState<null | 'first' | 'second'>(null)
   const [isCancelling, setIsCancelling]     = useState(false)
   const [cancelError, setCancelError]       = useState<string | null>(null)
+  const [qrFullscreen, setQrFullscreen]     = useState(false)
 
   const eventEnded = event?.status === 'past' && !checkedIn
 
@@ -440,10 +441,11 @@ export default function EventTicket() {
                         />
                       </svg>
 
-                      {/* QR container */}
+                      {/* QR container — tap to zoom */}
                       <div
-                        className="p-4 bg-white rounded-2xl shadow-[0_8px_32px_rgba(30,42,86,0.18)]"
+                        className="p-4 bg-white rounded-2xl shadow-[0_8px_32px_rgba(30,42,86,0.18)] cursor-pointer active:scale-[0.97] transition-transform"
                         style={{ opacity: isRefreshing || !token ? 0.4 : 1, transition: 'opacity 0.3s' }}
+                        onClick={() => { if (token && !isRefreshing) setQrFullscreen(true) }}
                       >
                         {token ? (
                           <QRCodeSVG
@@ -476,9 +478,14 @@ export default function EventTicket() {
                     Tap to retry
                   </motion.button>
                 ) : (
-                  <p className="text-md3-label-md font-medium" style={{ color: secondsLeft <= 10 ? '#F8C630' : 'rgb(var(--color-primary))' }}>
-                    {isRefreshing ? 'Refreshing…' : `Refreshes in ${secondsLeft}s`}
-                  </p>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <p className="text-md3-label-md font-medium" style={{ color: secondsLeft <= 10 ? '#F8C630' : 'rgb(var(--color-primary))' }}>
+                      {isRefreshing ? 'Refreshing…' : `Refreshes in ${secondsLeft}s`}
+                    </p>
+                    {token && !isRefreshing && (
+                      <p className="text-[10px] text-slate-400">Tap QR to enlarge</p>
+                    )}
+                  </div>
                 )
               )}
             </motion.div>
@@ -553,6 +560,40 @@ export default function EventTicket() {
         </motion.p>
 
       </div>
+
+      {/* ── Fullscreen QR overlay ── */}
+      <AnimatePresence>
+        {qrFullscreen && token && (
+          <motion.div
+            key="qr-fullscreen"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-5"
+            onClick={() => setQrFullscreen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.82 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.82 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 30 }}
+            >
+              <QRCodeSVG
+                value={token}
+                size={300}
+                level="M"
+                fgColor="#1E2A56"
+                bgColor="#FFFFFF"
+              />
+            </motion.div>
+            <p className="text-lg font-semibold" style={{ color: secondsLeft <= 10 ? '#F8C630' : 'rgb(var(--color-primary))' }}>
+              {isRefreshing ? 'Refreshing…' : `Refreshes in ${secondsLeft}s`}
+            </p>
+            <p className="absolute bottom-10 text-slate-300 text-md3-label-sm">Tap anywhere to close</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Cancel confirmation sheets ── */}
       <AnimatePresence>

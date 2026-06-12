@@ -1,6 +1,6 @@
 // AUTO-GENERATED — do not edit manually.
 // Regenerate with: mcp__supabase__generate_typescript_types
-// Last generated: 2026-04-19 (added interests, tech_stack, community_roles to profiles; added interest_options table)
+// Last generated: 2026-06-02 (added officer_email_assignments table + assign_officer_email RPC — Automated Officer Detection)
 
 export type Json =
   | string
@@ -143,6 +143,7 @@ export type Database = {
           end_date: string | null
           end_time: string | null
           event_date: string | null
+          external_registration_url: string | null
           id: string
           is_chapter_locked: boolean | null
           is_external: boolean | null
@@ -150,7 +151,6 @@ export type Database = {
           is_free: boolean | null
           is_promoted: boolean | null
           location: string | null
-          external_registration_url: string | null
           points_value: number | null
           privacy_status: string | null
           requires_approval: boolean | null
@@ -176,6 +176,7 @@ export type Database = {
           end_date?: string | null
           end_time?: string | null
           event_date?: string | null
+          external_registration_url?: string | null
           id?: string
           is_chapter_locked?: boolean | null
           is_external?: boolean | null
@@ -183,7 +184,6 @@ export type Database = {
           is_free?: boolean | null
           is_promoted?: boolean | null
           location?: string | null
-          external_registration_url?: string | null
           points_value?: number | null
           privacy_status?: string | null
           requires_approval?: boolean | null
@@ -209,6 +209,7 @@ export type Database = {
           end_date?: string | null
           end_time?: string | null
           event_date?: string | null
+          external_registration_url?: string | null
           id?: string
           is_chapter_locked?: boolean | null
           is_external?: boolean | null
@@ -216,7 +217,6 @@ export type Database = {
           is_free?: boolean | null
           is_promoted?: boolean | null
           location?: string | null
-          external_registration_url?: string | null
           points_value?: number | null
           privacy_status?: string | null
           requires_approval?: boolean | null
@@ -391,7 +391,7 @@ export type Database = {
           difficulty: string | null
           github_url: string | null
           id: string
-          is_active: boolean | null
+          is_active: boolean
           status: string | null
           submission_type: string | null
           title: string
@@ -403,7 +403,7 @@ export type Database = {
           difficulty?: string | null
           github_url?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           status?: string | null
           submission_type?: string | null
           title: string
@@ -415,7 +415,7 @@ export type Database = {
           difficulty?: string | null
           github_url?: string | null
           id?: string
-          is_active?: boolean | null
+          is_active?: boolean
           status?: string | null
           submission_type?: string | null
           title?: string
@@ -466,6 +466,103 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      officer_email_assignments: {
+        Row: {
+          applied_at: string | null
+          applied_user_id: string | null
+          assigned_role: string
+          chapter_id: string
+          created_at: string | null
+          created_by: string | null
+          email: string
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_user_id?: string | null
+          assigned_role?: string
+          chapter_id: string
+          created_at?: string | null
+          created_by?: string | null
+          email: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Update: {
+          applied_at?: string | null
+          applied_user_id?: string | null
+          assigned_role?: string
+          chapter_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "officer_email_assignments_applied_user_id_fkey"
+            columns: ["applied_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_email_assignments_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_email_assignments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      officer_resources: {
+        Row: {
+          category: string
+          created_at: string | null
+          group_label: string | null
+          href: string
+          id: string
+          is_active: boolean
+          sort_order: number
+          subtitle: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          group_label?: string | null
+          href?: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          subtitle?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          group_label?: string | null
+          href?: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          subtitle?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       organizer_codes: {
         Row: {
@@ -622,6 +719,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auth_uid: string | null
           avatar_url: string | null
           chapter_id: string
           community_roles: number[] | null
@@ -631,6 +729,7 @@ export type Database = {
           github_url: string | null
           id: string
           interests: number[] | null
+          is_email_verified: boolean
           lifetime_points: number | null
           linkedin_url: string | null
           pending_chapter_id: string | null
@@ -644,6 +743,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          auth_uid?: string | null
           avatar_url?: string | null
           chapter_id: string
           community_roles?: number[] | null
@@ -653,6 +753,7 @@ export type Database = {
           github_url?: string | null
           id: string
           interests?: number[] | null
+          is_email_verified?: boolean
           lifetime_points?: number | null
           linkedin_url?: string | null
           pending_chapter_id?: string | null
@@ -666,6 +767,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          auth_uid?: string | null
           avatar_url?: string | null
           chapter_id?: string
           community_roles?: number[] | null
@@ -675,6 +777,7 @@ export type Database = {
           github_url?: string | null
           id?: string
           interests?: number[] | null
+          is_email_verified?: boolean
           lifetime_points?: number | null
           linkedin_url?: string | null
           pending_chapter_id?: string | null
@@ -1025,6 +1128,30 @@ export type Database = {
         Args: { p_application_id: string; p_organizer_id: string }
         Returns: Json
       }
+      assign_officer_email: {
+        Args: { p_chapter_id: string; p_email: string }
+        Returns: {
+          applied_at: string | null
+          applied_user_id: string | null
+          assigned_role: string
+          chapter_id: string
+          created_at: string | null
+          created_by: string | null
+          email: string
+          id: string
+          is_active: boolean | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "officer_email_assignments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      award_signup_bonus_for_verified: {
+        Args: { p_profile_id: string }
+        Returns: undefined
+      }
       check_rate_limit: {
         Args: { p_bucket: string; p_identifier: string }
         Returns: boolean
@@ -1032,6 +1159,48 @@ export type Database = {
       confirm_referral: {
         Args: { p_referral_code: string; p_referred_user_id: string }
         Returns: Json
+      }
+      create_profile_with_bonus: {
+        Args: {
+          p_auth_uid?: string
+          p_chapter_id?: string
+          p_email: string
+          p_full_name: string
+          p_id: string
+          p_is_email_verified?: boolean
+          p_school_or_company?: string
+          p_username?: string
+        }
+        Returns: {
+          auth_uid: string | null
+          avatar_url: string | null
+          chapter_id: string
+          community_roles: number[] | null
+          created_at: string | null
+          email: string
+          full_name: string
+          github_url: string | null
+          id: string
+          interests: number[] | null
+          is_email_verified: boolean
+          lifetime_points: number | null
+          linkedin_url: string | null
+          pending_chapter_id: string | null
+          pending_role: string | null
+          portfolio_url: string | null
+          referral_code: string | null
+          role: string | null
+          school_or_company: string | null
+          spendable_points: number | null
+          tech_stack: number[] | null
+          username: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       delete_own_account: { Args: never; Returns: undefined }
       get_active_chapters_count: { Args: never; Returns: number }

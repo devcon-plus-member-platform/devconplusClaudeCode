@@ -27,7 +27,7 @@ const EVENT_FILTERS: { id: EventFilter; label: string }[] = [
   { id: 'all', label: 'All Events' },
   { id: 'near_you', label: 'Near You' },
   { id: 'devcon_only', label: 'DEVCON' },
-  { id: 'featured', label: 'Featured' },
+  { id: 'featured', label: 'Community Featured' },
 ]
 
 function formatEventDate(iso: string): { month: string; day: string } {
@@ -124,12 +124,14 @@ export default function EventsList() {
       case 'near_you':
         if (regionChapterIds.size > 0) {
           return events.filter((e) =>
+            e.chapter_id === null ||
             (e.is_external && e.visibility === 'public') ||
             (e.chapter_id && regionChapterIds.has(e.chapter_id))
           )
         }
         return user?.chapter_id
           ? events.filter((e) =>
+              e.chapter_id === null ||
               (e.is_external && e.visibility === 'public') ||
               e.chapter_id === user.chapter_id
             )
@@ -166,12 +168,22 @@ export default function EventsList() {
     ? (chapters.find((c) => c.id === selectedChapterId)?.name ?? null)
     : 'All Chapters'
 
-  // We use events.find on the FULL list to ensure tickets show even if they are for a different chapter
+  // We use events.find on the FULL list to ensure tickets show even if they are for a different chapter.
+  // Ordering: active tickets first (soonest event first), then expired tickets (most recent first).
   const allTickets: TicketEntry[] = useMemo(() => registrations
     .filter((r) => r.status === 'approved' || r.status === 'pending')
     .map((r) => ({ reg: r, event: events.find((e) => e.id === r.event_id) }))
     .filter((item): item is TicketEntry => item.event !== undefined)
-    .sort((a, b) => (a.reg.status === 'approved' ? -1 : 1) - (b.reg.status === 'approved' ? -1 : 1)),
+    .sort((a, b) => {
+      const aExpired = a.reg.checked_in || getEventLifecycleState(a.event) === 'done'
+      const bExpired = b.reg.checked_in || getEventLifecycleState(b.event) === 'done'
+      // Active tickets always sort above expired ones
+      if (aExpired !== bExpired) return aExpired ? 1 : -1
+      const aTime = a.event.event_date ? new Date(a.event.event_date).getTime() : 0
+      const bTime = b.event.event_date ? new Date(b.event.event_date).getTime() : 0
+      // Active: soonest upcoming first (asc). Expired: most recently passed first (desc).
+      return aExpired ? bTime - aTime : aTime - bTime
+    }),
   [registrations, events])
 
   const filteredTickets = useMemo(() => allTickets.filter(item =>
@@ -344,7 +356,7 @@ export default function EventsList() {
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">
                   {eventFilter === 'near_you' && 'No upcoming events nearby'}
                   {eventFilter === 'devcon_only' && 'No DEVCON events right now'}
-                  {eventFilter === 'featured' && 'No featured events'}
+                  {eventFilter === 'featured' && 'No community featured events'}
                   {eventFilter === 'all' && `No events in ${selectedChapterName}`}
                 </h3>
                 <p className="text-md3-body-md text-slate-500 text-center mb-5">
@@ -442,22 +454,22 @@ export default function EventsList() {
                       {/* Right Side: Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
+                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate min-w-0 flex-1">
                             {event.title}
                           </p>
                           <AltArrowRightOutline className="w-3.5 h-3.5 shrink-0 text-slate-300 mt-0.5" />
                         </div>
 
                         {/* Date Text */}
-                        <p className="text-[11px] text-slate-500 mb-0.5">
+                        <p className="text-[11px] text-slate-500 mb-0.5 truncate">
                           {event.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No date set'}
                         </p>
 
                         {/* Location */}
                         {event.location && (
-                          <p className="text-[11px] text-slate-400 truncate mb-1.5 flex items-center gap-1">
-                            <MapPointOutline className="w-2.5 h-2.5" color="#94A3B8" />
-                            {event.location}
+                          <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1 min-w-0">
+                            <MapPointOutline className="w-2.5 h-2.5 shrink-0" color="#94A3B8" />
+                            <span className="truncate min-w-0">{event.location}</span>
                           </p>
                         )}
 
@@ -588,22 +600,22 @@ export default function EventsList() {
                       {/* Right Side: Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
+                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate min-w-0 flex-1">
                             {ev.title}
                           </p>
                           <AltArrowRightOutline className="w-3.5 h-3.5 shrink-0 text-slate-300 mt-0.5" />
                         </div>
 
                         {/* Date Text */}
-                        <p className="text-[11px] text-slate-500 mb-0.5">
+                        <p className="text-[11px] text-slate-500 mb-0.5 truncate">
                           {ev.event_date ? new Date(ev.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No date set'}
                         </p>
 
                         {/* Location */}
                         {ev.location && (
-                          <p className="text-[11px] text-slate-400 truncate mb-1.5 flex items-center gap-1">
-                            <MapPointOutline className="w-2.5 h-2.5" color="#94A3B8" />
-                            {ev.location}
+                          <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1 min-w-0">
+                            <MapPointOutline className="w-2.5 h-2.5 shrink-0" color="#94A3B8" />
+                            <span className="truncate min-w-0">{ev.location}</span>
                           </p>
                         )}
 

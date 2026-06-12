@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Job } from '@devcon-plus/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
+import { logoStatusCache } from '../lib/logoCache'
 
 interface JobsState {
   jobs: Job[]
@@ -29,6 +30,15 @@ export const useJobsStore = create<JobsState>((set, get) => ({
     try {
       const data = await publicFetch<Job[]>('/api/jobs')
       set({ jobs: data })
+      for (const job of data) {
+        if (job.logo_url && !logoStatusCache.has(job.logo_url)) {
+          const img = new Image()
+          const url = job.logo_url
+          img.onload  = () => logoStatusCache.set(url, 'ok')
+          img.onerror = () => logoStatusCache.set(url, 'error')
+          img.src = url
+        }
+      }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {

@@ -451,6 +451,7 @@ export default function ProfileEdit() {
                 <input
                   {...passwordForm.register('new_password')}
                   type="password"
+                  autoComplete="new-password"
                   placeholder="New password (min 8 characters)"
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -460,6 +461,7 @@ export default function ProfileEdit() {
                 <input
                   {...passwordForm.register('confirm_password')}
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Confirm new password"
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />

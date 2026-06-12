@@ -23,6 +23,11 @@ output "api_domain" {
   value       = var.api_domain
 }
 
+output "github_actions_role_arn" {
+  description = "IAM role assumed by GitHub Actions (set as AWS_DEPLOY_ROLE_ARN repo variable)."
+  value       = aws_iam_role.github_actions_deploy.arn
+}
+
 output "alarm_topic_arn" {
   description = "SNS topic used by CloudWatch alarms for the backend host."
   value       = aws_sns_topic.backend_alerts.arn

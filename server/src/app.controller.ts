@@ -5,9 +5,14 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
+  /** Root landing route — served at `/` (excluded from the /api prefix in main.ts). */
   @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  root(): { name: string; status: string; health: string } {
+    return {
+      name: this.appService.getHello(),
+      status: 'ok',
+      health: '/api/health',
+    };
   }
 
   /** Liveness probe for CloudWatch / nginx upstream health checks. */

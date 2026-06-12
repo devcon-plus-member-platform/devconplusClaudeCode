@@ -1,5 +1,16 @@
 # Rule: Prevent Vercel Build Failure (Exit Code 2)
 
+## Rule 0: A green build is not a working bundle (env vars)
+
+**Incident (2026-06-12):** staging white-screened with `supabaseUrl is required` while every pipeline stage was green. Root cause: the Vercel project's env vars are stored **sensitive/encrypted** — `vercel pull` exports them with **empty values** (`VITE_SUPABASE_URL=""`), so any CI-side build (`vercel build`, `vite build`) bakes empty config. Vite happily builds with missing `VITE_*` vars and only fails in the user's browser.
+
+Standing protections — do not remove them:
+
+1. **Never build the frontend in CI.** `deploy-frontend-staging.yml` uses `vercel deploy --prod` (remote build on Vercel infra, where sensitive env is injected). Reintroducing `vercel pull` + `vercel build` reintroduces the white screen.
+2. **`web/vite.config.ts` hard-fails builds with missing required env** (`REQUIRED_ENV` list). When adding a new required `VITE_*` var, add it to that list — and to the Vercel project env + `web/.env`.
+3. **The deploy workflow asserts the served bundle** contains baked-in config after every deploy. HTTP 200 on `index.html` proves nothing about the JS — verify the artifact, not the door.
+4. Same content ⇒ same Vite hash: if a "successful" deploy serves an **unchanged bundle filename**, the build inputs didn't change — treat it as a failed deploy, not a propagation delay.
+
 ## The Rule
 
 Every change to `apps/member/src/` must produce a clean `tsc -b` before it is considered done. A TypeScript error is a deployment failure — Vercel runs `tsc -b && vite build` and the entire deploy aborts if `tsc -b` exits non-zero. This has caused two separate rollback incidents (`cfa050d`, `93a368e`).

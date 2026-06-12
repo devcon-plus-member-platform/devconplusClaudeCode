@@ -13,8 +13,13 @@ async function bootstrap() {
   // All new feature endpoints live under /api/*.
   // Existing auth routes (/auth/*) keep their paths — authBridge.ts and api.ts
   // call them by full path and must not break.
+  // The bare root (/) is excluded so the API answers at the domain root
+  // instead of returning a 404 to anyone visiting it in a browser.
   app.setGlobalPrefix('api', {
-    exclude: [{ path: 'auth/(.*)', method: RequestMethod.ALL }],
+    exclude: [
+      { path: 'auth/(.*)', method: RequestMethod.ALL },
+      { path: '/', method: RequestMethod.GET },
+    ],
   });
 
   // CORS — comma-separated origins from env (no trailing slash).

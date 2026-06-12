@@ -1,0 +1,100 @@
+# Deploys the web frontend (web/) to the Vercel devconplus-dev project on
+# every dev push that touches it. Used instead of Vercel's Git integration
+# because the Hobby plan can't connect this repo's namespace and only builds
+# commits authored by the linked GitHub account.
+#
+# Each run produces a unique immutable deployment URL (printed in the job
+# summary) and promotes the build to the stable staging domain:
+# https://staging.cloud-engineer.dev
+#
+# Requires the VERCEL_TOKEN repository secret (Vercel account token, scope:
+# devcon-plus-member-platform's projects). Until it is set, runs skip with a
+# warning instead of failing.
+name: Deploy frontend (staging)
+
+on:
+  push:
+    branches: [dev, master]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-frontend-staging.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Project identifiers (not secrets) — pin the CLI to the devconplus-dev
+  # project under the devcon-plus-member-platform Vercel account.
+  VERCEL_ORG_ID: team_oKqcZFnXB6yI7WlWPAMpC7LC
+  VERCEL_PROJECT_ID: prj_qjtjIP90J44vkS1uZvAta1HmUeyS
+
+jobs:
+  # Same dormancy guard as the backend workflow: master keeps the old repo
+  # layout (no web/) until the structural merge.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      has-web: ${{ steps.detect.outputs.has-web }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: echo "has-web=$([ -d web ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: preflight
+    if: needs.preflight.outputs.has-web == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check deploy token
+        id: token
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN secret is not set — skipping frontend deploy. Add it under Settings > Secrets and variables > Actions."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+
+      # Build happens ON Vercel's infrastructure, not in CI. The project's env
+      # vars are stored as sensitive/encrypted — `vercel pull` exports them
+      # with EMPTY values, so any CI-side build (vercel build / vite build)
+      # produces a bundle without VITE_* config and the app white-screens with
+      # "supabaseUrl is required". Remote builds inject the env correctly.
+      - name: Deploy to staging (remote build with project env)
+        if: steps.token.outputs.present == 'true'
+        working-directory: web
+        run: |
+          URL=$(npx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN")
+          echo "Per-commit deployment URL: $URL"
+          {
+            echo "### Frontend staging deploy"
+            echo "- Per-commit URL: $URL"
+            echo "- Stable domain: https://staging.cloud-engineer.dev"
+            echo "- Commit: \`${GITHUB_SHA::7}\` on \`$GITHUB_REF_NAME\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A 200 on the HTML proves nothing about the JS — assert the served
+      # bundle actually contains baked-in build-time config (the Supabase
+      # hostname is public by design; it ships in every browser bundle).
+      - name: Verify deployed bundle contains build-time env
+        if: steps.token.outputs.present == 'true'
+        run: |
+          sleep 10
+          ASSET=$(curl -fsS --retry 3 --retry-delay 5 https://staging.cloud-engineer.dev | grep -o '/assets/index-[^"]*\.js' | head -1)
+          echo "main bundle: $ASSET"
+          if curl -fsS "https://staging.cloud-engineer.dev$ASSET" | grep -q "supabase.co"; then
+            echo "OK: build-time env present in served bundle"
+          else
+            echo "::error::Served bundle is missing VITE_* env — app will white-screen"
+            exit 1
+          fi

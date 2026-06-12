@@ -328,6 +328,7 @@ export function OrgProfileEdit() {
                 <input
                   {...passwordForm.register('new_password')}
                   type="password"
+                  autoComplete="new-password"
                   placeholder="New password (min 6 characters)"
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
                 />
@@ -337,6 +338,7 @@ export function OrgProfileEdit() {
                 <input
                   {...passwordForm.register('confirm_password')}
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Confirm new password"
                   className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
                 />

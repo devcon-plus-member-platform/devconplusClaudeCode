@@ -7,27 +7,20 @@ import { SkeletonJobCard } from '../../components/Skeleton'
 import { WORK_TYPE_LABELS } from '../../lib/constants'
 import { staggerContainer, cardItem } from '../../lib/animation'
 import { fuzzySearchFilter } from '../../lib/utils'
+import { logoStatusCache } from '../../lib/logoCache'
 import SearchBar from '../../components/SearchBar'
 import SearchEmptyState from '../../components/SearchEmptyState'
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
-const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
-
-// ── Company logo with fallback ────────────────────────────────────────────────
-
 function CompanyLogo({ logoUrl, company }: { logoUrl: string | null; company: string }) {
-  const [imgError, setImgError] = useState(false)
-
-  if (logoUrl && !imgError) {
+  const [imgStatus, setImgStatus] = useState<'ok' | 'error' | 'pending'>(
+    () => (logoUrl ? (logoStatusCache.get(logoUrl) ?? 'pending') : 'error')
+  )
+  if (logoUrl && imgStatus !== 'error') {
     return (
-      <div className="w-12 h-12 shrink-0 overflow-hidden rounded-xl bg-white">
-        <img
-          src={logoUrl}
-          alt={company}
-          className="w-full h-full object-contain"
-          onError={() => setImgError(true)}
+      <div className="w-12 h-12 shrink-0">
+        <img src={logoUrl} alt={company} className="w-full h-full object-contain rounded-xl"
+          onLoad={() => { logoStatusCache.set(logoUrl, 'ok'); setImgStatus('ok') }}
+          onError={() => { logoStatusCache.set(logoUrl, 'error'); setImgStatus('error') }}
         />
       </div>
     )
@@ -40,6 +33,11 @@ function CompanyLogo({ logoUrl, company }: { logoUrl: string | null; company: st
     </div>
   )
 }
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
+const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
