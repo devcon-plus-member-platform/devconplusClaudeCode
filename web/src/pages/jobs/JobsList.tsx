@@ -52,10 +52,6 @@ export default function JobsList() {
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  useEffect(() => {
-    setExpandedId(idParam)
-  }, [idParam])
-
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const deferredQuery = useDeferredValue(searchQuery.trim())

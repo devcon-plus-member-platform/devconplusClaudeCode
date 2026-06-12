@@ -152,7 +152,6 @@ const CATEGORY_OPTIONS: { value: EventFormData['category']; label: string }[] = 
   { value: 'summit',     label: 'Summit'     },
   { value: 'social',     label: 'Social'     },
   { value: 'networking', label: 'Networking' },
-  { value: 'code_camp',  label: 'Code Camp'  },
 ]
 
 const VISIBILITY_OPTIONS: { value: EventFormData['visibility']; label: string }[] = [
