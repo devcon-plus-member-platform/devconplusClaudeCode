@@ -22,7 +22,7 @@ interface PointsState {
   pendingLoads: number
   error: string | null
 
-  loadTransactions: () => Promise<void>
+  loadTransactions: (limit?: number) => Promise<void>
   loadTotalPoints: () => Promise<void>
   subscribeToChanges: () => () => void
 }
@@ -39,12 +39,14 @@ export const usePointsStore = create<PointsState>((set, get) => ({
   pendingLoads: 0,
   error: null,
 
-  loadTransactions: async () => {
+  loadTransactions: async (limit?: number) => {
     const user = useAuthStore.getState().user
     if (!user) return
     set((s) => ({ pendingLoads: s.pendingLoads + 1, isLoading: true, error: null }))
     try {
-      const data = await apiFetch<PointTransaction[]>('/api/points/transactions')
+      // Server clamps to [1, 200]; pass a small limit where only a preview is shown.
+      const qs = limit != null ? `?limit=${limit}` : ''
+      const data = await apiFetch<PointTransaction[]>(`/api/points/transactions${qs}`)
       set({ transactions: data })
     } catch (err) {
       set({ transactions: [], error: err instanceof Error ? err.message : String(err) })

@@ -31,7 +31,6 @@ export default function MemberLayout() {
   const location = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
   const subscribeToEventChanges = useEventsStore((s) => s.subscribeToChanges)
-  const subscribeToRewardChanges = useRewardsStore((s) => s.subscribeToChanges)
   const subscribeToPointsChanges = usePointsStore((s) => s.subscribeToChanges)
   const fetchEvents = useEventsStore((s) => s.fetchEvents)
   const fetchRegistrations = useEventsStore((s) => s.fetchRegistrations)
@@ -45,7 +44,6 @@ export default function MemberLayout() {
   const loadVolunteerApplications = useVolunteerStore((s) => s.loadApplications)
   const loadReferralData = useReferralsStore((s) => s.loadReferralData)
   const fetchMissions = useMissionsStore((s) => s.fetchAll)
-  const subscribeMissions = useMissionsStore((s) => s.subscribeToChanges)
   const { fetchRecent, subscribe: subscribeNotifications } = useNotificationsStore()
 
 
@@ -83,9 +81,10 @@ export default function MemberLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         // Re-establish channels AND refetch data — channels authenticated with
-        // the old token must be replaced after a token refresh.
+        // the old token must be replaced after a token refresh, so force the
+        // rebuild even if the channels currently look healthy.
         recoverRef.current?.()
-        resubscribeRef.current?.()
+        resubscribeRef.current?.({ force: true })
       }
     })
     return () => { subscription.unsubscribe() }
@@ -93,15 +92,13 @@ export default function MemberLayout() {
 
   // Unified data + realtime management for the member session.
   const unsubEventsRef = useRef<(() => void) | null>(null)
-  const unsubRewardsRef = useRef<(() => void) | null>(null)
-  const unsubMissionsRef = useRef<(() => void) | null>(null)
   const unsubPointsRef = useRef<(() => void) | null>(null)
   const unsubNotifsRef = useRef<(() => void) | null>(null)
 
   // Stable refs so async handlers/event listeners (empty deps or stale closures)
   // always call the current store-aware logic.
   const recoverRef = useRef<(() => void) | null>(null)
-  const resubscribeRef = useRef<(() => void) | null>(null)
+  const resubscribeRef = useRef<((opts?: { force?: boolean }) => void) | null>(null)
   // Debounce guard: prevents concurrent recovery runs when visibilitychange,
   // online, and onRealtimeDisconnect all fire within the same "wake-up" burst.
   const lastRecoveryRef = useRef(0)
@@ -142,24 +139,36 @@ export default function MemberLayout() {
     }
     recoverRef.current = recover
 
-    const resubscribe = () => {
+    const resubscribe = (opts?: { force?: boolean }) => {
+      const socketState = supabase.realtime.connectionState()
+      const channels = supabase.getChannels()
+      const hasDeadChannel =
+        channels.length === 0 ||
+        channels.some((ch) => ch.state === 'closed' || ch.state === 'errored')
+
+      // Health gate: the realtime subscription-management query is one of the
+      // heaviest DB costs (it re-evaluates pg_publication_tables on every
+      // channel create/destroy). Skip the teardown/re-create entirely when the
+      // socket is open and every channel is still healthy — otherwise the
+      // high-frequency triggers (visibilitychange / online / 300 s poll /
+      // +5 s,+15 s follow-ups) thrash subscriptions for no reason.
+      // Recovery is still guaranteed: a genuinely dead channel reports
+      // 'closed'/'errored' here, onRealtimeDisconnect catches socket loss, and
+      // a token refresh forces a rebuild via { force: true }.
+      if (!opts?.force && socketState !== 'closed' && !hasDeadChannel) return
+
       // Force reconnect if the socket is truly closed
-      const state = supabase.realtime.connectionState()
-      if (state === 'closed') {
+      if (socketState === 'closed') {
         supabase.realtime.connect()
       }
-      
+
       // Cleanup existing subscriptions
       unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubMissionsRef.current?.()
       unsubPointsRef.current?.()
       unsubNotifsRef.current?.()
       
       // Re-establish general subscriptions
       unsubEventsRef.current = subscribeToEventChanges()
-      unsubRewardsRef.current = subscribeToRewardChanges()
-      unsubMissionsRef.current = subscribeMissions()
       unsubPointsRef.current = subscribeToPointsChanges()
       
       // Re-establish notification subscription using the latest store state
@@ -217,8 +226,6 @@ export default function MemberLayout() {
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = []
       unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubMissionsRef.current?.()
       unsubPointsRef.current?.()
       unsubNotifsRef.current?.()
     }

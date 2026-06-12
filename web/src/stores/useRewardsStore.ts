@@ -134,28 +134,13 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
   },
 
   // ── Realtime ─────────────────────────────────────────────────────────────
+  // Disabled 2026-06-12: `rewards` was removed from the supabase_realtime
+  // publication to cut WAL load (see supabase/diagnostics/FINDINGS.md). The
+  // catalog is low-churn and refetches on mount/recovery, so no live channel is
+  // opened. To restore, re-add `rewards` to the publication and revert this body
+  // (git history has the original UPDATE-driven deactivation handler).
   subscribeToChanges: () => {
-    const channel = supabase
-      .channel(nextChan('rewards-realtime'))
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'rewards' },
-        (payload) => {
-          const updated = payload.new as Reward
-          if (!updated.is_active) {
-            set((s) => ({
-              rewards: s.rewards.filter((r) => r.id !== updated.id),
-              allRewards: s.allRewards.filter((r) => r.id !== updated.id),
-            }))
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[rewards-realtime] channel error', status, err)
-        }
-      })
-    return () => { void supabase.removeChannel(channel) }
+    return () => {}
   },
 
   // ── Redeem ───────────────────────────────────────────────────────────────

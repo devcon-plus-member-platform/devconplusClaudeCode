@@ -52,7 +52,7 @@ export default function Dashboard() {
     void fetchEvents()
     void fetchJobs()
     void loadTotalPoints()
-    void loadTransactions()
+    void loadTransactions(4) // dashboard only renders the last 4 (see recentTxns)
     void fetchMissions()
 
     // Fetch approved registration counts and some profiles for all events
