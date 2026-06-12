@@ -13,7 +13,7 @@ import {
 
 const CATEGORIES = [
   'tech_talk', 'hackathon', 'workshop', 'brown_bag',
-  'summit', 'social', 'networking',
+  'code_camp', 'summit', 'social', 'networking',
 ] as const;
 
 const DEVCON_CATEGORIES = ['devcon', 'she', 'kids', 'campus'] as const;

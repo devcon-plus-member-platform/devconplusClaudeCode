@@ -47,6 +47,9 @@ export default function JobsList() {
 
   const { jobs, isLoading, error, fetchJobs } = useJobsStore()
   const [expandedId, setExpandedId] = useState<string | null>(idParam)
+
+  useEffect(() => { setExpandedId(idParam) }, [idParam])
+
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const [isSearchVisible, setIsSearchVisible] = useState(false)
