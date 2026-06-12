@@ -41,7 +41,17 @@ describe('PointsController', () => {
 
   it('getTransactions — scoped to caller from token (not body)', async () => {
     await controller.getTransactions(mockMember);
-    expect(service.getTransactions).toHaveBeenCalledWith(mockMember);
+    expect(service.getTransactions).toHaveBeenCalledWith(mockMember, undefined);
+  });
+
+  it('getTransactions — forwards a numeric ?limit to the service', async () => {
+    await controller.getTransactions(mockMember, '4');
+    expect(service.getTransactions).toHaveBeenCalledWith(mockMember, 4);
+  });
+
+  it('getTransactions — non-numeric ?limit falls back to undefined', async () => {
+    await controller.getTransactions(mockMember, 'abc');
+    expect(service.getTransactions).toHaveBeenCalledWith(mockMember, undefined);
   });
 
   it('getPointSummary — scoped to caller from token', async () => {

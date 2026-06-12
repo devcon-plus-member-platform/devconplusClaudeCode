@@ -13,12 +13,16 @@ export class PointsRepository extends BaseRepository {
 
   // ── Member ────────────────────────────────────────────────────────────────
 
-  async findTransactions(userId: string): Promise<PointTransaction[]> {
+  async findTransactions(userId: string, limit = 200): Promise<PointTransaction[]> {
+    // Always bounded — the full ledger is never needed in one call. The dashboard
+    // preview shows 4; the history page is capped by the service. Prevents a
+    // power user's multi-thousand-row ledger from being shipped on every fetch.
     const result = await this.db
       .from('point_transactions')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
     return this.unwrap(
       result as { data: PointTransaction[] | null; error: { message: string } | null },
     );

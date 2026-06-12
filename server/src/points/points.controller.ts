@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
@@ -26,10 +27,21 @@ export class PointsController {
 
   // ── Member: reads ─────────────────────────────────────────────────────────
 
-  /** GET /api/points/transactions — caller's full point transaction history */
+  /**
+   * GET /api/points/transactions — caller's point transaction history,
+   * newest first. Optional `?limit=N` (clamped to [1, 200] by the service);
+   * the dashboard preview requests a small limit, history pages the default.
+   */
   @Get('transactions')
-  getTransactions(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.getTransactions(user);
+  getTransactions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit === undefined ? undefined : Number.parseInt(limit, 10);
+    return this.service.getTransactions(
+      user,
+      Number.isFinite(parsed as number) ? parsed : undefined,
+    );
   }
 
   /** GET /api/points/summary — caller's spendable + lifetime point totals */

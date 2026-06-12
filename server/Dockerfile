@@ -1,6 +1,7 @@
 # Multi-stage build for the DEVCON+ NestJS auth-bridge.
-# Designed for GCP Cloud Run with min-instances=0 — runtime image
-# is kept small so cold starts stay under ~1.5s.
+# Runs on AWS EC2 via Docker Compose behind nginx (see server/docker-compose.*.yml).
+# The runtime image is kept small so `docker compose pull` and container
+# restarts stay fast on the small t3.small host.
 
 # ── Builder stage ──────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
@@ -30,7 +31,8 @@ COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/package.json ./
 
 ENV NODE_ENV=production
-# Cloud Run sets $PORT dynamically (default 8080); main.ts reads process.env.PORT
-EXPOSE 8080
+# main.ts reads process.env.PORT (default 3000); compose sets PORT=8000 via the
+# env file and maps 127.0.0.1:8000 -> 8000. EXPOSE is documentation only.
+EXPOSE 8000
 
 CMD ["node", "dist/main.js"]

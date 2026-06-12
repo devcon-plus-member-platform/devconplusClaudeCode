@@ -37,8 +37,6 @@ export default function OrganizerLayout() {
   const fetchEvents = useEventsStore((s) => s.fetchEvents)
   const subscribeToEventChanges = useEventsStore((s) => s.subscribeToChanges)
   const fetchAllRewards = useRewardsStore((s) => s.fetchAllRewards)
-  const subscribeToRewardChanges = useRewardsStore((s) => s.subscribeToChanges)
-  const subscribeToRedemptions = useRewardsStore((s) => s.subscribeToRedemptions)
   const fetchAllRedemptions = useRewardsStore((s) => s.fetchAllRedemptions)
   const loadOrgVolunteerApps = useOrgVolunteerStore((s) => s.loadApplications)
 
@@ -54,10 +52,8 @@ export default function OrganizerLayout() {
   // Fetches data and subscribes to realtime on mount; recovers and re-subscribes
   // on visibility/online/idle-timeout events.
   const unsubEventsRef = useRef<(() => void) | null>(null)
-  const unsubRewardsRef = useRef<(() => void) | null>(null)
-  const unsubRedemptionsRef = useRef<(() => void) | null>(null)
   const recoverRef = useRef<(() => void) | null>(null)
-  const resubscribeRef = useRef<(() => void) | null>(null)
+  const resubscribeRef = useRef<((opts?: { force?: boolean }) => void) | null>(null)
   const lastRecoveryRef = useRef(0)
   const retryTimersRef = useRef<number[]>([])
 
@@ -65,9 +61,10 @@ export default function OrganizerLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         // Re-establish channels AND refetch data — channels authenticated with
-        // the old token must be replaced after a token refresh.
+        // the old token must be replaced after a token refresh, so force the
+        // rebuild even if the channels currently look healthy.
         recoverRef.current?.()
-        resubscribeRef.current?.()
+        resubscribeRef.current?.({ force: true })
       }
     })
     return () => { subscription.unsubscribe() }
@@ -83,13 +80,24 @@ export default function OrganizerLayout() {
     }
     recoverRef.current = recover
 
-    const resubscribe = () => {
+    const resubscribe = (opts?: { force?: boolean }) => {
+      const socketState = supabase.realtime.connectionState()
+      const channels = supabase.getChannels()
+      const hasDeadChannel =
+        channels.length === 0 ||
+        channels.some((ch) => ch.state === 'closed' || ch.state === 'errored')
+
+      // Health gate — see MemberLayout for the full rationale. The realtime
+      // subscription-management query is one of the heaviest DB costs, so only
+      // tear down + re-create channels when the socket is closed or a channel is
+      // actually dead (or on a forced rebuild after a token refresh). Healthy
+      // channels are left alone so the frequent triggers don't thrash them.
+      if (!opts?.force && socketState !== 'closed' && !hasDeadChannel) return
+
+      if (socketState === 'closed') supabase.realtime.connect()
+
       unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubRedemptionsRef.current?.()
       unsubEventsRef.current = subscribeToEventChanges()
-      unsubRewardsRef.current = subscribeToRewardChanges()
-      unsubRedemptionsRef.current = subscribeToRedemptions()
     }
     resubscribeRef.current = resubscribe
 
@@ -129,8 +137,6 @@ export default function OrganizerLayout() {
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = []
       unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubRedemptionsRef.current?.()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
