@@ -19,6 +19,7 @@ remix-of-devcon-connect/
 
 # AI tool config/cache
 .gemini/
+.playwright-mcp/
 supabase/migrations/.claude/
 
 # Server build output
