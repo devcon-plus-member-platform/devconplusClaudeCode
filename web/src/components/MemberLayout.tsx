@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { HomeOutline, GiftOutline, QRCodeOutline, CaseOutline, UserOutline } from 'solar-icon-set'
+import { HomeOutline, GiftOutline, QRCodeOutline, CaseOutline, UserOutline, BoltOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
@@ -322,7 +322,7 @@ export default function MemberLayout() {
                   whileTap={{ scale: 0.88 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                 >
-                  <CaseOutline className="w-5 h-5" />
+                  <CaseOutline color={isActive ? 'rgb(var(--color-primary))' : '#94A3B8'} size={20} />
                   <span className="text-[10px] font-medium">Jobs</span>
                 </motion.div>
               )}
@@ -340,7 +340,7 @@ export default function MemberLayout() {
                   whileTap={{ scale: 0.88 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                 >
-                  <UserOutline className="w-5 h-5" />
+                  <UserOutline color={isActive ? 'rgb(var(--color-primary))' : '#94A3B8'} size={20} />
                   <span className="text-[10px] font-medium">Profile</span>
                 </motion.div>
               )}
@@ -420,8 +420,20 @@ export default function MemberLayout() {
                 }`
               }
             >
-              <CaseOutline className="w-4 h-4 shrink-0" />
+              <CaseOutline color="white" size={16} className="shrink-0" />
               Jobs
+            </NavLink>
+
+            <NavLink
+              to="/missions"
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium transition-colors ${
+                  isActive ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              <BoltOutline color="white" size={16} className="shrink-0" />
+              Missions
             </NavLink>
 
             <NavLink
@@ -432,7 +444,7 @@ export default function MemberLayout() {
                 }`
               }
             >
-              <UserOutline className="w-4 h-4 shrink-0" />
+              <UserOutline color="white" size={16} className="shrink-0" />
               Profile
             </NavLink>
 
