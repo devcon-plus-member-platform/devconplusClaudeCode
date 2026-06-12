@@ -29,9 +29,24 @@ describe('PointsService', () => {
     service = new PointsService(repo);
   });
 
-  it('getTransactions — scoped to caller profileId (IDOR defense)', async () => {
+  it('getTransactions — scoped to caller profileId (IDOR defense), default cap', async () => {
     await service.getTransactions(member);
-    expect(repo.findTransactions).toHaveBeenCalledWith('member-1');
+    expect(repo.findTransactions).toHaveBeenCalledWith('member-1', 200);
+  });
+
+  it('getTransactions — honors a small limit (dashboard preview)', async () => {
+    await service.getTransactions(member, 4);
+    expect(repo.findTransactions).toHaveBeenCalledWith('member-1', 4);
+  });
+
+  it('getTransactions — clamps an over-large limit to the 200 cap', async () => {
+    await service.getTransactions(member, 9999);
+    expect(repo.findTransactions).toHaveBeenCalledWith('member-1', 200);
+  });
+
+  it('getTransactions — clamps a non-positive limit up to 1', async () => {
+    await service.getTransactions(member, 0);
+    expect(repo.findTransactions).toHaveBeenCalledWith('member-1', 1);
   });
 
   it('getPointSummary — scoped to caller profileId', async () => {

@@ -113,7 +113,8 @@ export class MissionsRepository extends BaseRepository {
     const result = await (this.db as any)
       .from('missions')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(200); // guardrail — admin-seeded table; never expected to exceed this
     return this.unwrap(
       result as { data: Mission[] | null; error: { message: string } | null },
     );
