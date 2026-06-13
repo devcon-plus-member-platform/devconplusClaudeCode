@@ -3,6 +3,8 @@ import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutlin
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 
 import type { Profile, UserRole, PointTransaction } from '@devcon-plus/supabase'
 
@@ -35,6 +37,8 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [userTxns, setUserTxns] = useState<PointTransaction[]>([])
   const [txnsLoading, setTxnsLoading] = useState(false)
+
+  const { pageItems, ...pagination } = usePagination(users, 10)
 
   const openUser = async (user: Profile) => {
     setSelectedUser(user)
@@ -110,7 +114,7 @@ export default function AdminUsers() {
 
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">Users</h1>
       <p className="text-md3-body-md text-slate-500 mb-6">Manage member roles and accounts</p>
 
@@ -121,9 +125,10 @@ export default function AdminUsers() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading users…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Email</th>
@@ -133,7 +138,7 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {pageItems.map((u) => (
                 <tr
                   key={u.id}
                   className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
@@ -187,6 +192,8 @@ export default function AdminUsers() {
           {users.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No users found.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="user" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
 

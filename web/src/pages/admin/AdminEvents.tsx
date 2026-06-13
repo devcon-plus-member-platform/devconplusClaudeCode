@@ -8,6 +8,8 @@ import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 
 // ── Custom form field types ────────────────────────────────────────────────────
 
@@ -1055,6 +1057,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
 export default function AdminEvents() {
   const [events, setEvents] = useState<EventWithChapter[]>([])
+  const { pageItems, ...pagination } = usePagination(events, 10)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -1301,7 +1304,7 @@ export default function AdminEvents() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1347,9 +1350,10 @@ export default function AdminEvents() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading events…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Event</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Chapter</th>
@@ -1360,7 +1364,7 @@ export default function AdminEvents() {
               </tr>
             </thead>
             <tbody>
-              {events.map((event) => (
+              {pageItems.map((event) => (
                 <tr key={event.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-900">{event.title}</p>
@@ -1445,6 +1449,8 @@ export default function AdminEvents() {
           {events.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No events found.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="event" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
 

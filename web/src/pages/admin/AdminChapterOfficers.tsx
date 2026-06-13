@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 
 interface Assignment {
   id: string
@@ -90,6 +92,8 @@ export default function AdminChapterOfficers() {
     )
   }, [filtered])
 
+  const { pageItems: pagedGroups, ...pagination } = usePagination(groupedByChapter, 10)
+
   const onSubmit = async (data: FormData) => {
     setError(null)
     const { error: rpcErr } = await supabase.rpc('assign_officer_email', {
@@ -116,7 +120,7 @@ export default function AdminChapterOfficers() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-md3-headline-sm font-black text-slate-900">Chapter Officers</h1>
@@ -232,8 +236,9 @@ export default function AdminChapterOfficers() {
       ) : filtered.length === 0 ? (
         <p className="text-center py-10 text-slate-400 text-md3-body-md">No assignments match the selected filters.</p>
       ) : (
-        <div className="space-y-6">
-          {groupedByChapter.map(([chapterId, { chapterName, rows }]) => (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
+          {pagedGroups.map(([chapterId, { chapterName, rows }]) => (
             <div key={chapterId} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
               {/* Chapter section header */}
               <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
@@ -296,6 +301,8 @@ export default function AdminChapterOfficers() {
               </table>
             </div>
           ))}
+          </div>
+          <Pagination controller={pagination} itemLabel="chapter" className="shrink-0" />
         </div>
       )}
     </div>
