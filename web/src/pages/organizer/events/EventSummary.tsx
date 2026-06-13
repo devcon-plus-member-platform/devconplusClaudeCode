@@ -16,7 +16,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventSummary() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, isLoading: eventsLoading } = useEventsStore()
 
   const [registrants, setRegistrants] = useState<Registration[]>([])
   const [isLoading, setIsLoading]     = useState(true)
@@ -62,11 +62,16 @@ export function OrgEventSummary() {
       })
   }, [id, event?.title]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Not-found fallback
+  // Not-found fallback — but wait for the events store to finish loading first,
+  // otherwise this flashes "Event not found" on a cold load / direct URL access.
   if (!event) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-slate-400">Event not found.</p>
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        {eventsLoading ? (
+          <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
+        ) : (
+          <p className="text-slate-400">Event not found.</p>
+        )}
       </div>
     )
   }

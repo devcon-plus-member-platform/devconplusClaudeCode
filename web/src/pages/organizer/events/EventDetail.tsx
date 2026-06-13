@@ -15,7 +15,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, isLoading } = useEventsStore()
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [statsTotal, setStatsTotal]       = useState(0)
   const [statsPending, setStatsPending]   = useState(0)
@@ -42,9 +42,15 @@ export function OrgEventDetail() {
 
   const event = events.find((e) => e.id === id)
   if (!event) {
+    // While the store is still loading we don't yet know whether the event exists —
+    // show a spinner instead of flashing "Event not found".
     return (
-      <div className="p-6 text-center">
-        <p className="text-slate-400">Event not found.</p>
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
+        {isLoading ? (
+          <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
+        ) : (
+          <p className="text-slate-400">Event not found.</p>
+        )}
       </div>
     )
   }

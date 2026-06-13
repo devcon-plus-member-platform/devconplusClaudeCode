@@ -148,6 +148,37 @@ export function SkeletonTransactionGroup({ rows = 3 }: { rows?: number }) {
   )
 }
 
+/** Notification announcement card */
+export function SkeletonNotificationCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 mb-3">
+      <div className="flex items-center justify-between mb-2.5 pr-6">
+        <S className="h-4 w-24 rounded-full" />
+        <S className="h-3 w-14" />
+      </div>
+      <div className="space-y-2">
+        <S className="h-3.5 w-full" />
+        <S className="h-3.5 w-2/3" />
+      </div>
+    </div>
+  )
+}
+
+/** Organizer horizontal event row (72px thumb + details) */
+export function SkeletonOrgEventRow() {
+  return (
+    <div className="w-full bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 flex items-center gap-4">
+      <S className="size-[72px] rounded-[12px] shrink-0" />
+      <div className="flex-1 space-y-2 min-w-0">
+        <S className="h-4 w-3/4" />
+        <S className="h-3 w-1/3" />
+        <S className="h-3 w-1/2" />
+        <S className="h-4 w-14 rounded-full" />
+      </div>
+    </div>
+  )
+}
+
 /** Reward card — full-width single column */
 export function SkeletonRewardCard() {
   return (

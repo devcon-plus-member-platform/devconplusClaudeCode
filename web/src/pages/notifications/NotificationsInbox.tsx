@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useNotificationsStore } from '../../stores/useNotificationsStore'
 import { formatDate } from '../../lib/dates'
 import { cardItem, staggerContainer } from '../../lib/animation'
+import { SkeletonNotificationCard } from '../../components/Skeleton'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Jobs
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -17,7 +18,7 @@ interface NotificationsInboxProps {
 
 export default function NotificationsInbox({ isOrganizer = false }: NotificationsInboxProps) {
   const navigate = useNavigate()
-  const { notifications, markAllRead, dismiss, clearAll } = useNotificationsStore()
+  const { notifications, isLoading, markAllRead, dismiss, clearAll } = useNotificationsStore()
 
   // Mark all as read when inbox is opened
   useEffect(() => {
@@ -69,7 +70,13 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
       </header>
 
       <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
-        {notifications.length === 0 ? (
+        {isLoading && notifications.length === 0 ? (
+          <div aria-busy="true" aria-label="Loading notifications">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonNotificationCard key={i} />
+            ))}
+          </div>
+        ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center px-8 pt-20 text-center">
             <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-5">
               <BellOffOutline className="w-9 h-9" color="#CBD5E1" />
