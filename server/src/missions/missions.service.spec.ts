@@ -14,17 +14,18 @@ const MISSION_ID = 'mission-uuid-001';
 const mockMission: Partial<Mission> = { id: MISSION_ID, title: 'Fix a Bug', is_active: true };
 const mockSub: MissionSubmission = {
   id: SUB_ID, mission_id: MISSION_ID, user_id: 'member-1',
-  pr_link: 'https://github.com/pr/1', status: 'pending', submitted_at: null,
+  pr_link: 'https://github.com/pr/1', status: 'pending', rejection_reason: null, submitted_at: null,
 };
 const mockParticipant: MissionParticipant = { mission_id: MISSION_ID, user_id: 'member-1', joined_at: null };
 
 function makeRepo() {
   return {
-    findActiveMissions:     jest.fn().mockResolvedValue([mockMission]),
+    findMissionsForUser:    jest.fn().mockResolvedValue([mockMission]),
     findUserParticipants:   jest.fn().mockResolvedValue([mockParticipant]),
     findUserSubmissions:    jest.fn().mockResolvedValue([mockSub]),
     startMission:           jest.fn().mockResolvedValue(mockParticipant),
     findExistingSubmission: jest.fn().mockResolvedValue(null),
+    findMissionById:        jest.fn().mockResolvedValue(mockMission),
     insertSubmission:       jest.fn().mockResolvedValue(mockSub),
     updateSubmission:       jest.fn().mockResolvedValue(mockSub),
     findAllMissions:        jest.fn().mockResolvedValue([mockMission]),
@@ -32,7 +33,8 @@ function makeRepo() {
     createMission:          jest.fn().mockResolvedValue(mockMission),
     updateMission:          jest.fn().mockResolvedValue(mockMission),
     deleteMission:          jest.fn().mockResolvedValue(undefined),
-    approveMissionWinner:   jest.fn().mockResolvedValue(undefined),
+    approveMissionSubmission: jest.fn().mockResolvedValue(undefined),
+    rejectMissionSubmission:  jest.fn().mockResolvedValue(undefined),
   } as unknown as jest.Mocked<MissionsRepository>;
 }
 
@@ -50,7 +52,7 @@ describe('MissionsService', () => {
   describe('getMemberData', () => {
     it('runs three queries in parallel scoped to caller — IDOR defense', async () => {
       const result = await service.getMemberData(member);
-      expect(repo.findActiveMissions).toHaveBeenCalled();
+      expect(repo.findMissionsForUser).toHaveBeenCalledWith('member-1');
       expect(repo.findUserParticipants).toHaveBeenCalledWith('member-1');
       expect(repo.findUserSubmissions).toHaveBeenCalledWith('member-1');
       expect(result.missions).toEqual([mockMission]);
@@ -82,6 +84,22 @@ describe('MissionsService', () => {
       expect(repo.updateSubmission).toHaveBeenCalledWith(SUB_ID, 'https://new-pr');
       expect(repo.insertSubmission).not.toHaveBeenCalled();
     });
+
+    it('auto-approves link-type missions on first submit', async () => {
+      repo.findMissionById.mockResolvedValue({ ...mockMission, submission_type: 'link' } as Mission);
+      const result = await service.submitMission(member, MISSION_ID, 'https://devcon.org');
+      expect(repo.approveMissionSubmission).toHaveBeenCalledWith(SUB_ID);
+      expect(result.status).toBe('approved');
+    });
+
+    it('does NOT re-award an already-approved link mission (double-award guard)', async () => {
+      repo.findMissionById.mockResolvedValue({ ...mockMission, submission_type: 'link' } as Mission);
+      repo.findExistingSubmission.mockResolvedValue({ ...mockSub, status: 'approved' });
+      const result = await service.submitMission(member, MISSION_ID, 'https://devcon.org');
+      expect(repo.updateSubmission).not.toHaveBeenCalled();
+      expect(repo.approveMissionSubmission).not.toHaveBeenCalled();
+      expect(result.status).toBe('approved');
+    });
   });
 
   // ── Admin ─────────────────────────────────────────────────────────────────
@@ -91,9 +109,14 @@ describe('MissionsService', () => {
     expect(repo.findAllMissions).toHaveBeenCalled();
   });
 
-  it('approveMissionWinner — passes subId to approve_mission_winner RPC', async () => {
-    await service.approveMissionWinner(SUB_ID);
-    expect(repo.approveMissionWinner).toHaveBeenCalledWith(SUB_ID);
+  it('approveMissionSubmission — passes subId, does not lock mission (new RPC)', async () => {
+    await service.approveMissionSubmission(SUB_ID);
+    expect(repo.approveMissionSubmission).toHaveBeenCalledWith(SUB_ID);
+  });
+
+  it('rejectMissionSubmission — passes subId and optional reason', async () => {
+    await service.rejectMissionSubmission(SUB_ID, 'Needs more detail');
+    expect(repo.rejectMissionSubmission).toHaveBeenCalledWith(SUB_ID, 'Needs more detail');
   });
 
   it('updateMission — passes id and dto (covers is_active toggle)', async () => {

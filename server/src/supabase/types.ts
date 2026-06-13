@@ -71,6 +71,7 @@ export interface MissionSubmission {
   user_id: string;
   pr_link: string | null;
   status: 'pending' | 'approved' | 'rejected';
+  rejection_reason: string | null;
   submitted_at: string | null;
 }
 

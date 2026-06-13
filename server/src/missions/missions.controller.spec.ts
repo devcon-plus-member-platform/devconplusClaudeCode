@@ -24,7 +24,8 @@ function makeService() {
     createMission:        jest.fn().mockResolvedValue({ id: MISSION_ID }),
     updateMission:        jest.fn().mockResolvedValue({ id: MISSION_ID }),
     deleteMission:        jest.fn().mockResolvedValue(undefined),
-    approveMissionWinner: jest.fn().mockResolvedValue(undefined),
+    approveMissionSubmission: jest.fn().mockResolvedValue(undefined),
+    rejectMissionSubmission:  jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -69,9 +70,14 @@ describe('MissionsController', () => {
     expect(service.getPendingQueue).toHaveBeenCalled();
   });
 
-  it('approveMissionWinner — subId from param only', async () => {
-    await controller.approveMissionWinner({ id: SUB_ID });
-    expect(service.approveMissionWinner).toHaveBeenCalledWith(SUB_ID);
+  it('approveMissionSubmission — subId from param only, mission stays open', async () => {
+    await controller.approveMissionSubmission({ id: SUB_ID });
+    expect(service.approveMissionSubmission).toHaveBeenCalledWith(SUB_ID);
+  });
+
+  it('rejectMissionSubmission — subId from param, optional reason from body', async () => {
+    await controller.rejectMissionSubmission({ id: SUB_ID }, { reason: 'Incomplete work' });
+    expect(service.rejectMissionSubmission).toHaveBeenCalledWith(SUB_ID, 'Incomplete work');
   });
 
   it('updateMission — covers is_active toggle path', async () => {

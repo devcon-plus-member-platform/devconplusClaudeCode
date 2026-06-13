@@ -24,7 +24,7 @@ export class MissionsService {
 
   async getMemberData(user: AuthenticatedUser): Promise<MemberMissionsData> {
     const [missions, participants, submissions] = await Promise.all([
-      this.repo.findActiveMissions(),
+      this.repo.findMissionsForUser(user.profileId),
       this.repo.findUserParticipants(user.profileId),
       this.repo.findUserSubmissions(user.profileId),
     ]);
@@ -40,11 +40,32 @@ export class MissionsService {
     missionId: string,
     link: string,
   ): Promise<MissionSubmission> {
-    const existing = await this.repo.findExistingSubmission(missionId, user.profileId);
-    if (existing) {
-      return this.repo.updateSubmission(existing.id, link);
+    const [existing, mission] = await Promise.all([
+      this.repo.findExistingSubmission(missionId, user.profileId),
+      this.repo.findMissionById(missionId),
+    ]);
+
+    // Link-type missions auto-approve and are one-shot. If this user already has an
+    // approved submission, return it as-is — re-running would reset it to pending and
+    // re-award XP (double-award). Guarded here because updateSubmission resets status.
+    if (mission?.submission_type === 'link' && existing?.status === 'approved') {
+      return existing;
     }
-    return this.repo.insertSubmission(missionId, user.profileId, link);
+
+    let submission: MissionSubmission;
+    if (existing) {
+      submission = await this.repo.updateSubmission(existing.id, link);
+    } else {
+      submission = await this.repo.insertSubmission(missionId, user.profileId, link);
+    }
+
+    // Link-type missions require no human review — auto-approve immediately.
+    if (mission?.submission_type === 'link') {
+      await this.repo.approveMissionSubmission(submission.id);
+      return { ...submission, status: 'approved', rejection_reason: null };
+    }
+
+    return submission;
   }
 
   // ── Admin ─────────────────────────────────────────────────────────────────
@@ -69,7 +90,11 @@ export class MissionsService {
     return this.repo.deleteMission(id);
   }
 
-  approveMissionWinner(subId: string): Promise<void> {
-    return this.repo.approveMissionWinner(subId);
+  approveMissionSubmission(subId: string): Promise<void> {
+    return this.repo.approveMissionSubmission(subId);
+  }
+
+  rejectMissionSubmission(subId: string, reason?: string): Promise<void> {
+    return this.repo.rejectMissionSubmission(subId, reason);
   }
 }
