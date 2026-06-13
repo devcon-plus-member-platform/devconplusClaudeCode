@@ -45,12 +45,41 @@ CREATE OR REPLACE FUNCTION approve_mission_submission(sub_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
-  v_user_id   uuid;
-  v_xp_reward integer;
-  v_title     text;
+  v_user_id        uuid;
+  v_xp_reward      integer;
+  v_title          text;
+  v_caller_role    text;
+  v_caller_chapter uuid;
+  v_member_chapter uuid;
 BEGIN
+  -- Authorization. This is SECURITY DEFINER and writes profiles.spendable_points,
+  -- so without a guard any authenticated member could call it on their own
+  -- submission and self-award XP. When invoked with an end-user JWT
+  -- (auth.uid() present) the caller must be an officer/admin; chapter officers
+  -- are further restricted to their own chapter's members. Service-role calls
+  -- (auth.uid() null) come from the trusted NestJS backend, which runs its own
+  -- auth guard, so they bypass this block.
+  IF auth.uid() IS NOT NULL THEN
+    SELECT role, chapter_id INTO v_caller_role, v_caller_chapter
+    FROM profiles WHERE id = auth.uid();
+
+    IF v_caller_role IS NULL OR v_caller_role NOT IN ('chapter_officer','hq_admin','super_admin') THEN
+      RAISE EXCEPTION 'not authorized to approve mission submissions';
+    END IF;
+
+    IF v_caller_role = 'chapter_officer' THEN
+      SELECT p.chapter_id INTO v_member_chapter
+      FROM mission_submissions ms JOIN profiles p ON p.id = ms.user_id
+      WHERE ms.id = sub_id;
+      IF v_caller_chapter IS DISTINCT FROM v_member_chapter THEN
+        RAISE EXCEPTION 'cross-chapter approval forbidden';
+      END IF;
+    END IF;
+  END IF;
+
   SELECT ms.user_id, m.xp_reward, m.title
   INTO   v_user_id, v_xp_reward, v_title
   FROM   mission_submissions ms
@@ -84,8 +113,34 @@ CREATE OR REPLACE FUNCTION reject_mission_submission(sub_id uuid, p_reason text 
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
+DECLARE
+  v_caller_role    text;
+  v_caller_chapter uuid;
+  v_member_chapter uuid;
 BEGIN
+  -- Same authorization model as approve_mission_submission: officer/admin only
+  -- when called with a user JWT (chapter officers limited to their chapter);
+  -- trusted service-role (auth.uid() null) bypasses the guard.
+  IF auth.uid() IS NOT NULL THEN
+    SELECT role, chapter_id INTO v_caller_role, v_caller_chapter
+    FROM profiles WHERE id = auth.uid();
+
+    IF v_caller_role IS NULL OR v_caller_role NOT IN ('chapter_officer','hq_admin','super_admin') THEN
+      RAISE EXCEPTION 'not authorized to reject mission submissions';
+    END IF;
+
+    IF v_caller_role = 'chapter_officer' THEN
+      SELECT p.chapter_id INTO v_member_chapter
+      FROM mission_submissions ms JOIN profiles p ON p.id = ms.user_id
+      WHERE ms.id = sub_id;
+      IF v_caller_chapter IS DISTINCT FROM v_member_chapter THEN
+        RAISE EXCEPTION 'cross-chapter rejection forbidden';
+      END IF;
+    END IF;
+  END IF;
+
   UPDATE mission_submissions
   SET    status           = 'rejected',
          rejection_reason = p_reason
@@ -96,3 +151,13 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- ── Lock down EXECUTE ─────────────────────────────────────────────────────────
+-- Postgres grants EXECUTE to PUBLIC by default, and Supabase exposes every
+-- function at /rest/v1/rpc/<name>. Revoke the blanket grant so the in-body
+-- authorization above is the sole gate, then grant only to authenticated users
+-- (officer/admin enforced in-body) and the service role (trusted backend).
+REVOKE EXECUTE ON FUNCTION approve_mission_submission(uuid)      FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION reject_mission_submission(uuid, text) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION approve_mission_submission(uuid)      TO authenticated, service_role;
+GRANT  EXECUTE ON FUNCTION reject_mission_submission(uuid, text) TO authenticated, service_role;
