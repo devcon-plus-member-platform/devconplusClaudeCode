@@ -11,7 +11,7 @@ const CONFIG = {
 export function StatusBadge({ status }: StatusBadgeProps) {
   const { label, className } = CONFIG[status]
   return (
-    <span className={`backdrop-blur-[16px] rounded-[100px] px-[12px] py-[6px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase whitespace-nowrap inline-flex items-center justify-center leading-[13.5px] ${className}`}>
+    <span className={`backdrop-blur-[16px] rounded-full px-[12px] py-[6px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase whitespace-nowrap inline-flex items-center justify-center leading-[13.5px] ${className}`}>
       {label}
     </span>
   )

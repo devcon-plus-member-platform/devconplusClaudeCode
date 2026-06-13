@@ -85,9 +85,9 @@ function EventCard({
             <StatusPill status={event.status as any} />
             {event.is_promoted && <PromotedBadge />}
             {!isExternal && (
-              <div className="backdrop-blur-[16px] bg-[rgba(254,248,209,0.9)] flex gap-1 items-center justify-center px-2 py-0.5 rounded-[100px] shrink-0">
+              <div className="bg-amber-100 flex gap-1 items-center justify-center px-2 py-0.5 rounded-full shrink-0">
                 <StarOutline className="w-[6px] h-[6px]" color="#F8C630" />
-                <span className="font-proxima font-semibold text-[#d2ad19] text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
+                <span className="font-proxima font-semibold text-amber-700 text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
                   {event.points_value} EXP
                 </span>
               </div>
@@ -98,7 +98,7 @@ function EventCard({
         {/* Footer Actions */}
         <div className="flex items-center justify-between gap-3">
           <div
-            className={`text-[12px] font-semibold px-[18px] py-[12px] rounded-[24px] flex items-center justify-center shrink-0 leading-none shadow-sm ${
+            className={`text-[12px] font-semibold px-[18px] py-[12px] rounded-2xl flex items-center justify-center shrink-0 leading-none shadow-sm ${
               isExternal && externalIsTba
                 ? 'bg-white/70 text-slate-500'
                 : 'bg-primary text-white'
@@ -123,8 +123,8 @@ function EventCard({
                    )}
                  </div>
                ))}
-               <div className="w-6 h-6 rounded-full border-2 border-white bg-[#d1d5db] flex items-center justify-center shrink-0">
-                 <span className="text-[8px] font-semibold text-[#4b5563]">+{attendeeCount}</span>
+               <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-300 flex items-center justify-center shrink-0">
+                 <span className="text-[8px] font-semibold text-slate-500">+{attendeeCount}</span>
                </div>
             </div>
           )}

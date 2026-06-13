@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPointOutline, BoltOutline, ClockCircleOutline, AddCircleOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
@@ -34,7 +34,7 @@ export function OrgEventsList() {
       <header className="sticky top-0 z-50 flex flex-col pointer-events-none">
         {/* ── Blue Background Container ── */}
         <div 
-          className="bg-[#1152d4] relative overflow-hidden z-0 pointer-events-auto pb-[24px] pt-14"
+          className="bg-primary relative overflow-hidden z-0 pointer-events-auto pb-[24px] pt-14"
           style={{ 
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,
@@ -74,7 +74,7 @@ export function OrgEventsList() {
               onClick={() => setActiveTab(tab)}
               className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
                 activeTab === tab 
-                  ? 'bg-[#1152d4] text-white shadow-sm' 
+                  ? 'bg-primary text-white shadow-sm' 
                   : 'text-black hover:bg-[#dbeafe]/50'
               }`}
             >
@@ -95,7 +95,7 @@ export function OrgEventsList() {
             <motion.button
               key={event.id}
               variants={cardItem}
-              className="w-full bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 flex items-center gap-4 text-left"
+              className="w-full bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 flex items-center gap-4 text-left"
               onClick={() => navigate(
                 isEventArchived(event)
                   ? `/organizer/events/${event.id}/summary`

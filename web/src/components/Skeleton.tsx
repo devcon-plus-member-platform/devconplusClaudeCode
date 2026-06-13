@@ -38,7 +38,7 @@ export function SkeletonFeaturedEvent() {
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <S className="h-10 w-32 rounded-[24px] bg-slate-400/30" />
+          <S className="h-10 w-32 rounded-2xl bg-slate-400/30" />
           <div className="flex -space-x-2">
             <S className="w-6 h-6 rounded-full bg-slate-400/20" />
             <S className="w-6 h-6 rounded-full bg-slate-400/20" />
@@ -52,7 +52,7 @@ export function SkeletonFeaturedEvent() {
 /** Horizontal job card for dashboard carousel (compact) */
 export function SkeletonJobCardCompact() {
   return (
-    <div className="flex-shrink-0 w-52 bg-white rounded-[24px] border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
+    <div className="flex-shrink-0 w-52 bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
       <div className="w-10 h-10 rounded-full bg-primary/20 animate-pulse" />
       <div className="space-y-1.5">
         <S className="h-4 w-full" />
@@ -68,7 +68,7 @@ export function SkeletonJobCardCompact() {
 /** Full-width job card skeleton matching new high-fidelity design */
 export function SkeletonJobCard() {
   return (
-    <div className="bg-white rounded-[24px] border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
       <div className="w-12 h-12 rounded-full bg-primary/20 animate-pulse shrink-0" />
       <div className="flex flex-col gap-1">
         <div className="flex flex-col gap-[2px]">
@@ -88,7 +88,7 @@ export function SkeletonJobCard() {
 /** Mission card skeleton */
 export function SkeletonMissionCard() {
   return (
-    <div className="bg-white border border-[rgba(156,163,175,0.3)] rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-4 space-y-3">
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-4 space-y-3">
       <div className="flex items-center gap-2">
         <S className="h-4 w-16 rounded-full" />
         <S className="h-4 w-20 rounded-full" />

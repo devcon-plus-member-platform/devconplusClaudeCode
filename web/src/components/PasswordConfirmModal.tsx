@@ -109,7 +109,7 @@ export default function PasswordConfirmModal({
               <button
                 onClick={() => void handleConfirm()}
                 disabled={isLoading}
-                className="flex-1 bg-primary text-white text-md3-body-md font-bold py-3 rounded-xl transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="flex-1 bg-primary text-white text-md3-body-md font-bold py-3 rounded-full shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {isLoading ? 'Verifying…' : confirmLabel}
               </button>

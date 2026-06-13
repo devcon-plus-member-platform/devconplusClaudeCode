@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+﻿import { useState, useRef } from 'react'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -45,7 +45,7 @@ export default function ForgotPassword() {
         <header className="flex flex-col pointer-events-none">
           {/* ── Blue Background Container ── */}
           <div 
-            className="bg-[#1152d4] relative overflow-hidden z-0 pointer-events-auto pb-[48px] pt-16 text-center"
+            className="bg-primary relative overflow-hidden z-0 pointer-events-auto pb-[48px] pt-16 text-center"
             style={{ 
               clipPath: 'ellipse(100% 100% at 50% 0%)',
               backgroundImage: PATTERN_BG,

@@ -92,7 +92,7 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
                   key={n.id}
                   variants={cardItem}
                   exit={{ x: 40, opacity: 0, transition: { duration: 0.2 } }}
-                  className="relative bg-white rounded-2xl border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 mb-3 overflow-hidden"
+                  className="relative bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 mb-3 overflow-hidden"
                 >
                   <motion.button
                     onClick={() => dismiss(n.id)}

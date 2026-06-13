@@ -213,7 +213,7 @@ export default function EventVolunteer() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => navigate(`/events/${slug}`)}
-              className="w-full bg-primary text-white font-bold py-4 rounded-2xl mt-2"
+              className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm mt-2"
             >
               Back to Event
             </motion.button>
@@ -315,7 +315,7 @@ export default function EventVolunteer() {
             whileTap={{ scale: 0.95 }}
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-primary text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {isSubmitting ? (
               <>

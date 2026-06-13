@@ -67,7 +67,7 @@ function RefundConfirmSheet({ claim, onConfirm, onClose, isLoading }: RefundConf
               <motion.button
                 onClick={handleClose}
                 disabled={isLoading}
-                className="flex-1 py-3.5 rounded-[14px] border border-slate-200 text-slate-600 text-[15px] font-proxima font-bold disabled:opacity-50"
+                className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 text-[15px] font-proxima font-bold disabled:opacity-50"
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
@@ -76,7 +76,7 @@ function RefundConfirmSheet({ claim, onConfirm, onClose, isLoading }: RefundConf
               <motion.button
                 onClick={() => { void onConfirm() }}
                 disabled={isLoading}
-                className="flex-1 py-3.5 rounded-[14px] bg-red text-white text-[15px] font-proxima font-bold disabled:opacity-60"
+                className="flex-1 py-3.5 rounded-xl bg-red text-white text-[15px] font-proxima font-bold disabled:opacity-60"
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               >
@@ -122,8 +122,8 @@ function ClaimCard({ claim, onApprove, onRefund, actionLoadingId, isHighlighted 
   return (
     <motion.div
       variants={cardItem}
-      className={`bg-white rounded-[16px] border-2 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 transition-colors ${
-        isHighlighted ? 'border-blue' : 'border-[rgba(156,163,175,0.3)]'
+      className={`bg-white rounded-2xl border-2 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 transition-colors ${
+        isHighlighted ? 'border-blue' : 'border-slate-200'
       }`}
     >
       {/* Member row */}
@@ -215,7 +215,7 @@ function TabButton({
   return (
     <button
       onClick={() => onSelect(id)}
-      className={`flex-1 h-[32px] flex items-center justify-center rounded-[128px] text-[14px] font-proxima font-bold transition-all relative ${
+      className={`flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima font-bold transition-all relative ${
         isActive ? 'bg-blue text-white shadow-sm' : 'bg-blue/10 text-blue'
       }`}
     >
@@ -361,7 +361,7 @@ export function OrgRewardsManagement() {
 
         {/* ── Stats Card Overlay ── */}
         <div className="relative z-10 flex flex-col px-4 -mt-[40px] pointer-events-none">
-          <div className="bg-white rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-400/30 h-[100px] flex items-center pointer-events-auto">
+          <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-200 h-[100px] flex items-center pointer-events-auto">
             {/* Total */}
             <div className="flex-1 flex items-center gap-[10px] pl-[20px]">
               <div className="shrink-0 size-[40px] bg-blue/10 rounded-xl flex items-center justify-center">
@@ -436,7 +436,7 @@ export function OrgRewardsManagement() {
                     <motion.div
                       key={reward.id}
                       variants={cardItem}
-                      className="bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 overflow-hidden"
+                      className="bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 overflow-hidden"
                     >
                       <div className="flex items-center gap-4">
                         {/* Left Side: Image or Placeholder */}

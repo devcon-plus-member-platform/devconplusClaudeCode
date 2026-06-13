@@ -253,7 +253,7 @@ export default function InterestQuiz() {
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               onClick={() => void handleNext()}
               disabled={isSaving}
-              className="w-full bg-primary text-white font-bold py-4 rounded-2xl text-md3-label-lg shadow-primary hover:brightness-110 transition-all disabled:opacity-60"
+              className="w-full bg-primary text-white font-bold py-3 rounded-full text-md3-label-lg shadow-primary hover:brightness-110 transition-all disabled:opacity-60"
             >
               {isSaving
                 ? 'Saving…'

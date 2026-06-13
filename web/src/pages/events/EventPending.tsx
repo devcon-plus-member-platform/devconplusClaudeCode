@@ -59,7 +59,7 @@ export default function EventPending() {
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => navigate('/events')}
-          className="w-full max-w-xs bg-primary text-white font-bold py-4 rounded-2xl"
+          className="w-full max-w-xs bg-primary text-white font-bold py-3 rounded-full shadow-sm"
         >
           Back to Events
         </motion.button>
@@ -77,7 +77,7 @@ export default function EventPending() {
         transition={{ type: 'spring', stiffness: 260, damping: 20 }}
         className="w-20 h-20 rounded-full bg-yellow-100 flex items-center justify-center mb-5"
       >
-        <ClockCircleOutline className="w-9 h-9" color="#EAB308" />
+        <ClockCircleOutline className="w-9 h-9" color="#F8C630" />
       </motion.div>
 
       <motion.div

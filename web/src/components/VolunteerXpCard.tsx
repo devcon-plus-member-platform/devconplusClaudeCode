@@ -86,7 +86,7 @@ export default function VolunteerXpCard() {
         }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
       >
-        <div className="bg-white rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-400/30 p-[24px] flex flex-col gap-5 pointer-events-auto">
+        <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-200 p-[24px] flex flex-col gap-5 pointer-events-auto">
           <div className="flex">
             <span 
               className="font-proxima font-bold text-white text-[10px] tracking-widest uppercase px-3 py-1.5 rounded-full"
@@ -101,7 +101,7 @@ export default function VolunteerXpCard() {
               <div className="shrink-0 size-[48px] flex items-center justify-center">
                 <MedalStarCircleBoldDuotone color="#F8C630" size={48} />
               </div>
-              <p className="font-proxima leading-none text-[#464646] tracking-[-1.226px]">
+              <p className="font-proxima leading-none text-slate-900 tracking-[-1.226px]">
                 <span className="font-extrabold text-[40.867px]">{spendablePoints.toLocaleString()}</span>
                 {' '}
                 <span className="font-semibold text-[24px]">XP</span>
@@ -113,7 +113,7 @@ export default function VolunteerXpCard() {
                 <div className="shrink-0 size-[16px] flex items-center justify-center">
                   <BoltOutline color="#94A3B8" size={14} />
                 </div>
-                <span className="font-proxima text-[14px] text-[#6b7280]">
+                <span className="font-proxima text-[14px] text-slate-500">
                   {lifetimePoints.toLocaleString()} lifetime points
                 </span>
               </div>
@@ -121,7 +121,7 @@ export default function VolunteerXpCard() {
               <div className="relative w-full h-2 bg-black/[0.16] rounded-full overflow-hidden">
                 <motion.div
                   className="absolute inset-y-0 left-0 rounded-full"
-                  style={{ backgroundColor: '#eab308' }}
+                  style={{ backgroundColor: '#F8C630' }}
                   initial={{ width: 0 }}
                   animate={{ width: `${tierProgress}%` }}
                   transition={{ 
@@ -153,7 +153,7 @@ export default function VolunteerXpCard() {
 
           <motion.button
             onClick={() => navigate('/events')}
-            className="font-proxima font-semibold w-full bg-primary text-white text-[16px] h-12 rounded-[80px]"
+            className="font-proxima font-semibold w-full bg-primary text-white text-[16px] h-12 rounded-full"
             whileTap={{ scale: 0.95 }}
           >
             Join Our Events

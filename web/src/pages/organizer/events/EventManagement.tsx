@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+﻿import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPointOutline, BoltOutline, ClockCircleOutline, AddCircleOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
@@ -31,7 +31,7 @@ export function OrgEventManagement() {
       <header className="sticky top-0 z-50 flex flex-col pointer-events-none">
         {/* ── Blue Background Container ── */}
         <div 
-          className="bg-[#1152d4] relative z-0 pointer-events-auto pb-[24px]"
+          className="bg-primary relative z-0 pointer-events-auto pb-[24px]"
           style={{ 
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,
@@ -79,7 +79,7 @@ export function OrgEventManagement() {
             {currentEvent && (
               <motion.div
                 variants={cardItem}
-                className="w-full h-[240px] bg-slate-900 rounded-[24px] shadow-card text-left relative overflow-hidden group cursor-pointer"
+                className="w-full h-[240px] bg-slate-900 rounded-2xl shadow-card text-left relative overflow-hidden group cursor-pointer"
                 onClick={() => navigate(`/organizer/events/${currentEvent.id}`)}
                 whileTap={{ scale: 0.97 }}
               >
@@ -92,7 +92,7 @@ export function OrgEventManagement() {
                       className="w-full h-full object-cover opacity-60"
                     />
                   ) : (
-                    <div className="w-full h-full bg-[#1152d4] opacity-40" />
+                    <div className="w-full h-full bg-primary opacity-40" />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                 </div>
@@ -120,7 +120,7 @@ export function OrgEventManagement() {
                       </div>
 
                       <div className="flex items-center justify-between gap-3">
-                      <div className="bg-[#1152d4] text-white text-[12px] font-bold px-[18px] py-[10px] rounded-full flex items-center justify-center shrink-0 leading-none shadow-lg">
+                      <div className="bg-primary text-white text-[12px] font-bold px-[18px] py-[10px] rounded-full flex items-center justify-center shrink-0 leading-none shadow-lg">
                       Manage Event
                       </div>
 
@@ -203,7 +203,7 @@ function EventRow({ event, onTap }: EventRowProps) {
       variants={cardItem}
       onClick={onTap}
       whileTap={{ scale: 0.98 }}
-      className={`w-full bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 flex items-center gap-4 text-left ${
+      className={`w-full bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 flex items-center gap-4 text-left ${
         isExpired ? 'opacity-60 grayscale' : ''
       }`}
     >
