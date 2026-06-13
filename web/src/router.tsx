@@ -32,7 +32,6 @@ import EventTicket from './pages/events/EventTicket'
 import EventVolunteer from './pages/events/EventVolunteer'
 import JobsList from './pages/jobs/JobsList'
 import JobDetail from './pages/jobs/JobDetail'
-import MissionsList from './pages/missions/MissionsList'
 import Points from './pages/points/Points'
 import PointsHistory from './pages/points/PointsHistory'
 import Rewards from './pages/rewards/Rewards'
@@ -55,6 +54,7 @@ import { OrgEventSummary } from './pages/organizer/events/EventSummary'
 import { OrgRewardsManagement } from './pages/organizer/rewards/RewardsManagement'
 import { RewardCreate } from './pages/organizer/rewards/RewardCreate'
 import { RewardEdit } from './pages/organizer/rewards/RewardEdit'
+import OrgMissions from './pages/organizer/missions/OrgMissions'
 import { OrgProfile } from './pages/organizer/profile/Profile'
 import { OrgProfileEdit } from './pages/organizer/profile/ProfileEdit'
 import { OrgCoOrganizers } from './pages/organizer/profile/OrgCoOrganizers'
@@ -100,7 +100,6 @@ export const router = createBrowserRouter([
       { path: '/events/:slug/volunteer',      element: <EventVolunteer /> },
       { path: '/jobs',                      element: <JobsList /> },
       { path: '/jobs/:id',                  element: <JobDetail /> },
-      { path: '/missions',                  element: <MissionsList /> },
       { path: '/points',                    element: <Points /> },
       { path: '/points/history',            element: <PointsHistory /> },
       { path: '/news/:id',                  element: <NewsDetail /> },
@@ -181,6 +180,7 @@ export const router = createBrowserRouter([
       { path: '/organizer/rewards',                      element: <OrgRewardsManagement /> },
       { path: '/organizer/rewards/create',               element: <RewardCreate /> },
       { path: '/organizer/rewards/:id/edit',             element: <RewardEdit /> },
+      { path: '/organizer/missions',                     element: <OrgMissions /> },
       { path: '/organizer/profile',                      element: <OrgProfile /> },
       { path: '/organizer/profile/edit',                 element: <OrgProfileEdit /> },
       { path: '/organizer/profile/co-organizers',        element: <OrgCoOrganizers /> },
