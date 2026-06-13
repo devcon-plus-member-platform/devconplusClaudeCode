@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
 import { apiFetch } from '../../lib/api'
 import { useAuthStore } from '../../stores/useAuthStore'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 
 interface UpgradeRequest {
   id: string
@@ -12,13 +14,12 @@ interface UpgradeRequest {
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
   reviewed_at: string | null
-  profiles?: {
-    full_name: string
-    email: string
-    chapter_id: string | null
-    chapters?: { name: string } | null
-  } | null
-  chapters?: { name: string } | null
+  // Flat fields returned by GET /api/upgrades (see server UpgradeRequestWithDetails)
+  member_name: string
+  member_email: string
+  member_chapter_id: string | null
+  member_chapter_name: string | null
+  request_chapter_name: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -29,6 +30,7 @@ const ROLE_LABELS: Record<string, string> = {
 export default function AdminUpgradeRequests() {
   const { user } = useAuthStore()
   const [requests, setRequests] = useState<UpgradeRequest[]>([])
+  const { pageItems, ...pagination } = usePagination(requests, 10)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -78,7 +80,7 @@ export default function AdminUpgradeRequests() {
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-md3-headline-sm font-black text-slate-900">Organizer Upgrade Requests</h1>
@@ -100,9 +102,10 @@ export default function AdminUpgradeRequests() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading requests…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Member</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Current Chapter</th>
@@ -113,14 +116,14 @@ export default function AdminUpgradeRequests() {
               </tr>
             </thead>
             <tbody>
-              {requests.map((req) => (
+              {pageItems.map((req) => (
                 <tr key={req.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-slate-900 text-md3-body-md">{req.profiles?.full_name ?? '—'}</p>
-                    <p className="text-md3-label-md text-slate-400">{req.profiles?.email ?? '—'}</p>
+                    <p className="font-semibold text-slate-900 text-md3-body-md">{req.member_name || '—'}</p>
+                    <p className="text-md3-label-md text-slate-400">{req.member_email || '—'}</p>
                   </td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">
-                    {req.profiles?.chapters?.name ?? 'No chapter'}
+                    {req.member_chapter_name ?? 'No chapter'}
                   </td>
                   <td className="px-4 py-3 font-mono text-md3-label-md text-slate-700 font-bold tracking-wider">
                     {req.organizer_code}
@@ -168,6 +171,8 @@ export default function AdminUpgradeRequests() {
           {requests.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No upgrade requests yet.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="request" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
     </div>

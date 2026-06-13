@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { apiFetch } from '../../lib/api'
 import { useChaptersStore } from '../../stores/useChaptersStore'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 
 const generateCode = (): string => {
   const letters = Array.from({ length: 3 }, () =>
@@ -26,7 +28,8 @@ interface OrgCode {
   usage_count: number
   expires_at: string | null
   created_at: string
-  chapters?: { name: string } | null
+  // Flat field returned by GET /api/org-codes (see server OrgCodeWithChapter)
+  chapter_name: string | null
 }
 
 const CODE_PATTERN = /^DCN-[A-Z]{3}-[0-9]{4}$/
@@ -46,6 +49,7 @@ type FormData = z.infer<typeof schema>
 
 export default function AdminOrgCodes() {
   const [codes, setCodes] = useState<OrgCode[]>([])
+  const { pageItems, ...pagination } = usePagination(codes, 10)
   const { chapters, fetchChapters } = useChaptersStore()
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -159,7 +163,7 @@ export default function AdminOrgCodes() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-md3-headline-sm font-black text-slate-900">Organizer Codes</h1>
@@ -307,9 +311,10 @@ export default function AdminOrgCodes() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading codes…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Code</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Role</th>
@@ -321,11 +326,11 @@ export default function AdminOrgCodes() {
               </tr>
             </thead>
             <tbody>
-              {codes.map((c) => (
+              {pageItems.map((c) => (
                 <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-mono font-bold text-slate-900 text-md3-label-md tracking-wider">{c.code}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{c.assigned_role}</td>
-                  <td className="px-4 py-3 text-slate-600">{c.chapters?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600">{c.chapter_name ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md tabular-nums">
                     {c.usage_count} / {c.usage_limit ?? '∞'}
                   </td>
@@ -390,6 +395,8 @@ export default function AdminOrgCodes() {
           {codes.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No organizer codes yet.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="code" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
     </div>
