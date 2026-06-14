@@ -1,7 +1,17 @@
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import type { AppCacheService } from '../cache/app-cache.service';
 import type { Mission, MissionParticipant, MissionSubmission, Profile } from '../supabase/types';
 import { MissionsRepository } from './missions.repository';
 import { MissionsService } from './missions.service';
+
+function makeCache() {
+  return {
+    getOrSet: jest.fn((_k: string, _ttl: number, loader: () => unknown) => loader()),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<AppCacheService>;
+}
 
 function makeUser(id = 'uid-1'): AuthenticatedUser {
   return { firebaseUid: 'fb', profileId: id, profile: { id, role: 'member', chapter_id: 'ch-1' } as Profile };
@@ -42,7 +52,7 @@ describe('MissionsService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new MissionsService(repo);
+    service = new MissionsService(repo, makeCache());
   });
 
   // ── getMemberData ─────────────────────────────────────────────────────────

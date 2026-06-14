@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import { AppCacheService } from '../cache/app-cache.service';
+import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
 import type {
   Mission,
   MissionParticipant,
@@ -18,7 +20,10 @@ export interface MemberMissionsData {
 
 @Injectable()
 export class MissionsService {
-  constructor(private readonly repo: MissionsRepository) {}
+  constructor(
+    private readonly repo: MissionsRepository,
+    private readonly cache: AppCacheService,
+  ) {}
 
   // ── Member ────────────────────────────────────────────────────────────────
 
@@ -49,24 +54,32 @@ export class MissionsService {
 
   // ── Admin ─────────────────────────────────────────────────────────────────
 
+  // Admin list of all missions — global (not user-scoped) → shared cache key.
   getAllMissions(): Promise<Mission[]> {
-    return this.repo.findAllMissions();
+    return this.cache.getOrSet(CacheKeys.MISSIONS_ADMIN_LIST, CACHE_TTL.MISSIONS, () =>
+      this.repo.findAllMissions(),
+    );
   }
 
   getPendingQueue(): Promise<MissionSubmissionWithDetails[]> {
     return this.repo.findPendingQueue();
   }
 
-  createMission(dto: CreateMissionDto): Promise<Mission> {
-    return this.repo.createMission(dto);
+  async createMission(dto: CreateMissionDto): Promise<Mission> {
+    const mission = await this.repo.createMission(dto);
+    await this.cache.del(CacheKeys.MISSIONS_ADMIN_LIST);
+    return mission;
   }
 
-  updateMission(id: string, dto: UpdateMissionDto): Promise<Mission> {
-    return this.repo.updateMission(id, dto);
+  async updateMission(id: string, dto: UpdateMissionDto): Promise<Mission> {
+    const mission = await this.repo.updateMission(id, dto);
+    await this.cache.del(CacheKeys.MISSIONS_ADMIN_LIST);
+    return mission;
   }
 
-  deleteMission(id: string): Promise<void> {
-    return this.repo.deleteMission(id);
+  async deleteMission(id: string): Promise<void> {
+    await this.repo.deleteMission(id);
+    await this.cache.del(CacheKeys.MISSIONS_ADMIN_LIST);
   }
 
   approveMissionWinner(subId: string): Promise<void> {

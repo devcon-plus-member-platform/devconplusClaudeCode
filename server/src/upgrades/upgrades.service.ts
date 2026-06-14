@@ -5,6 +5,8 @@ import {
   Injectable,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import { AppCacheService } from '../cache/app-cache.service';
+import { CacheKeys } from '../cache/cache-keys';
 import { assertSameChapter } from '../common/authz/chapter-scope';
 import { isAtLeast } from '../common/authz/authz';
 import type {
@@ -21,7 +23,10 @@ export type UpgradeResult = 'submitted' | 'already_pending' | 'invalid_code' | '
 
 @Injectable()
 export class UpgradesService {
-  constructor(private readonly repo: UpgradesRepository) {}
+  constructor(
+    private readonly repo: UpgradesRepository,
+    private readonly cache: AppCacheService,
+  ) {}
 
   // ── Member: submit upgrade request ───────────────────────────────────────
 
@@ -70,6 +75,8 @@ export class UpgradesService {
       user.profileId,
       req.requested_role,
     );
+    // Approval promotes the requester's role/chapter — bust their authz cache.
+    await this.invalidateAuthProfile(req.user_id);
   }
 
   // ── Admin/Officer: reject ─────────────────────────────────────────────────
@@ -96,6 +103,8 @@ export class UpgradesService {
       assertSameChapter(user, req.chapter_id);
     }
     await this.repo.officerApproveRequest(requestId, user.profileId);
+    // Officer approval promotes the requester to chapter_officer — bust their cache.
+    await this.invalidateAuthProfile(req.user_id);
   }
 
   // ── Organizer codes ───────────────────────────────────────────────────────
@@ -134,5 +143,23 @@ export class UpgradesService {
       throw new ForbiddenException('Target is not a co-organizer in your chapter');
     }
     await this.repo.demoteCoOrganizer(targetId, user.profileId);
+    // Demotion changes the target's role back to member — bust their cache so the
+    // elevated access does not linger for the TTL window.
+    await this.invalidateAuthProfile(targetId);
+  }
+
+  // NOTE: requestUpgrade (sets pending_* on self) and rejectRequest (clears
+  // pending_*) do NOT change role/chapter, and pending fields are not served from
+  // the cached guard profile, so they need no auth-profile invalidation.
+
+  /**
+   * Bust the AuthGuard cache for a profile after a role/chapter change.
+   * Resolves auth_uid in the repository (DAL-compliant) — these are rare
+   * admin/officer actions, so the extra lookup is negligible.
+   */
+  private async invalidateAuthProfile(profileId: string | null): Promise<void> {
+    if (!profileId) return;
+    const authUid = await this.repo.getAuthUidById(profileId);
+    if (authUid) await this.cache.del(CacheKeys.authProfile(authUid));
   }
 }

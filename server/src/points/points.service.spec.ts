@@ -1,7 +1,17 @@
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import type { AppCacheService } from '../cache/app-cache.service';
 import type { Profile } from '../supabase/types';
 import { PointsRepository } from './points.repository';
 import { PointsService } from './points.service';
+
+function makeCache() {
+  return {
+    getOrSet: jest.fn((_k: string, _ttl: number, loader: () => unknown) => loader()),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<AppCacheService>;
+}
 
 function makeUser(id = 'uid-1'): AuthenticatedUser {
   return { firebaseUid: 'fb', profileId: id, profile: { id, role: 'member', chapter_id: 'ch-1' } as Profile };
@@ -26,7 +36,7 @@ describe('PointsService', () => {
 
   beforeEach(() => {
     repo = makeRepo();
-    service = new PointsService(repo);
+    service = new PointsService(repo, makeCache());
   });
 
   it('getTransactions — scoped to caller profileId (IDOR defense), default cap', async () => {

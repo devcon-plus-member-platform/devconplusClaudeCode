@@ -1,6 +1,7 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, AUTHENTICATED_USER_KEY, AuthenticatedUser } from './auth.guard';
+import { AppCacheService } from '../cache/app-cache.service';
 import { FirebaseService } from '../firebase/firebase.service';
 import { SupabaseService } from '../supabase/supabase.service';
 
@@ -46,22 +47,34 @@ function makeSupabase(profile: unknown = MOCK_PROFILE) {
   };
 }
 
+// Cache mock that always misses → guard falls through to the DB lookup,
+// preserving the original (uncached) behavior these tests assert.
+function makeCache() {
+  return {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 async function buildGuard(
   fbOverride?: Parameters<typeof makeFirebase>[0],
   profile?: unknown,
 ) {
   const firebase = makeFirebase(fbOverride);
   const supabase = makeSupabase(profile);
+  const cache = makeCache();
 
   const module = await Test.createTestingModule({
     providers: [
       AuthGuard,
       { provide: FirebaseService, useValue: firebase },
       { provide: SupabaseService, useValue: supabase },
+      { provide: AppCacheService, useValue: cache },
     ],
   }).compile();
 
-  return { guard: module.get(AuthGuard), firebase, supabase };
+  return { guard: module.get(AuthGuard), firebase, supabase, cache };
 }
 
 // ── Suite ─────────────────────────────────────────────────────────────────
@@ -92,6 +105,7 @@ describe('AuthGuard', () => {
           AuthGuard,
           { provide: FirebaseService, useValue: firebase },
           { provide: SupabaseService, useValue: supabase },
+          { provide: AppCacheService, useValue: makeCache() },
         ],
       }).compile();
 
@@ -135,6 +149,35 @@ describe('AuthGuard', () => {
       expect(attached.firebaseUid).toBe(MOCK_FIREBASE_UID);
       expect(attached.profileId).toBe(MOCK_PROFILE.id);
       expect(attached.profile).toMatchObject({ email: MOCK_PROFILE.email });
+    });
+  });
+
+  describe('auth-profile cache (hot path)', () => {
+    it('on a cache MISS: hits the DB and caches the profile under its auth_uid', async () => {
+      const { guard, supabase, cache } = await buildGuard();
+      await guard.canActivate(makeContext('Bearer valid.token'));
+      expect(supabase.findProfileByAuthUid).toHaveBeenCalledWith(MOCK_FIREBASE_UID);
+      expect(cache.set).toHaveBeenCalledWith(
+        `authprofile:${MOCK_FIREBASE_UID}`,
+        MOCK_PROFILE,
+        expect.any(Number),
+      );
+    });
+
+    it('on a cache HIT: serves the cached profile without touching the DB', async () => {
+      const { guard, supabase, cache } = await buildGuard();
+      cache.get.mockResolvedValue(MOCK_PROFILE);
+      const result = await guard.canActivate(makeContext('Bearer valid.token'));
+      expect(result).toBe(true);
+      expect(supabase.findProfileByAuthUid).not.toHaveBeenCalled();
+    });
+
+    it('never caches a null (unlinked) profile — avoids locking out the user', async () => {
+      const { guard, cache } = await buildGuard(undefined, null);
+      await expect(guard.canActivate(makeContext('Bearer valid.token'))).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(cache.set).not.toHaveBeenCalled();
     });
   });
 });

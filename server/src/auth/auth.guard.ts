@@ -6,6 +6,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { AppCacheService } from '../cache/app-cache.service';
+import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
 import { FirebaseService } from '../firebase/firebase.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { Profile } from '../supabase/types';
@@ -39,6 +41,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly firebase: FirebaseService,
     private readonly supabase: SupabaseService,
+    private readonly cache: AppCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -60,7 +63,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Email must be verified before access');
     }
 
-    const profile = await this.supabase.findProfileByAuthUid(decoded.uid);
+    const profile = await this.resolveProfile(decoded.uid);
     if (!profile) {
       // auth_uid not linked yet — user has not completed the exchange flow
       throw new UnauthorizedException(
@@ -75,6 +78,32 @@ export class AuthGuard implements CanActivate {
     };
     (req as unknown as Record<string, unknown>)[AUTHENTICATED_USER_KEY] = user;
     return true;
+  }
+
+  /**
+   * Resolves the caller's profile from auth_uid, cached for the hot path.
+   *
+   * This lookup runs on EVERY authenticated request, so it is the single
+   * highest-frequency DB read in the system. The cache is keyed by auth_uid and
+   * holds only authz-relevant data (role / chapter / id). Role and chapter
+   * changes are busted explicitly by Admin/Upgrades/Users services; the short
+   * AUTH_PROFILE TTL backstops any missed bust.
+   *
+   * Safety: a null (unlinked) profile is NEVER cached — that would lock out a
+   * user who completes the exchange flow seconds later. AppCacheService is
+   * fail-open, so any Upstash error falls straight through to the DB read.
+   */
+  private async resolveProfile(authUid: string): Promise<Profile | null> {
+    const key = CacheKeys.authProfile(authUid);
+
+    const cached = await this.cache.get<Profile>(key);
+    if (cached) return cached;
+
+    const profile = await this.supabase.findProfileByAuthUid(authUid);
+    if (profile) {
+      await this.cache.set(key, profile, CACHE_TTL.AUTH_PROFILE);
+    }
+    return profile;
   }
 
   private extractBearerToken(req: Request): string | null {

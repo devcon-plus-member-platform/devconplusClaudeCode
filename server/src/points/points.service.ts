@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import { AppCacheService } from '../cache/app-cache.service';
+import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
 import type { PointSummary, PointTransaction, XpTier } from '../supabase/types';
 import type { CreateXpTierDto } from './dto/create-xp-tier.dto';
 import type { UpdateXpTierDto } from './dto/update-xp-tier.dto';
@@ -10,7 +12,10 @@ export class PointsService {
   /** Max rows returned for a single transactions fetch (also the default). */
   private static readonly TX_MAX = 200;
 
-  constructor(private readonly repo: PointsRepository) {}
+  constructor(
+    private readonly repo: PointsRepository,
+    private readonly cache: AppCacheService,
+  ) {}
 
   getTransactions(
     user: AuthenticatedUser,
@@ -28,19 +33,27 @@ export class PointsService {
     return this.repo.findPointSummary(user.profileId);
   }
 
+  // xp_tiers is global reference data (milestone definitions) — shared key.
   getAllTiers(): Promise<XpTier[]> {
-    return this.repo.findAllTiers();
+    return this.cache.getOrSet(CacheKeys.XP_TIERS, CACHE_TTL.TIERS, () =>
+      this.repo.findAllTiers(),
+    );
   }
 
-  createTier(dto: CreateXpTierDto): Promise<XpTier> {
-    return this.repo.createTier(dto);
+  async createTier(dto: CreateXpTierDto): Promise<XpTier> {
+    const tier = await this.repo.createTier(dto);
+    await this.cache.del(CacheKeys.XP_TIERS);
+    return tier;
   }
 
-  updateTier(id: string, dto: UpdateXpTierDto): Promise<XpTier> {
-    return this.repo.updateTier(id, dto);
+  async updateTier(id: string, dto: UpdateXpTierDto): Promise<XpTier> {
+    const tier = await this.repo.updateTier(id, dto);
+    await this.cache.del(CacheKeys.XP_TIERS);
+    return tier;
   }
 
-  deleteTier(id: string): Promise<void> {
-    return this.repo.deleteTier(id);
+  async deleteTier(id: string): Promise<void> {
+    await this.repo.deleteTier(id);
+    await this.cache.del(CacheKeys.XP_TIERS);
   }
 }
