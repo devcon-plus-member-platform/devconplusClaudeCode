@@ -112,21 +112,21 @@ export default function PointsHistory() {
 
         {/* ── Points Card Overlay ── */}
         <div className="relative z-10 flex flex-col px-4 -mt-[40px] pointer-events-none">
-          <div className="bg-white rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-400/30 h-[100px] flex items-center pointer-events-auto">
+          <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-200 h-[100px] flex items-center pointer-events-auto">
             {/* Spendable */}
             <div className="flex-1 flex items-center gap-[10px] pl-[20px]">
               <div className="shrink-0 size-[40px] bg-gold/10 rounded-full flex items-center justify-center">
                 <StarOutline color="#F8C630" size={22} />
               </div>
               <div className="flex flex-col justify-center translate-y-px">
-                <p className="font-proxima text-[#6b7280] text-[12px] leading-none mb-[6px]">
+                <p className="font-proxima text-slate-500 text-[12px] leading-none mb-[6px]">
                   Spendable
                 </p>
                 <div className="flex items-baseline gap-1">
-                  <p className="font-proxima font-extrabold text-[24px] text-[#464646] leading-none tracking-tight">
+                  <p className="font-proxima font-extrabold text-[24px] text-slate-900 leading-none tracking-tight">
                     {spendablePoints.toLocaleString()}
                   </p>
-                  <p className="font-proxima font-semibold text-[14px] text-[#464646] leading-none">
+                  <p className="font-proxima font-semibold text-[14px] text-slate-900 leading-none">
                     XP
                   </p>
                 </div>
@@ -142,14 +142,14 @@ export default function PointsHistory() {
                 <BoltOutline className="size-5" color="rgb(var(--color-primary))" />
               </div>
               <div className="flex flex-col justify-center translate-y-px">
-                <p className="font-proxima text-[#6b7280] text-[12px] leading-none mb-[6px]">
+                <p className="font-proxima text-slate-500 text-[12px] leading-none mb-[6px]">
                   Lifetime
                 </p>
                 <div className="flex items-baseline gap-1">
-                  <p className="font-proxima font-extrabold text-[24px] text-[#464646] leading-none tracking-tight">
+                  <p className="font-proxima font-extrabold text-[24px] text-slate-900 leading-none tracking-tight">
                     {lifetimePoints.toLocaleString()}
                   </p>
-                  <p className="font-proxima font-semibold text-[14px] text-[#464646] leading-none">
+                  <p className="font-proxima font-semibold text-[14px] text-slate-900 leading-none">
                     XP
                   </p>
                 </div>
@@ -160,15 +160,15 @@ export default function PointsHistory() {
 
         {/* ── Tabs Wrapper ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="flex gap-[6px] overflow-x-auto no-scrollbar max-w-4xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar max-w-4xl mx-auto">
             {FILTER_CHIPS.map((chip) => (
               <button
                 key={chip.id}
                 onClick={() => setActiveFilter(chip.id)}
-                className={`whitespace-nowrap px-[12px] h-[32px] flex items-center justify-center rounded-[128px] text-[14px] font-proxima font-bold transition-all shrink-0 ${
+                className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
                   activeFilter === chip.id
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-primary/10 text-primary'
+                    ? 'bg-primary text-white font-semibold'
+                    : 'bg-primary/10 text-primary font-medium'
                 }`}
               >
                 {chip.label}
@@ -198,8 +198,8 @@ export default function PointsHistory() {
         ) : (
           groups.map(([date, txs]) => (
             <div key={date} className="mb-6">
-              <p className="font-proxima text-[#6b7280] text-[10px] uppercase tracking-wider mb-2 font-bold px-1">{date}</p>
-              <div className="bg-white rounded-2xl border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] px-4">
+              <p className="font-proxima text-slate-500 text-[10px] uppercase tracking-wider mb-2 font-bold px-1">{date}</p>
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] px-4">
                 {txs.map((tx) => (
                   <TransactionRow
                     key={tx.id}

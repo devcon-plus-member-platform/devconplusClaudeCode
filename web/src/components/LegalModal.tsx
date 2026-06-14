@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+﻿import { AnimatePresence, motion } from 'framer-motion'
 import { CloseCircleOutline } from 'solar-icon-set'
 import { slideUp, backdrop } from '../lib/animation'
 
@@ -141,7 +141,7 @@ function SectionCard({ section }: { section: PPSection }) {
   return (
     <div className="bg-white rounded-2xl shadow-card overflow-hidden">
       <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-100">
-        <div className="w-7 h-7 rounded-lg bg-[#1152d4] flex items-center justify-center shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
           <span className="text-white text-[11px] font-bold font-proxima">{section.number}</span>
         </div>
         <h2 className="text-md3-title-md font-bold text-slate-900 font-proxima leading-tight">
@@ -169,7 +169,7 @@ function SectionCard({ section }: { section: PPSection }) {
           <ul className="space-y-3">
             {section.items.map((item, i) => (
               <li key={i} className="flex gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-[#1152d4] shrink-0" />
+                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                 <p className="text-md3-body-md text-slate-600 leading-relaxed">
                   {item.label && <span className="font-semibold text-slate-800">{item.label}: </span>}
                   {item.text}

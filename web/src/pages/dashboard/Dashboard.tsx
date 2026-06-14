@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, CheckSquareOutline, HandHeartOutline, StarOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, HandHeartOutline, StarOutline } from 'solar-icon-set'
 import { motion, AnimatePresence, useMotionValue } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
@@ -36,11 +36,12 @@ export default function Dashboard() {
   const { events, fetchEvents, isLoading: eventsLoading } = useEventsStore()
   const { jobs, isLoading: jobsLoading, fetchJobs } = useJobsStore()
   const { transactions, loadTotalPoints, loadTransactions, isLoading: pointsLoading } = usePointsStore()
-  const { missions, participants, submissions, fetchAll: fetchMissions, isLoading: missionsLoading } = useMissionsStore()
+  const { missions, participants, submissions, fetchAll: fetchMissions, startMission, isLoading: missionsLoading } = useMissionsStore()
   const { chapters: allChapters, fetchChapters } = useChaptersStore()
   const [regionChapterIds, setRegionChapterIds] = useState<Set<string>>(new Set())
   const [bannerIdx, setBannerIdx] = useState(0)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isStartingMission, setIsStartingMission] = useState<Record<string, boolean>>({})
   const [attendeeCounts, setAttendeeCounts] = useState<Record<string, number>>({})
   const [attendeeDetails, setAttendeeDetails] = useState<Record<string, { avatar_url: string | null; full_name: string }[]>>({})
   const [activeTab, setActiveTab] = useState<'updates' | 'featured'>('updates')
@@ -155,6 +156,17 @@ useEffect(() => {
 
   const unclaimedMissions = missions.filter(m => m.status !== 'claimed')
 
+  const handleStartMission = async (missionId: string, alreadyJoined: boolean) => {
+    if (!alreadyJoined) {
+      setIsStartingMission(p => ({ ...p, [missionId]: true }))
+      try {
+        await startMission(missionId, user?.id ?? '')
+      } catch { /* already joined or error — navigate anyway */ }
+      setIsStartingMission(p => ({ ...p, [missionId]: false }))
+    }
+    navigate('/rewards', { state: { expandMissionId: missionId } })
+  }
+
   return (
     <div className="relative min-h-screen bg-slate-50">
       <VolunteerXpCard />
@@ -195,7 +207,7 @@ useEffect(() => {
                 <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
                   <Bag2Outline color="rgb(127,8,255)" size={24} />
                 </div>
-                <span className="font-proxima font-semibold text-[#0d121b] text-[10px]">Find Jobs</span>
+                <span className="font-proxima font-semibold text-slate-900 text-[10px]">Find Jobs</span>
               </motion.button>
 
               {/* Volunteer Card */}
@@ -208,20 +220,20 @@ useEffect(() => {
                 <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
                   <HandHeartOutline color="rgb(70,144,17)" size={24} />
                 </div>
-                <span className="font-proxima font-semibold text-[#0d121b] text-[10px]">Volunteer</span>
+                <span className="font-proxima font-semibold text-slate-900 text-[10px]">Volunteer</span>
               </motion.button>
 
               {/* Earn Points Card */}
               <motion.button
                 variants={cardItem}
-                onClick={() => navigate('/missions')}
+                onClick={() => navigate('/rewards')}
                 className="bg-[rgba(234,179,8,0.15)] border border-[rgba(210,173,25,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(75,60,0,0.1)] w-full py-4"
                 whileTap={{ scale: 0.95 }}
               >
                 <div className="bg-white flex items-center justify-center rounded-full w-[42px] h-[42px] shadow-sm">
-                  <StarOutline color="#D2AD19" size={24} />
+                  <StarOutline color="#F8C630" size={24} />
                 </div>
-                <span className="font-proxima font-semibold text-[#0d121b] text-[10px]">Earn Points</span>
+                <span className="font-proxima font-semibold text-slate-900 text-[10px]">Earn Points</span>
               </motion.button>
             </div>
           </motion.section>
@@ -318,7 +330,7 @@ useEffect(() => {
               onClick={() => navigate('/events')}
               className="flex gap-1 items-center"
             >
-              <p className="font-proxima text-[#464646] text-[12px] tracking-[0.96px] uppercase">
+              <p className="font-proxima text-slate-900 text-[12px] tracking-[0.96px] uppercase">
                 MORE
               </p>
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />
@@ -376,7 +388,7 @@ useEffect(() => {
           <div className="flex items-center justify-between mb-4">
             <p className="font-proxima font-bold text-[18px] text-black">Jobs</p>
             <button onClick={() => navigate('/jobs')} className="flex gap-1 items-center">
-              <p className="font-proxima text-[#464646] text-[12px] tracking-[0.96px] uppercase">MORE</p>
+              <p className="font-proxima text-slate-900 text-[12px] tracking-[0.96px] uppercase">MORE</p>
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />
             </button>
           </div>
@@ -407,8 +419,8 @@ useEffect(() => {
         <section>
           <div className="flex items-center justify-between mb-4">
             <p className="font-proxima font-bold text-[18px] text-black">Missions</p>
-            <button onClick={() => navigate('/missions')} className="flex gap-1 items-center">
-              <p className="font-proxima text-[#464646] text-[12px] tracking-[0.96px] uppercase">MORE</p>
+            <button onClick={() => navigate('/rewards')} className="flex gap-1 items-center">
+              <p className="font-proxima text-slate-900 text-[12px] tracking-[0.96px] uppercase">MORE</p>
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />
             </button>
           </div>
@@ -446,65 +458,61 @@ useEffect(() => {
           ) : (
             <motion.div className="flex flex-col gap-3" variants={staggerContainer} initial="hidden" animate="visible">
               {unclaimedMissions.slice(0, 2).map((mission) => {
-                const submissionCount = submissions.filter(s => s.mission_id === mission.id).length
-                const participantCount = participants.filter(p => p.mission_id === mission.id).length
-                const isClaimed = mission.status === 'claimed'
+                const isJoined   = participants.some(p => p.mission_id === mission.id)
+                const mySubmission = submissions.find(s => s.mission_id === mission.id)
+                const hasWon     = mySubmission?.status === 'approved'
 
-                const difficultyStyle: Record<string, { bg: string; text: string }> = {
-                  easy:   { bg: 'rgba(115,178,9,0.2)',   text: '#4a8c05' },
-                  medium: { bg: 'rgba(255,111,11,0.2)',  text: '#ff6f0b' },
-                  hard:   { bg: 'rgba(127,8,255,0.2)',   text: '#7f08ff' },
+                const difficultyStyle: Record<string, string> = {
+                  easy:   'bg-emerald-100 text-emerald-700',
+                  medium: 'bg-orange-100 text-amber-600',
+                  hard:   'bg-purple-100 text-purple-600',
                 }
-                const diff = difficultyStyle[mission.difficulty ?? 'easy']
+                const diffCls = difficultyStyle[mission.difficulty ?? 'easy'] ?? difficultyStyle.easy
 
                 return (
-                  <motion.button
+                  <motion.div
                     key={mission.id}
                     variants={cardItem}
-                    onClick={() => navigate('/missions')}
-                    className="w-full bg-white border border-[rgba(156,163,175,0.3)] rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] text-left"
+                    onClick={() => navigate('/rewards', { state: { expandMissionId: mission.id } })}
+                    className="w-full bg-white border border-slate-200 rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] text-left cursor-pointer"
                     whileTap={{ scale: 0.98 }}
                   >
                     <div className="px-[18px] py-4 flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <span
-                          className="text-[9px] font-semibold tracking-[0.9px] uppercase px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: diff.bg, color: diff.text }}
+                          className={`text-[9px] font-semibold tracking-[0.9px] uppercase px-2 py-0.5 rounded-full ${diffCls}`}
                         >
                           {mission.difficulty?.toUpperCase() ?? 'EASY'}
                         </span>
-                        <span className="bg-[rgba(254,248,209,0.9)] text-[#d2ad19] text-[9px] font-semibold tracking-[0.9px] uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="bg-amber-100 text-amber-700 text-[9px] font-semibold tracking-[0.9px] uppercase px-2 py-0.5 rounded-full flex items-center gap-1">
                           <StarOutline className="w-[6px] h-[6px]" color="#F8C630" />
                           {mission.xp_reward} EXP
                         </span>
                       </div>
                       <div className="flex flex-col items-start">
                         <p className="font-proxima font-bold text-[16px] text-black w-full leading-snug">{mission.title}</p>
-                        <div className="flex items-center gap-3 py-1">
-                          {submissionCount > 0 && (
-                            <div className="flex items-center gap-1">
-                              <CheckSquareOutline className="w-[10px] h-[10px]" color="#94A3B8" />
-                              <span className="font-proxima text-[#6b7280] text-[12px]">{submissionCount} Submitted</span>
-                            </div>
-                          )}
-                          {participantCount > 0 && (
-                            <div className="flex items-center gap-1">
-                              <UsersGroupRoundedOutline className="w-[10px] h-[10px]" color="#94A3B8" />
-                              <span className="font-proxima text-[#6b7280] text-[12px]">{participantCount} joined</span>
-                            </div>
-                          )}
-                        </div>
+                        {isJoined && !hasWon && mySubmission?.status === 'pending' && (
+                          <p className="font-proxima text-amber-600 text-[12px] py-1">Pending Review</p>
+                        )}
                       </div>
                       <div className="pt-1">
-                        <span
-                          className="text-white text-[12px] font-semibold px-[18px] py-[10px] rounded-full inline-block leading-none"
-                          style={{ backgroundColor: isClaimed ? '#868686' : 'rgb(var(--color-primary))' }}
-                        >
-                          {isClaimed ? 'Claimed' : 'Start Mission'}
-                        </span>
+                        {hasWon ? (
+                          <span className="text-[12px] font-semibold px-[18px] py-[10px] rounded-full inline-block leading-none bg-green/10 text-green">
+                            Completed
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); void handleStartMission(mission.id, isJoined) }}
+                            disabled={isStartingMission[mission.id]}
+                            className="text-white text-[12px] font-semibold px-[18px] py-[10px] rounded-full inline-block leading-none disabled:opacity-60"
+                            style={{ backgroundColor: 'rgb(var(--color-primary))' }}
+                          >
+                            {isStartingMission[mission.id] ? 'Starting…' : isJoined ? 'Continue' : 'Start Mission'}
+                          </button>
+                        )}
                       </div>
                     </div>
-                  </motion.button>
+                  </motion.div>
                 )
               })}
             </motion.div>
@@ -513,24 +521,24 @@ useEffect(() => {
 
         {/* Switcher: Updates / Featured */}
         <section className="flex flex-col gap-4">
-          <div className="bg-primary/10 inline-flex self-start items-center p-1 rounded-full">
+          <div className="inline-flex self-start items-center gap-2">
             <button
               onClick={() => setActiveTab('updates')}
               className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
-                activeTab === 'updates' ? 'bg-primary text-white shadow-sm' : 'text-black hover:bg-primary/20'
+                activeTab === 'updates' ? 'bg-primary text-white font-semibold shadow-sm' : 'bg-primary/10 text-primary font-medium'
               }`}
             >
-              <span className="font-proxima font-bold text-[16px]">
+              <span className="font-proxima text-[16px]">
                 Updates
               </span>
             </button>
             <button
               onClick={() => setActiveTab('featured')}
               className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
-                activeTab === 'featured' ? 'bg-primary text-white shadow-sm' : 'text-black hover:bg-primary/20'
+                activeTab === 'featured' ? 'bg-primary text-white font-semibold shadow-sm' : 'bg-primary/10 text-primary font-medium'
               }`}
             >
-              <span className="font-proxima font-bold text-[16px]">
+              <span className="font-proxima text-[16px]">
                 Featured
               </span>
             </button>
@@ -541,7 +549,7 @@ useEffect(() => {
               <motion.button
                 key="updates"
                 onClick={() => navigate('/news/welcome')}
-                className="w-full h-[220px] bg-white rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] overflow-hidden text-left flex flex-col"
+                className="w-full h-[220px] bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] overflow-hidden text-left flex flex-col"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -602,7 +610,7 @@ useEffect(() => {
               onClick={() => navigate('/points/history')}
               className="flex gap-1 items-center"
             >
-              <p className="font-proxima text-[#464646] text-[12px] tracking-[0.96px] uppercase">
+              <p className="font-proxima text-slate-900 text-[12px] tracking-[0.96px] uppercase">
                 MORE
               </p>
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />

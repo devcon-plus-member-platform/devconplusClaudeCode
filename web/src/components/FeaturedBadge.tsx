@@ -8,7 +8,7 @@ import { StarOutline } from 'solar-icon-set'
  */
 export default function FeaturedBadge() {
   return (
-    <span className="relative inline-flex items-center overflow-hidden rounded-[100px] shadow-sm">
+    <span className="relative inline-flex items-center overflow-hidden rounded-full shadow-sm">
       {/* Animated silver gradient base — slow, gentle drift */}
       <motion.span
         aria-hidden

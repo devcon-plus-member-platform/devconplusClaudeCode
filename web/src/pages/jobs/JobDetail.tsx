@@ -129,7 +129,7 @@ export default function JobDetail() {
             href={job.apply_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full bg-primary text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2"
+            className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm flex items-center justify-center gap-2"
             whileTap={{ scale: 0.95 }}
           >
             <ShareOutline className="w-5 h-5" />

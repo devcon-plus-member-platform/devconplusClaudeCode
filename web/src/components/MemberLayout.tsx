@@ -436,7 +436,7 @@ export default function MemberLayout() {
             </NavLink>
 
             <NavLink
-              to="/missions"
+              to="/rewards"
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium transition-colors ${
                   isActive ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
