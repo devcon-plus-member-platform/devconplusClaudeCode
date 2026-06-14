@@ -719,7 +719,7 @@ export function OrgQRScanner() {
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xl">
                 <div className="flex items-center gap-3 mb-1">
                   <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
-                    <ClockCircleOutline className="w-5 h-5" color="#F8C630" />
+                    <ClockCircleOutline className="w-5 h-5" color="#EAB308" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-slate-900 font-black text-md3-body-lg truncate">{overlayEntry.data.memberName}</p>

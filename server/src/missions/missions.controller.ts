@@ -16,7 +16,6 @@ import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { CreateMissionDto } from './dto/create-mission.dto';
-import { RejectMissionSubmissionDto } from './dto/reject-mission-submission.dto';
 import { SubmitMissionDto } from './dto/submit-mission.dto';
 import { UpdateMissionDto } from './dto/update-mission.dto';
 import { MissionsService } from './missions.service';
@@ -44,25 +43,13 @@ export class MissionsController {
     return this.service.getPendingQueue();
   }
 
-  /** POST /api/missions/submissions/:id/approve — awards XP to that member only; mission stays open */
+  /** POST /api/missions/submissions/:id/approve — hq_admin: approve_mission_winner RPC */
   @Post('submissions/:id/approve')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
-  @Roles('hq_admin', 'chapter_officer')
-  approveMissionSubmission(@Param() { id }: IdParamDto) {
-    return this.service.approveMissionSubmission(id);
-  }
-
-  /** POST /api/missions/submissions/:id/reject — sets status='rejected', stores optional reason */
-  @Post('submissions/:id/reject')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles('hq_admin', 'chapter_officer')
-  rejectMissionSubmission(
-    @Param() { id }: IdParamDto,
-    @Body() dto: RejectMissionSubmissionDto,
-  ) {
-    return this.service.rejectMissionSubmission(id, dto.reason);
+  @Roles('hq_admin')
+  approveMissionWinner(@Param() { id }: IdParamDto) {
+    return this.service.approveMissionWinner(id);
   }
 
   // ── Member: consolidated data ─────────────────────────────────────────────

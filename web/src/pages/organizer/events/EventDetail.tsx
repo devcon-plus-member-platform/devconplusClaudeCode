@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftOutline, BoltOutline, PenOutline, UserSpeakOutline, MapPointOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
@@ -85,7 +85,7 @@ export function OrgEventDetail() {
           <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover" />
         ) : (
           <div
-            className="w-full h-full bg-primary"
+            className="w-full h-full bg-[#1152d4]"
             style={{ backgroundImage: PATTERN_BG, backgroundSize: '60px 60px' }}
           />
         )}

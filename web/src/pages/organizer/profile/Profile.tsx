@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AltArrowRightOutline, LogoutOutline, UserOutline, CalendarOutline, MapPointOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
@@ -51,7 +51,7 @@ export function OrgProfile() {
     <div className="min-h-screen bg-slate-50">
       {/* ── Blue Background Container ── */}
       <div 
-        className="bg-primary relative overflow-hidden z-0 pb-[40px] pt-14 text-center"
+        className="bg-[#1152d4] relative overflow-hidden z-0 pb-[40px] pt-14 text-center"
           style={{ 
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,

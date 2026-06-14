@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftOutline, CopyOutline, CheckCircleOutline, UsersGroupRoundedOutline, ClockCircleOutline, TrashBinTrashOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -139,7 +139,7 @@ export function OrgCoOrganizers() {
       <header className="sticky top-0 z-50 flex flex-col pointer-events-none">
         {/* ── Blue Background Container ── */}
         <div 
-          className="bg-primary relative overflow-hidden z-0 pointer-events-auto pb-[24px] pt-14"
+          className="bg-[#1152d4] relative overflow-hidden z-0 pointer-events-auto pb-[24px] pt-14"
           style={{ 
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,

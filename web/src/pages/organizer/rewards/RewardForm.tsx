@@ -1,4 +1,4 @@
-﻿import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -193,7 +193,7 @@ export function RewardForm({ reward, onSuccess, dangerZone }: RewardFormProps) {
 
         {/* ── Blue Background Container ── */}
         <div 
-          className="bg-primary relative overflow-hidden z-0 pointer-events-auto pb-[24px] pt-14"
+          className="bg-[#1152d4] relative overflow-hidden z-0 pointer-events-auto pb-[24px] pt-14"
           style={{ 
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,
