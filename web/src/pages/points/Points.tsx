@@ -139,14 +139,14 @@ export default function Points() {
 
         {/* ── Tabs Wrapper ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="bg-slate-100 inline-flex w-full rounded-xl p-1 gap-1">
+          <div className="bg-primary/5 inline-flex w-full rounded-lg p-1 gap-1">
             {(['earn', 'share'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-lg text-[14px] font-proxima transition-all shrink-0 ${
                   tab === t
-                    ? 'bg-white text-slate-900 font-semibold shadow-sm'
+                    ? 'bg-primary text-white font-semibold shadow-sm'
                     : 'text-slate-500 font-medium'
                 }`}
               >

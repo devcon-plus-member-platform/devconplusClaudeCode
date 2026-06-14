@@ -7,7 +7,7 @@ import {
   StarOutline, CupFirstOutline, LockOutline, GiftOutline,
   AltArrowRightOutline, MedalStarCircleBoldDuotone,
   BoltOutline, AltArrowDownOutline, UsersGroupRoundedOutline,
-  FileTextOutline, CodeSquareOutline, ShareOutline,
+  FileTextOutline, CodeSquareOutline, ShareOutline, CheckCircleOutline,
 } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Reward, RewardRedemption, MissionDifficulty, SubmissionType } from '@devcon-plus/supabase'
@@ -508,12 +508,13 @@ function ClaimReceiptsTab({ onSelectReceipt }: ClaimReceiptsTabProps) {
 
 // ── Missions Feed ─────────────────────────────────────────────────────────────
 
-type MissionFilterId = 'all' | 'in_progress' | 'pending' | 'completed'
+type MissionFilterId = 'all' | 'in_progress' | 'pending' | 'rejected' | 'completed'
 
 const MISSION_FILTERS: { id: MissionFilterId; label: string }[] = [
   { id: 'all',         label: 'All' },
   { id: 'in_progress', label: 'In Progress' },
   { id: 'pending',     label: 'Pending' },
+  { id: 'rejected',    label: 'Rejected' },
   { id: 'completed',   label: 'Completed' },
 ]
 
@@ -521,6 +522,7 @@ const MISSION_EMPTY: Record<MissionFilterId, { headline: string; body: string }>
   all:         { headline: 'No active missions right now',      body: 'Check back soon for new bounties.' },
   in_progress: { headline: "You haven't started any missions yet", body: 'Tap a mission card to get started.' },
   pending:     { headline: 'Nothing awaiting review',           body: 'Submit a mission to queue it for review.' },
+  rejected:    { headline: 'Nothing needs revision',            body: 'Rejected submissions show here to fix and resubmit.' },
   completed:   { headline: 'No completed missions yet',         body: 'Finish a mission to see it here.' },
 }
 
@@ -618,9 +620,11 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
       const mySubmission = userId
         ? submissions.find((s) => s.mission_id === mission.id && s.user_id === userId)
         : undefined
-      // rejected counts as "in progress" — member must revise and resubmit
-      if (missionFilter === 'in_progress') return isJoined && (!mySubmission || mySubmission.status === 'rejected')
+      // Distinct buckets: in_progress = started but not yet submitted; rejected has
+      // its own tab (member must revise and resubmit).
+      if (missionFilter === 'in_progress') return isJoined && !mySubmission
       if (missionFilter === 'pending') return mySubmission?.status === 'pending'
+      if (missionFilter === 'rejected') return mySubmission?.status === 'rejected'
       if (missionFilter === 'completed') return mySubmission?.status === 'approved'
       return true
     })
@@ -807,14 +811,9 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                     )}
 
                     {hasWon && (
-                      <div className="bg-gold/10 rounded-xl p-3 flex items-center gap-3">
-                        <CupFirstOutline className="w-5 h-5 shrink-0" color="#D97706" />
-                        <div>
-                          <p className="text-md3-body-md font-bold text-amber-700">
-                            {submissionType === 'self_attest' ? 'Mission completed!' : 'You won this mission!'}
-                          </p>
-                          <p className="text-md3-label-md text-amber-600">+{mission.xp_reward} XP has been added to your account.</p>
-                        </div>
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <CheckCircleOutline className="w-5 h-5 shrink-0" color="#21C45D" />
+                        <p className="text-md3-body-md font-bold text-green">+{mission.xp_reward} EXP earned</p>
                       </div>
                     )}
 
@@ -865,12 +864,9 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                           </a>
                         )}
                         {mySubmission && mySubmission.status === 'pending' && (
-                          <div className="space-y-2">
-                            <div className="w-full h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center gap-2">
-                              <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                              <p className="text-md3-label-lg font-proxima font-bold text-amber-700">Submitted — Pending Review</p>
-                            </div>
-                            <p className="text-[10px] text-center text-slate-400">
+                          <div className="bg-slate-50 rounded-xl p-3">
+                            <p className="text-md3-body-md font-bold text-slate-700">Pending review</p>
+                            <p className="text-[12px] text-slate-400 mt-0.5">
                               Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
                             </p>
                           </div>
@@ -925,21 +921,16 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                         {isJoined && (
                           <>
                             {mySubmission && mySubmission.status !== 'rejected' && !submitOpen[mission.id] && (
-                              <div className="space-y-2">
+                              <div className="bg-slate-50 rounded-xl p-3 space-y-1">
                                 {mySubmission.status === 'pending' && (
-                                  <div className="w-full h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-                                    <p className="text-md3-label-lg font-proxima font-bold text-amber-700">Submitted — Pending Review</p>
-                                  </div>
+                                  <p className="text-md3-body-md font-bold text-slate-700">Pending review</p>
                                 )}
-                                <div className="bg-slate-50 rounded-xl p-3 space-y-1">
-                                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your Submission</p>
-                                  <a href={mySubmission.pr_link ?? '#'} target="_blank" rel="noopener noreferrer"
-                                    className="text-md3-label-md text-blue hover:underline break-all block">{mySubmission.pr_link}</a>
-                                  <p className="text-[10px] text-slate-400">
-                                    Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
-                                  </p>
-                                </div>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your Submission</p>
+                                <a href={mySubmission.pr_link ?? '#'} target="_blank" rel="noopener noreferrer"
+                                  className="text-md3-label-md text-blue hover:underline break-all block">{mySubmission.pr_link}</a>
+                                <p className="text-[10px] text-slate-400">
+                                  Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
+                                </p>
                               </div>
                             )}
 
@@ -1107,14 +1098,14 @@ export default function Rewards() {
 
         {/* ── Segmented Toggle: Missions / Redeem ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="bg-slate-100 inline-flex w-full rounded-xl p-1 gap-1 max-w-4xl mx-auto">
+          <div className="bg-primary/5 inline-flex w-full rounded-lg p-1 gap-1 max-w-4xl mx-auto">
             {(['missions', 'redeem'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setMainTab(t)}
                 className={`flex-1 h-[38px] flex items-center justify-center rounded-lg text-[14px] font-proxima transition-all ${
                   mainTab === t
-                    ? 'bg-white text-slate-900 font-semibold shadow-sm'
+                    ? 'bg-primary text-white font-semibold shadow-sm'
                     : 'text-slate-500 font-medium'
                 }`}
               >
@@ -1134,7 +1125,7 @@ export default function Rewards() {
                   onClick={() => setMissionFilter(f.id)}
                   className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
                     missionFilter === f.id
-                      ? 'bg-slate-900 text-white font-semibold'
+                      ? 'bg-primary/5 border border-primary text-primary font-semibold'
                       : 'bg-white border border-slate-300 text-slate-500 font-medium'
                   }`}
                 >
@@ -1148,7 +1139,7 @@ export default function Rewards() {
                   onClick={() => handleTabClick(tab.id, tab.label)}
                   className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
                     activeTab === tab.id
-                      ? 'bg-slate-900 text-white font-semibold'
+                      ? 'bg-primary/5 border border-primary text-primary font-semibold'
                       : 'bg-white border border-slate-300 text-slate-500 font-medium'
                   }`}
                 >
