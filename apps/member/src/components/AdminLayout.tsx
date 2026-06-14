@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, StarOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
 import { supabase } from '../lib/supabase'
 import ScrollToTop from './ScrollToTop'
@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { path: '/admin/events',    label: 'Events',            Icon: CalendarOutline,         end: false, superOnly: false },
   { path: '/admin/chapters',  label: 'Chapters',          Icon: BuildingsOutline,        end: false, superOnly: false },
   { path: '/admin/upgrades',  label: 'Chapter Management', Icon: ShieldCheckOutline,     end: false, superOnly: false },
-  { path: '/admin/points',    label: 'Points Approval',   Icon: StarOutline,             end: false, superOnly: false },
   { path: '/admin/kiosk',     label: 'Kiosk',             Icon: ScannerOutline,          end: false, superOnly: true  },
 ]
 
@@ -104,7 +103,7 @@ export default function AdminLayout() {
             >
               <Icon className="w-4 h-4 shrink-0" />
               <span className="flex-1">{label}</span>
-              {path === '/admin/points' && pendingPointsCount > 0 && (
+              {path === '/admin/upgrades' && pendingPointsCount > 0 && (
                 <span className="w-5 h-5 bg-red rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0">
                   {pendingPointsCount > 9 ? '9+' : pendingPointsCount}
                 </span>

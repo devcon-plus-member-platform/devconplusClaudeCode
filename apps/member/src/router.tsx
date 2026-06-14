@@ -143,10 +143,6 @@ export const router = createBrowserRouter([
         lazy: () => import('./pages/admin/AdminCMS').then((m) => ({ Component: m.default })),
       },
       {
-        path: '/admin/points',
-        lazy: () => import('./pages/admin/AdminPointsApproval').then((m) => ({ Component: m.default })),
-      },
-      {
         path: '/admin/kiosk',
         lazy: () => import('./pages/admin/AdminKiosk').then((m) => ({ Component: m.default })),
       },

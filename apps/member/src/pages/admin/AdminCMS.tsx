@@ -1,8 +1,14 @@
-import { useEffect, useState } from 'react'
-import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone,
+  CheckCircleOutline, CloseCircleOutline, StarOutline, UserOutline, LinkOutline,
+  DocumentTextOutline, ClockCircleOutline,
+} from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../stores/useAuthStore'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
+import { cardItem, staggerContainer, slideUp, backdrop } from '../../lib/animation'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1016,6 +1022,363 @@ interface XpTierForm {
   badge_color: string
 }
 
+// ── Mission Submission Review — shared types & helpers ────────────────────
+
+type SubmissionStatus = 'pending' | 'approved' | 'rejected'
+
+interface FullSubmissionRow {
+  id: string
+  mission_id: string
+  user_id: string
+  pr_link: string
+  status: SubmissionStatus
+  admin_remarks: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  submitted_at: string
+  missions: { title: string; xp_reward: number; description: string | null } | null
+  profiles: { full_name: string; email: string; spendable_points: number; lifetime_points: number } | null
+}
+
+interface PointTransaction {
+  id: string
+  amount: number
+  description: string
+  source: string
+  created_at: string
+}
+
+const SUB_STATUS_TABS: { key: SubmissionStatus; label: string }[] = [
+  { key: 'pending',  label: 'Pending'  },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+]
+
+const SUB_STATUS_COLORS: Record<SubmissionStatus, string> = {
+  pending:  'bg-gold/10 text-slate-700',
+  approved: 'bg-green/10 text-green',
+  rejected: 'bg-red/10 text-red',
+}
+
+function memberInitials(name: string | null | undefined) {
+  if (!name) return '?'
+  return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
+
+function fmtSubDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-PH', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+function fmtSubDateShort(iso: string) {
+  return new Date(iso).toLocaleDateString('en-PH', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  })
+}
+
+// ── Reject Modal ───────────────────────────────────────────────────────────
+
+interface MissionRejectModalProps {
+  submissionId: string
+  memberName: string
+  missionTitle: string
+  onConfirm: (submissionId: string, remarks: string) => Promise<void>
+  onClose: () => void
+  loading: boolean
+}
+
+function MissionRejectModal({ submissionId, memberName, missionTitle, onConfirm, onClose, loading }: MissionRejectModalProps) {
+  const [remarks, setRemarks] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => { textareaRef.current?.focus() }, [])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!remarks.trim()) return
+    void onConfirm(submissionId, remarks.trim())
+  }
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    >
+      <motion.div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} variants={backdrop} initial="hidden" animate="visible" exit="hidden" />
+      <motion.div
+        className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 pb-8 z-10"
+        variants={slideUp} initial="hidden" animate="visible" exit="hidden"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-md3-title-md font-bold text-slate-900">Reject Submission</h3>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+            <CloseCircleLineDuotone className="w-5 h-5" color="#EF4444" />
+          </button>
+        </div>
+        <p className="text-md3-body-md text-slate-600 mb-5">
+          Rejecting <span className="font-semibold text-slate-900">{memberName}</span>'s submission for{' '}
+          <span className="font-semibold text-slate-900">{missionTitle}</span>. Admin remarks are required.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-md3-label-md font-semibold text-slate-700 block mb-1.5">
+              Admin Remarks <span className="text-red">*</span>
+            </label>
+            <textarea
+              ref={textareaRef} value={remarks} onChange={(e) => setRemarks(e.target.value)}
+              rows={4} placeholder="Explain why this submission was rejected…"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-red/40 resize-none"
+              required
+            />
+            <p className="text-[11px] text-slate-400 mt-1">This will be visible to the member in their notification.</p>
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 py-3 border border-slate-200 rounded-xl text-md3-body-md font-semibold text-slate-600">Cancel</button>
+            <motion.button
+              type="submit" disabled={loading || !remarks.trim()} whileTap={{ scale: 0.95 }}
+              className="flex-1 py-3 bg-red text-white rounded-xl text-md3-body-md font-bold disabled:opacity-50 transition-opacity"
+            >
+              {loading ? 'Rejecting…' : 'Reject'}
+            </motion.button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Detail Sheet ───────────────────────────────────────────────────────────
+
+interface MissionDetailSheetProps {
+  sub: FullSubmissionRow
+  history: PointTransaction[]
+  historyLoading: boolean
+  onClose: () => void
+  onApprove: (sub: FullSubmissionRow) => void
+  onReject: (sub: FullSubmissionRow) => void
+  actionLoading: string | null
+}
+
+function MissionDetailSheet({ sub, history, historyLoading, onClose, onApprove, onReject, actionLoading }: MissionDetailSheetProps) {
+  const isProofLink = sub.pr_link !== 'submitted-for-approval'
+
+  return (
+    <motion.div className="fixed inset-0 z-40 flex items-end" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <motion.div
+        className="relative w-full bg-white rounded-t-3xl shadow-2xl z-10 max-h-[90vh] flex flex-col"
+        variants={slideUp} initial="hidden" animate="visible" exit="hidden"
+      >
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+          <h3 className="text-md3-title-md font-bold text-slate-900">Submission Detail</h3>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-slate-100">
+            <CloseCircleLineDuotone className="w-5 h-5" color="#94A3B8" />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5 pb-8">
+          {/* User info */}
+          <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
+            <div className="w-12 h-12 rounded-full bg-blue flex items-center justify-center shrink-0">
+              <span className="text-white font-bold text-[16px] font-proxima">{memberInitials(sub.profiles?.full_name)}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-md3-title-md font-bold text-slate-900 truncate">{sub.profiles?.full_name ?? '—'}</p>
+              <p className="text-md3-body-sm text-slate-500 truncate">{sub.profiles?.email ?? '—'}</p>
+              <div className="flex items-center gap-1 mt-1">
+                <StarOutline className="w-3 h-3" color="#F8C630" />
+                <span className="text-md3-label-sm text-slate-600 font-semibold">
+                  {(sub.profiles?.spendable_points ?? 0).toLocaleString()} pts
+                </span>
+                <span className="text-md3-label-sm text-slate-400">spendable</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Mission info */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <DocumentTextOutline className="w-4 h-4" color="rgb(var(--color-primary))" />
+              </div>
+              <p className="text-md3-body-md font-bold text-slate-900">{sub.missions?.title ?? '—'}</p>
+            </div>
+            {sub.missions?.description && (
+              <p className="text-md3-body-sm text-slate-500 pl-9 leading-relaxed">{sub.missions.description}</p>
+            )}
+            <div className="pl-9 flex items-center gap-3">
+              <span className="text-md3-label-sm font-bold text-green bg-green/10 px-2 py-0.5 rounded-full">
+                +{sub.missions?.xp_reward ?? 0} pts
+              </span>
+              <span className={`text-md3-label-sm font-bold px-2 py-0.5 rounded-full ${SUB_STATUS_COLORS[sub.status]}`}>
+                {sub.status.charAt(0).toUpperCase() + sub.status.slice(1)}
+              </span>
+            </div>
+          </div>
+
+          {/* Proof */}
+          <div className="border border-slate-100 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <LinkOutline className="w-4 h-4" color="#94A3B8" />
+              <p className="text-md3-label-md font-semibold text-slate-700">Submitted Proof</p>
+            </div>
+            {isProofLink ? (
+              <a href={sub.pr_link} target="_blank" rel="noopener noreferrer" className="text-md3-body-sm text-blue hover:underline break-all block">
+                {sub.pr_link}
+              </a>
+            ) : (
+              <p className="text-md3-body-sm text-slate-400 italic">Submitted for approval (no link provided)</p>
+            )}
+          </div>
+
+          {/* Timestamps */}
+          <div className="flex items-start gap-2 text-md3-body-sm text-slate-500">
+            <ClockCircleOutline className="w-3.5 h-3.5 mt-0.5 shrink-0" color="#94A3B8" />
+            <div className="space-y-0.5">
+              <p>Submitted {fmtSubDate(sub.submitted_at)}</p>
+              {sub.reviewed_at && (
+                <p>{sub.status === 'approved' ? 'Approved' : 'Rejected'} {fmtSubDate(sub.reviewed_at)}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Admin remarks */}
+          {sub.status === 'rejected' && sub.admin_remarks && (
+            <div className="bg-red/5 border border-red/20 rounded-xl p-4">
+              <p className="text-md3-label-md font-bold text-red mb-1">Admin Remarks</p>
+              <p className="text-md3-body-sm text-slate-700 leading-relaxed">{sub.admin_remarks}</p>
+            </div>
+          )}
+
+          {/* Point history */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <StarOutline className="w-4 h-4" color="#F8C630" />
+              <p className="text-md3-label-md font-bold text-slate-700">Recent Point History</p>
+            </div>
+            {historyLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-md3-body-sm text-slate-400">No transactions yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {history.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                    <div className="min-w-0">
+                      <p className="text-md3-body-sm text-slate-700 font-medium truncate">{tx.description}</p>
+                      <p className="text-[10px] text-slate-400">{fmtSubDateShort(tx.created_at)}</p>
+                    </div>
+                    <span className={`text-md3-label-md font-bold ml-3 shrink-0 ${tx.amount >= 0 ? 'text-green' : 'text-red'}`}>
+                      {tx.amount >= 0 ? '+' : ''}{tx.amount.toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          {sub.status === 'pending' && (
+            <div className="flex gap-3 pt-2">
+              <motion.button
+                whileTap={{ scale: 0.95 }} onClick={() => onReject(sub)} disabled={actionLoading === sub.id}
+                className="flex-1 py-3 flex items-center justify-center gap-2 bg-red/10 text-red rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-red/20 transition-colors"
+              >
+                <CloseCircleOutline className="w-5 h-5" color="#EF4444" />
+                Reject
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.95 }} onClick={() => onApprove(sub)} disabled={actionLoading === sub.id}
+                className="flex-1 py-3 flex items-center justify-center gap-2 bg-green/10 text-green rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-green/20 transition-colors"
+              >
+                <CheckCircleOutline className="w-5 h-5" color="#21C45D" />
+                {actionLoading === sub.id ? 'Approving…' : 'Approve & Award'}
+              </motion.button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Submission Card ────────────────────────────────────────────────────────
+
+interface MissionSubmissionCardProps {
+  sub: FullSubmissionRow
+  onTap: (sub: FullSubmissionRow) => void
+  onApprove: (sub: FullSubmissionRow) => void
+  onReject: (sub: FullSubmissionRow) => void
+  actionLoading: string | null
+}
+
+function MissionSubmissionCard({ sub, onTap, onApprove, onReject, actionLoading }: MissionSubmissionCardProps) {
+  const isProofLink = sub.pr_link !== 'submitted-for-approval'
+
+  return (
+    <motion.div
+      variants={cardItem} whileTap={{ scale: 0.97 }} onClick={() => onTap(sub)}
+      className="bg-white rounded-2xl border border-slate-100 shadow-card p-4 cursor-pointer active:bg-slate-50 transition-colors"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-blue flex items-center justify-center shrink-0">
+          <span className="text-white font-bold text-[13px] font-proxima">{memberInitials(sub.profiles?.full_name)}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-md3-body-md font-bold text-slate-900 truncate">{sub.profiles?.full_name ?? '—'}</p>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${SUB_STATUS_COLORS[sub.status]}`}>
+              {sub.status.charAt(0).toUpperCase() + sub.status.slice(1)}
+            </span>
+          </div>
+          <p className="text-md3-label-sm text-slate-400 truncate">{sub.profiles?.email ?? '—'}</p>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className="text-md3-label-sm font-semibold text-slate-700 truncate max-w-[180px]">{sub.missions?.title ?? '—'}</span>
+            <span className="text-[10px] font-bold text-green bg-green/10 px-1.5 py-0.5 rounded-full shrink-0">+{sub.missions?.xp_reward ?? 0} pts</span>
+            {isProofLink && <span className="text-[10px] font-semibold text-blue bg-blue/10 px-1.5 py-0.5 rounded-full shrink-0">Link</span>}
+          </div>
+          <p className="text-[10px] text-slate-400 mt-1">
+            {sub.status === 'pending' ? `Submitted ${fmtSubDateShort(sub.submitted_at)}` : `Reviewed ${sub.reviewed_at ? fmtSubDateShort(sub.reviewed_at) : '—'}`}
+          </p>
+          {sub.status === 'rejected' && sub.admin_remarks && (
+            <p className="text-[10px] text-red/80 mt-1 italic truncate">Rejected: {sub.admin_remarks}</p>
+          )}
+        </div>
+      </div>
+      {sub.status === 'pending' && (
+        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={(e) => { e.stopPropagation(); onReject(sub) }}
+            disabled={actionLoading === sub.id}
+            className="flex-1 py-2 flex items-center justify-center gap-1.5 bg-red/10 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/20 transition-colors"
+          >
+            <CloseCircleOutline className="w-3.5 h-3.5" color="#EF4444" />
+            Reject
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={(e) => { e.stopPropagation(); onApprove(sub) }}
+            disabled={actionLoading === sub.id}
+            className="flex-1 py-2 flex items-center justify-center gap-1.5 bg-green/10 text-green rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-green/20 transition-colors"
+          >
+            <CheckCircleOutline className="w-3.5 h-3.5" color="#21C45D" />
+            {actionLoading === sub.id ? 'Approving…' : 'Approve'}
+          </motion.button>
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 // ── Tab 4: Missions ───────────────────────────────────────────────────────
 
 type MissionSubmissionType = 'proof_upload' | 'link' | 'submit_for_approval'
@@ -1037,17 +1400,6 @@ interface MissionRow {
   github_url: string | null
   is_active: boolean
   created_at: string
-}
-
-interface MissionSubmissionRow {
-  id: string
-  mission_id: string
-  user_id: string
-  pr_link: string
-  status: 'pending' | 'approved'
-  submitted_at: string
-  missions?: { title: string } | null
-  profiles?: { full_name: string; email: string } | null
 }
 
 interface MissionForm {
@@ -1077,9 +1429,10 @@ const DIFF_COLORS = {
 } as const
 
 function MissionsTab() {
+  const { user } = useAuthStore()
   const [subTab, setSubTab] = useState<'manage' | 'queue'>('manage')
 
-  // ── Mission CRUD ──────────────────────────────────────────────────────────
+  // ── Mission CRUD ────────────────────────────────────────────────────────
   const [rows, setRows] = useState<MissionRow[]>([])
   const [loadingMissions, setLoadingMissions] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1088,90 +1441,76 @@ function MissionsTab() {
   const [form, setForm] = useState<MissionForm>(defaultMissionForm())
   const [saving, setSaving] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
-  // ── Review queue ──────────────────────────────────────────────────────────
-  const [queue, setQueue] = useState<MissionSubmissionRow[]>([])
-  const [loadingQueue, setLoadingQueue] = useState(false)
-  const [approvingId, setApprovingId] = useState<string | null>(null)
-  const [approveError, setApproveError] = useState<string | null>(null)
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null)
+
+  // ── Submission Review ────────────────────────────────────────────────────
+  const [submissions, setSubmissions] = useState<FullSubmissionRow[]>([])
+  const [loadingQueue, setLoadingQueue] = useState(false)
+  const [queueTab, setQueueTab] = useState<SubmissionStatus>('pending')
+  const [queueSearch, setQueueSearch] = useState('')
+  const [detailSub, setDetailSub] = useState<FullSubmissionRow | null>(null)
+  const [txHistory, setTxHistory] = useState<PointTransaction[]>([])
+  const [txHistoryLoading, setTxHistoryLoading] = useState(false)
+  const [queueActionLoading, setQueueActionLoading] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<FullSubmissionRow | null>(null)
+  const [rejectLoading, setRejectLoading] = useState(false)
+  const [queueError, setQueueError] = useState<string | null>(null)
 
   const loadMissions = async () => {
     setLoadingMissions(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error: err } = await (supabase as any)
-      .from('missions')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .from('missions').select('*').order('created_at', { ascending: false })
     if (err) setError(err.message)
     else setRows((data ?? []) as MissionRow[])
     setLoadingMissions(false)
   }
 
-  const loadQueue = async () => {
+  const loadSubmissions = useCallback(async () => {
     setLoadingQueue(true)
+    setQueueError(null)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error: err } = await (supabase as any)
       .from('mission_submissions')
-      .select(`*, missions:mission_id(title), profiles:user_id(full_name, email)`)
-      .eq('status', 'pending')
-      .order('submitted_at', { ascending: true })
-    if (err) setApproveError(err.message)
-    else setQueue((data ?? []) as MissionSubmissionRow[])
+      .select(`*, missions:mission_id(title, xp_reward, description), profiles:user_id(full_name, email, spendable_points, lifetime_points)`)
+      .order('submitted_at', { ascending: false })
+      .limit(200)
+    if (err) setQueueError(err.message)
+    else setSubmissions((data ?? []) as FullSubmissionRow[])
     setLoadingQueue(false)
-  }
+  }, [])
 
   useEffect(() => { void loadMissions() }, [])
-  useEffect(() => { if (subTab === 'queue') void loadQueue() }, [subTab])
+  useEffect(() => { if (subTab === 'queue') void loadSubmissions() }, [subTab, loadSubmissions])
 
-  const openCreate = () => {
-    setEditingItem(null)
-    setForm(defaultMissionForm())
-    setSlideOver('create')
-  }
+  // Mission CRUD handlers
+  const openCreate = () => { setEditingItem(null); setForm(defaultMissionForm()); setSlideOver('create') }
   const openEdit = (m: MissionRow) => {
     setEditingItem(m)
     setForm({
-      title:           m.title,
-      description:     m.description ?? '',
-      xp_reward:       String(m.xp_reward),
-      difficulty:      m.difficulty,
-      submission_type: m.submission_type ?? 'proof_upload',
-      github_url:      m.github_url ?? '',
-      is_active:       m.is_active,
+      title: m.title, description: m.description ?? '', xp_reward: String(m.xp_reward),
+      difficulty: m.difficulty, submission_type: m.submission_type ?? 'proof_upload',
+      github_url: m.github_url ?? '', is_active: m.is_active,
     })
     setSlideOver('edit')
   }
 
   const handleSave = async () => {
-    setSaving(true)
-    setError(null)
+    setSaving(true); setError(null)
     const payload = {
-      title:           form.title.trim(),
-      description:     form.description.trim() || null,
-      xp_reward:       parseInt(form.xp_reward, 10) || 100,
-      difficulty:      form.difficulty,
-      submission_type: form.submission_type,
-      github_url:      form.github_url.trim() || null,
-      is_active:       form.is_active,
+      title: form.title.trim(), description: form.description.trim() || null,
+      xp_reward: parseInt(form.xp_reward, 10) || 100, difficulty: form.difficulty,
+      submission_type: form.submission_type, github_url: form.github_url.trim() || null,
+      is_active: form.is_active,
     }
     try {
-      if (slideOver === 'create') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: err } = await (supabase as any).from('missions').insert(payload)
-        if (err) throw err
-      } else if (editingItem) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: err } = await (supabase as any).from('missions').update(payload).eq('id', editingItem.id)
-        if (err) throw err
-      }
-      setSlideOver(null)
-      await loadMissions()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
-    } finally {
-      setSaving(false)
-    }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (slideOver === 'create') { const { error: err } = await (supabase as any).from('missions').insert(payload); if (err) throw err }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      else if (editingItem) { const { error: err } = await (supabase as any).from('missions').update(payload).eq('id', editingItem.id); if (err) throw err }
+      setSlideOver(null); await loadMissions()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Save failed') }
+    finally { setSaving(false) }
   }
 
   const handleDelete = async (id: string) => {
@@ -1188,23 +1527,83 @@ function MissionsTab() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: err } = await (supabase as any).from('missions').update({ is_active: nextActive }).eq('id', m.id)
     if (err) setError(err.message)
-    else setRows((prev) => prev.map((r) => (r.id === m.id ? { ...r, is_active: nextActive } : r)))
+    else setRows((prev) => prev.map((r) => r.id === m.id ? { ...r, is_active: nextActive } : r))
     setTogglingStatusId(null)
   }
 
-  const handleApprove = async (subId: string) => {
-    setApprovingId(subId)
-    setApproveError(null)
+  // Submission review handlers
+  const loadTxHistory = async (userId: string) => {
+    setTxHistoryLoading(true)
+    const { data } = await supabase
+      .from('point_transactions').select('id, amount, description, source, created_at')
+      .eq('user_id', userId).order('created_at', { ascending: false }).limit(8)
+    setTxHistory((data ?? []) as PointTransaction[])
+    setTxHistoryLoading(false)
+  }
+
+  const openDetail = (sub: FullSubmissionRow) => { setDetailSub(sub); void loadTxHistory(sub.user_id) }
+  const closeDetail = () => { setDetailSub(null); setTxHistory([]) }
+
+  const notifyUser = async (userId: string, type: 'points_approved' | 'points_rejected', missionTitle: string, points: number, remarks?: string) => {
+    const title = type === 'points_approved' ? 'Points Approved!' : 'Submission Rejected'
+    const message = type === 'points_approved'
+      ? `Your submission for "${missionTitle}" was approved. +${points} pts have been added to your account.`
+      : `Your submission for "${missionTitle}" was rejected. Remarks: ${remarks ?? 'No remarks provided.'}`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('user_notifications').insert({ user_id: userId, title, message, type })
+  }
+
+  const handleApproveSubmission = async (sub: FullSubmissionRow) => {
+    if (!user) return
+    setQueueActionLoading(sub.id); setQueueError(null)
     try {
-      const { error: err } = await supabase.rpc('approve_mission_winner' as never, { sub_id: subId } as never)
-      if (err) throw err
-      setQueue((prev) => prev.filter((s) => s.id !== subId))
-      await loadMissions()
-    } catch (err) {
-      setApproveError(err instanceof Error ? err.message : 'Approve failed')
-    } finally {
-      setApprovingId(null)
-    }
+      const { error: rpcErr } = await supabase.rpc('approve_mission_winner' as never, { sub_id: sub.id } as never)
+      if (rpcErr) throw rpcErr
+      await notifyUser(sub.user_id, 'points_approved', sub.missions?.title ?? 'Mission', sub.missions?.xp_reward ?? 0)
+      setSubmissions((prev) =>
+        prev.map((s) => s.id === sub.id ? { ...s, status: 'approved' as SubmissionStatus, reviewed_by: user.id, reviewed_at: new Date().toISOString() } : s)
+      )
+      setDetailSub(null)
+    } catch (err) { setQueueError(err instanceof Error ? err.message : 'Approve failed') }
+    finally { setQueueActionLoading(null) }
+  }
+
+  const handleRejectConfirm = async (submissionId: string, remarks: string) => {
+    if (!user) return
+    setRejectLoading(true); setQueueError(null)
+    const sub = submissions.find((s) => s.id === submissionId)
+    try {
+      const { error: rpcErr } = await supabase.rpc('reject_mission_submission' as never, {
+        p_submission_id: submissionId, p_admin_remarks: remarks,
+      } as never)
+      if (rpcErr) throw rpcErr
+      if (sub) await notifyUser(sub.user_id, 'points_rejected', sub.missions?.title ?? 'Mission', sub.missions?.xp_reward ?? 0, remarks)
+      setSubmissions((prev) =>
+        prev.map((s) => s.id === submissionId
+          ? { ...s, status: 'rejected' as SubmissionStatus, admin_remarks: remarks, reviewed_by: user.id, reviewed_at: new Date().toISOString() }
+          : s
+        )
+      )
+      setRejectTarget(null); setDetailSub(null)
+    } catch (err) { setQueueError(err instanceof Error ? err.message : 'Reject failed') }
+    finally { setRejectLoading(false) }
+  }
+
+  const filteredSubmissions = submissions.filter((s) => {
+    if (s.status !== queueTab) return false
+    if (!queueSearch.trim()) return true
+    const q = queueSearch.toLowerCase()
+    return (
+      (s.profiles?.full_name ?? '').toLowerCase().includes(q) ||
+      (s.profiles?.email ?? '').toLowerCase().includes(q) ||
+      (s.missions?.title ?? '').toLowerCase().includes(q)
+    )
+  })
+
+  const subCounts: Record<SubmissionStatus, number> = {
+    pending:  submissions.filter((s) => s.status === 'pending').length,
+    approved: submissions.filter((s) => s.status === 'approved').length,
+    rejected: submissions.filter((s) => s.status === 'rejected').length,
   }
 
   const f = (key: keyof MissionForm) =>
@@ -1220,10 +1619,7 @@ function MissionsTab() {
           <p className="text-md3-body-md text-slate-500 mt-0.5">Manage bounty missions and review submissions</p>
         </div>
         {subTab === 'manage' && (
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
-          >
+          <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors">
             <AddCircleOutline className="w-4 h-4" />
             Add Mission
           </button>
@@ -1234,13 +1630,17 @@ function MissionsTab() {
       <div className="flex gap-2 mb-6">
         {(['manage', 'queue'] as const).map((t) => (
           <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`px-4 py-1.5 rounded-full text-md3-body-md font-semibold transition-colors ${
+            key={t} onClick={() => setSubTab(t)}
+            className={`px-4 py-1.5 rounded-full text-md3-body-md font-semibold transition-colors relative ${
               subTab === t ? 'bg-blue text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
             }`}
           >
-            {t === 'manage' ? 'Mission Manager' : `Review Queue${queue.length > 0 ? ` (${queue.length})` : ''}`}
+            {t === 'manage' ? 'Mission Manager' : 'Submission Review'}
+            {t === 'queue' && subCounts.pending > 0 && subTab !== 'queue' && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                {subCounts.pending > 9 ? '9+' : subCounts.pending}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -1264,20 +1664,15 @@ function MissionsTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-md3-body-md font-semibold text-slate-900 truncate">{m.title}</span>
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${DIFF_COLORS[m.difficulty]}`}>
-                      {m.difficulty}
-                    </span>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${DIFF_COLORS[m.difficulty]}`}>{m.difficulty}</span>
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 capitalize">
                       {(m.submission_type ?? 'proof_upload').replace('_', ' ')}
                     </span>
                     {m.status === 'claimed' && (
-                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">
-                        claimed
-                      </span>
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">claimed</span>
                     )}
                     <button
-                      onClick={() => void handleToggleStatus(m)}
-                      disabled={togglingStatusId === m.id}
+                      onClick={() => void handleToggleStatus(m)} disabled={togglingStatusId === m.id}
                       className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full transition-colors disabled:opacity-40 ${m.is_active ? 'bg-green/10 text-green hover:bg-green/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
                     >
                       {m.is_active ? 'Active' : 'Inactive'}
@@ -1299,55 +1694,127 @@ function MissionsTab() {
         )
       )}
 
-      {/* Review Queue */}
+      {/* Submission Review */}
       {subTab === 'queue' && (
-        loadingQueue ? (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : queue.length === 0 ? (
-          <p className="text-md3-body-md text-slate-400 text-center py-12">No pending submissions. The queue is clear.</p>
-        ) : (
-          <div className="space-y-3">
-            {approveError && <p className="text-md3-body-md text-red mb-2">{approveError}</p>}
-            {queue.map((sub) => (
-              <div key={sub.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-card">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-md3-body-md font-semibold text-slate-900">{sub.profiles?.full_name ?? 'Unknown'}</p>
-                    <p className="text-md3-label-md text-slate-400">{sub.profiles?.email}</p>
-                    <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.missions?.title}</p>
-                    {sub.pr_link === 'submitted-for-approval' ? (
-                      <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
-                    ) : (
-                      <a
-                        href={sub.pr_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
-                      >
-                        {sub.pr_link}
-                      </a>
-                    )}
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Submitted {new Date(sub.submitted_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => void handleApprove(sub.id)}
-                    disabled={approvingId === sub.id}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green/10 text-green text-md3-label-md font-bold rounded-lg hover:bg-green/20 transition-colors disabled:opacity-50 shrink-0"
-                  >
-                    <CheckCircleOutline className="w-3.5 h-3.5" />
-                    {approvingId === sub.id ? 'Approving…' : 'Approve & Award'}
-                  </button>
-                </div>
+        <div>
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            {SUB_STATUS_TABS.map(({ key, label }) => (
+              <div
+                key={key}
+                className={`rounded-2xl p-3 text-center border ${
+                  key === 'pending' ? 'bg-gold/10 border-gold/20' :
+                  key === 'approved' ? 'bg-green/10 border-green/20' :
+                  'bg-red/10 border-red/20'
+                }`}
+              >
+                <p className={`text-md3-headline-sm font-black ${
+                  key === 'pending' ? 'text-slate-900' : key === 'approved' ? 'text-green' : 'text-red'
+                }`}>
+                  {loadingQueue ? '—' : subCounts[key]}
+                </p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
               </div>
             ))}
           </div>
-        )
+
+          {/* Status tabs + search */}
+          <div className="space-y-3 mb-4">
+            <div className="flex gap-2">
+              {SUB_STATUS_TABS.map(({ key, label }) => (
+                <button
+                  key={key} onClick={() => setQueueTab(key)}
+                  className={`flex-1 py-2 rounded-xl text-md3-label-md font-bold transition-colors relative ${
+                    queueTab === key ? 'bg-blue text-white shadow-blue' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue/30'
+                  }`}
+                >
+                  {label}
+                  {key === 'pending' && subCounts.pending > 0 && queueTab !== 'pending' && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                      {subCounts.pending > 9 ? '9+' : subCounts.pending}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <UserOutline className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" color="#94A3B8" />
+              <input
+                type="search" placeholder="Search by name, email, or mission…"
+                value={queueSearch} onChange={(e) => setQueueSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+              />
+            </div>
+          </div>
+
+          {queueError && (
+            <div className="mb-3 px-4 py-3 bg-red/5 border border-red/20 rounded-xl">
+              <p className="text-md3-body-sm text-red">{queueError}</p>
+            </div>
+          )}
+
+          {loadingQueue ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-28 bg-white rounded-2xl border border-slate-100 animate-pulse" />
+              ))}
+            </div>
+          ) : filteredSubmissions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                <StarOutline className="w-7 h-7" color="#CBD5E1" />
+              </div>
+              <p className="text-md3-body-lg font-bold text-slate-700">
+                {queueSearch ? 'No results found' : `No ${queueTab} submissions`}
+              </p>
+              <p className="text-md3-body-md text-slate-400 mt-1 max-w-xs">
+                {queueSearch ? 'Try a different name or mission title.' :
+                  queueTab === 'pending' ? 'All submissions have been reviewed.' :
+                  `${queueTab.charAt(0).toUpperCase() + queueTab.slice(1)} submissions will appear here.`}
+              </p>
+            </div>
+          ) : (
+            <motion.div key={queueTab} variants={staggerContainer} initial="hidden" animate="visible" className="space-y-3">
+              {filteredSubmissions.map((sub) => (
+                <MissionSubmissionCard
+                  key={sub.id} sub={sub}
+                  onTap={openDetail}
+                  onApprove={handleApproveSubmission}
+                  onReject={(s) => setRejectTarget(s)}
+                  actionLoading={queueActionLoading}
+                />
+              ))}
+              <p className="text-center text-md3-label-sm text-slate-400 pt-2">
+                {filteredSubmissions.length} submission{filteredSubmissions.length !== 1 ? 's' : ''}
+              </p>
+            </motion.div>
+          )}
+
+          <AnimatePresence>
+            {detailSub && (
+              <MissionDetailSheet
+                sub={detailSub} history={txHistory} historyLoading={txHistoryLoading}
+                onClose={closeDetail}
+                onApprove={handleApproveSubmission}
+                onReject={(s) => setRejectTarget(s)}
+                actionLoading={queueActionLoading}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {rejectTarget && (
+              <MissionRejectModal
+                submissionId={rejectTarget.id}
+                memberName={rejectTarget.profiles?.full_name ?? 'Member'}
+                missionTitle={rejectTarget.missions?.title ?? 'Mission'}
+                onConfirm={handleRejectConfirm}
+                onClose={() => setRejectTarget(null)}
+                loading={rejectLoading}
+              />
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       {/* SlideOver: Create / Edit */}
@@ -1389,14 +1856,9 @@ function MissionsTab() {
             </select>
           </div>
           <div>
-            <label className={LABEL_CLS}>
-              {form.submission_type === 'link' ? 'Link URL' : 'GitHub URL'}
-            </label>
+            <label className={LABEL_CLS}>{form.submission_type === 'link' ? 'Link URL' : 'GitHub URL'}</label>
             <input
-              className={INPUT_CLS}
-              type="url"
-              value={form.github_url}
-              onChange={f('github_url')}
+              className={INPUT_CLS} type="url" value={form.github_url} onChange={f('github_url')}
               placeholder={form.submission_type === 'link' ? 'https://...' : 'https://github.com/org/repo'}
             />
           </div>

@@ -7,6 +7,8 @@ dist/
 .DS_Store
 *.log
 remix-of-devcon-connect/
+.playwright-mcp
+.vite
 
 .vercel
 .mcp.json
