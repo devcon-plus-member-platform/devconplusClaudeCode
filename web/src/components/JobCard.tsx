@@ -39,7 +39,7 @@ function JobCard({ job }: { job: Job }) {
   return (
     <motion.button
       onClick={() => navigate(`/jobs?id=${job.id}`)}
-      className="w-full bg-white border border-[rgba(156,163,175,0.3)] rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] text-left overflow-hidden"
+      className="w-full bg-white border border-slate-200 rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] text-left overflow-hidden"
       whileTap={{ scale: 0.98 }}
     >
       <div className="px-[18px] py-[12px] flex flex-col gap-2">
@@ -50,7 +50,7 @@ function JobCard({ job }: { job: Job }) {
             <p className="font-proxima font-bold text-[16px] text-black leading-snug">
               {job.title}
             </p>
-            <p className="font-proxima text-[#6b7280] text-[12px]">
+            <p className="font-proxima text-slate-500 text-[12px]">
               Posted by {job.company}
             </p>
           </div>
@@ -58,15 +58,15 @@ function JobCard({ job }: { job: Job }) {
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               {job.work_type && (
-                <div className="backdrop-blur-[16px] bg-[rgba(102,102,102,0.2)] px-[12px] py-[6px] rounded-[100px] inline-flex items-center justify-center shrink-0">
-                  <span className="font-proxima font-semibold text-[#6b7280] text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
+                <div className="bg-slate-100 px-[12px] py-[6px] rounded-full inline-flex items-center justify-center shrink-0">
+                  <span className="font-proxima font-semibold text-slate-500 text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
                     {WORK_TYPE_LABELS[job.work_type] ?? job.work_type}
                   </span>
                 </div>
               )}
               {job.is_promoted && (
-                <div className="backdrop-blur-[16px] bg-[rgba(255,225,205,0.9)] px-[12px] py-[6px] rounded-[100px] inline-flex items-center justify-center shrink-0">
-                  <span className="font-proxima font-semibold text-[#ff6f0b] text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
+                <div className="bg-orange-100 px-[12px] py-[6px] rounded-full inline-flex items-center justify-center shrink-0">
+                  <span className="font-proxima font-semibold text-[#F97316] text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
                     Promoted
                   </span>
                 </div>
@@ -74,8 +74,8 @@ function JobCard({ job }: { job: Job }) {
             </div>
             {job.location && (
               <div className="flex items-center gap-1 py-[6px]">
-                <MapPointOutline className="w-[10px] h-[10px]" color="#6b7280" />
-                <span className="font-proxima text-[#6b7280] text-[12px]">{job.location}</span>
+                <MapPointOutline className="w-[10px] h-[10px]" color="#64748B" />
+                <span className="font-proxima text-slate-500 text-[12px]">{job.location}</span>
               </div>
             )}
           </div>

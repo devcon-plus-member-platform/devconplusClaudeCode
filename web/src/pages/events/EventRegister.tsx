@@ -437,7 +437,7 @@ export default function EventRegister() {
         <button
           type="submit"
           disabled={!agreed || submitting}
-          className="w-full bg-primary text-white font-bold py-4 rounded-2xl disabled:opacity-40"
+          className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm disabled:opacity-40"
         >
           {submitting ? 'Submitting…' : 'Confirm Registration'}
         </button>

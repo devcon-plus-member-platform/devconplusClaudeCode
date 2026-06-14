@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+﻿import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeftOutline,
@@ -113,7 +113,7 @@ export default function OfficerResources() {
       {/* ── Sticky Header ── */}
       <header className="sticky top-0 z-50">
         <div
-          className="bg-[#1152D4] relative overflow-hidden pb-7 pt-12"
+          className="bg-primary relative overflow-hidden pb-7 pt-12"
           style={{
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,

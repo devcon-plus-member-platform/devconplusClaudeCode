@@ -214,7 +214,7 @@ export default function EventDetail() {
             ) : (
               <button
                 onClick={handleExternalRegistration}
-                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+                className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm"
               >
                 Open Registration
               </button>
@@ -224,7 +224,7 @@ export default function EventDetail() {
             <div className="space-y-2">
               <button
                 onClick={() => navigate(`/sign-up?returnTo=${encodeURIComponent(registerPath)}`)}
-                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+                className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm"
               >
                 Register for this Event
               </button>
@@ -237,7 +237,7 @@ export default function EventDetail() {
             ) : (
               <button
                 onClick={() => navigate(registerPath)}
-                className="w-full bg-primary text-white font-bold py-4 rounded-2xl"
+                className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm"
               >
                 Request to Join
               </button>

@@ -89,7 +89,7 @@ export const OFFICER_CATEGORY_META: Record<OfficerResourceCategory, OfficerCateg
     slug: 'training-and-policy',
     title: 'Training and Policy',
     subtitle: 'Recorded sessions, playbooks, and chapter policies.',
-    accent: '#D2AD19',
+    accent: '#F8C630',
   },
   seed_funds: {
     category: 'seed_funds',

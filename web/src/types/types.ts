@@ -260,12 +260,12 @@ export interface Referral {
 
 export type MissionDifficulty  = 'easy' | 'medium' | 'hard'
 export type MissionStatus      = 'available' | 'claimed'
-export type SubmissionStatus   = 'pending' | 'approved'
+export type SubmissionStatus   = 'pending' | 'approved' | 'rejected'
 /** How a member completes a mission:
- *  proof_upload        — submits a link for admin review
- *  link                — opens a URL; no submission created
- *  submit_for_approval — member declares completion; admin reviews (same queue as proof_upload) */
-export type SubmissionType     = 'proof_upload' | 'link' | 'submit_for_approval'
+ *  proof_upload — submits a link for admin review
+ *  link         — opens a URL; participation tracked, no submission queue
+ *  self_attest  — member clicks "Mark as Done"; admin reviews */
+export type SubmissionType     = 'proof_upload' | 'link' | 'self_attest'
 
 export interface Mission {
   id: string
@@ -292,5 +292,6 @@ export interface MissionSubmission {
   user_id: string
   pr_link: string
   status: SubmissionStatus
+  rejection_reason: string | null
   submitted_at: string
 }

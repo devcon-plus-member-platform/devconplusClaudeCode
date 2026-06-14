@@ -223,8 +223,13 @@ export default function Profile() {
 
         {/* Theme */}
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-card">
-          <p className="text-md3-body-md font-bold text-slate-900 mb-3">Theme</p>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-md3-body-md font-bold text-slate-900">Theme</p>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Coming soon</span>
+          </div>
+          {/* Theme switching temporarily disabled — picker is non-interactive (code retained).
+              To re-enable, remove `opacity-50 pointer-events-none` below and the "Coming soon" badge above. */}
+          <div className="flex gap-3 flex-wrap opacity-50 pointer-events-none">
             {PROGRAM_THEMES.map((theme) => {
               const isActive = theme.id === themeId
               const locked = isLocked(theme, lifetimePoints)

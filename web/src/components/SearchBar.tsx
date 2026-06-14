@@ -27,7 +27,7 @@ export default function SearchBar({ isVisible, value, onChange, onClear, placeho
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className="w-full bg-white border border-slate-200 rounded-[20px] px-11 py-3 text-[16px] font-proxima focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
+                className="w-full bg-white border border-slate-200 rounded-xl px-11 py-3 text-[16px] font-proxima focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm"
               />
               <MagniferOutline className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               {value && (
