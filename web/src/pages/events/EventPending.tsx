@@ -8,7 +8,7 @@ import { useAuthStore } from '../../stores/useAuthStore'
 export default function EventPending() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const { events, registrations, subscribeToRegistration } = useEventsStore()
+  const { events, registrations, subscribeToRegistration, fetchRegistrations } = useEventsStore()
   const { user } = useAuthStore()
 
   const event = events.find((e) => e.slug === slug)
@@ -17,17 +17,30 @@ export default function EventPending() {
 
   const [isRejected, setIsRejected] = useState(false)
 
-  // If already approved (page refresh after approval), go straight to ticket
+  // React to status from the store — driven by BOTH the realtime channel (instant)
+  // and the 5 s poll below (fallback). Handles approved/cancelled/rejected so the
+  // poll path works even when the realtime channel gave up past the 200-conn cap.
   useEffect(() => {
     if (reg?.status === 'approved') {
       navigate(`/events/${slug}/ticket`, { replace: true })
-    }
-    if (reg?.status === 'cancelled') {
+    } else if (reg?.status === 'cancelled') {
       navigate('/events', { replace: true })
+    } else if (reg?.status === 'rejected') {
+      setIsRejected(true)
     }
   }, [reg?.status, slug, navigate])
 
-  // Realtime: watch for approval or rejection
+  // Polling baseline: refetch registrations every 5 s while waiting, so the flip
+  // happens within ~5 s even with realtime unavailable. The store update re-runs
+  // the status effect above.
+  useEffect(() => {
+    if (!reg?.id || !user) return
+    const interval = setInterval(() => { void fetchRegistrations(user.id) }, 5000)
+    return () => clearInterval(interval)
+  }, [reg?.id, user, fetchRegistrations])
+
+  // Best-effort realtime: instant flip when the channel connects (it gives up on
+  // error past the cap — the poll above is the safety net).
   useEffect(() => {
     if (!reg?.id) return
     const unsubscribe = subscribeToRegistration(reg.id, (status) => {
