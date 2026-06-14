@@ -540,7 +540,6 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
   const { loadTotalPoints } = usePointsStore()
 
   const [expandedId, setExpandedId] = useState<string | null>(initialExpandId ?? null)
-  const [submitOpen, setSubmitOpen] = useState<Record<string, boolean>>({})
   const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({})
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({})
@@ -561,34 +560,29 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
     if (!userId) return
     try {
       await startMissionRef.current(missionId, userId)
-      toast.success('Mission started!')
+      toast.success('Mission Started!')
     } catch {
       // Already joined or network error — silently ignore, UI will reflect store state
     }
-  }
-
-  const openSubmit = (missionId: string, existingLink?: string) => {
-    setLinkDrafts((p) => ({ ...p, [missionId]: existingLink ?? '' }))
-    setSubmitOpen((p) => ({ ...p, [missionId]: true }))
-    setSubmitErrors((p) => ({ ...p, [missionId]: '' }))
   }
 
   const handleSubmit = async (missionId: string) => {
     if (!userId) return
     const link = (linkDrafts[missionId] ?? '').trim()
     if (!link) {
-      setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter a valid URL starting with https://.' }))
+      setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter a valid link.' }))
       return
     }
     if (!link.startsWith('https://') && !link.startsWith('http://')) {
-      setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter a valid URL starting with https://.' }))
+      setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter a valid link starting with https://.' }))
       return
     }
     setSubmitting((p) => ({ ...p, [missionId]: true }))
     setSubmitErrors((p) => ({ ...p, [missionId]: '' }))
     try {
       await submitMissionRef.current(missionId, userId, link)
-      setSubmitOpen((p) => ({ ...p, [missionId]: false }))
+      // Clear the draft so a later rejection re-opens the input on a clean slate.
+      setLinkDrafts((p) => ({ ...p, [missionId]: '' }))
     } catch (err) {
       setSubmitErrors((p) => ({ ...p, [missionId]: err instanceof Error ? err.message : 'Submit failed.' }))
     } finally {
@@ -865,7 +859,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                         )}
                         {mySubmission && mySubmission.status === 'pending' && (
                           <div className="bg-slate-50 rounded-xl p-3">
-                            <p className="text-md3-body-md font-bold text-slate-700">Pending review</p>
+                            <p className="text-md3-body-md font-bold text-slate-700">Pending Admin Review</p>
                             <p className="text-[12px] text-slate-400 mt-0.5">
                               Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
                             </p>
@@ -901,7 +895,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                     {/* Type: proof_upload */}
                     {!hasWon && submissionType === 'proof_upload' && (
                       <div className="space-y-2">
-                        {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && !submitOpen[mission.id] && (
+                        {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
                           <a href={mission.github_url} target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-2 text-md3-body-md text-slate-500 hover:text-slate-800 transition-colors">
                             <CodeSquareOutline className="w-4 h-4 shrink-0" color="#64748B" />
@@ -918,72 +912,44 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                             Start Mission
                           </motion.button>
                         )}
-                        {isJoined && (
-                          <>
-                            {mySubmission && mySubmission.status !== 'rejected' && !submitOpen[mission.id] && (
-                              <div className="bg-slate-50 rounded-xl p-3 space-y-1">
-                                {mySubmission.status === 'pending' && (
-                                  <p className="text-md3-body-md font-bold text-slate-700">Pending review</p>
-                                )}
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your Submission</p>
-                                <a href={mySubmission.pr_link ?? '#'} target="_blank" rel="noopener noreferrer"
-                                  className="text-md3-label-md text-blue hover:underline break-all block">{mySubmission.pr_link}</a>
-                                <p className="text-[10px] text-slate-400">
-                                  Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
-                                </p>
-                              </div>
+                        {/* Pending — read-only submission */}
+                        {isJoined && mySubmission && mySubmission.status === 'pending' && (
+                          <div className="bg-slate-50 rounded-xl p-3 space-y-1">
+                            <p className="text-md3-body-md font-bold text-slate-700">Pending Admin Review</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Your Submission</p>
+                            <a href={mySubmission.pr_link ?? '#'} target="_blank" rel="noopener noreferrer"
+                              className="text-md3-label-md text-blue hover:underline break-all block">{mySubmission.pr_link}</a>
+                            <p className="text-[10px] text-slate-400">
+                              Submitted {new Date(mySubmission.submitted_at).toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                        {/* In progress or needs revision — URL input + submit, shown immediately on a clean slate */}
+                        {isJoined && (!mySubmission || mySubmission.status === 'rejected') && (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              inputMode="url"
+                              maxLength={2048}
+                              value={linkDrafts[mission.id] ?? ''}
+                              onChange={(e) => setLinkDrafts((p) => ({ ...p, [mission.id]: e.target.value }))}
+                              placeholder="Paste your proof URL here"
+                              className={`w-full border rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${
+                                submitErrors[mission.id] ? 'border-red' : 'border-slate-200'
+                              }`}
+                            />
+                            {submitErrors[mission.id] && (
+                              <p className="text-md3-label-md text-red">{submitErrors[mission.id]}</p>
                             )}
-
-                            <AnimatePresence>
-                              {submitOpen[mission.id] && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }} className="overflow-hidden space-y-2"
-                                >
-                                  <input
-                                    type="text"
-                                    inputMode="url"
-                                    maxLength={2048}
-                                    value={linkDrafts[mission.id] ?? ''}
-                                    onChange={(e) => setLinkDrafts((p) => ({ ...p, [mission.id]: e.target.value }))}
-                                    placeholder="https://..."
-                                    className={`w-full border rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 ${
-                                      submitErrors[mission.id] ? 'border-red' : 'border-slate-200'
-                                    }`}
-                                  />
-                                  {submitErrors[mission.id] && (
-                                    <p className="text-md3-label-md text-red">{submitErrors[mission.id]}</p>
-                                  )}
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => setSubmitOpen((p) => ({ ...p, [mission.id]: false }))}
-                                      className="flex-1 py-2.5 rounded-full border border-slate-200 text-slate-600 text-md3-body-md font-semibold"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <motion.button
-                                      whileTap={{ scale: 0.97 }}
-                                      onClick={() => void handleSubmit(mission.id)}
-                                      disabled={submitting[mission.id]}
-                                      className="flex-1 py-2.5 rounded-full bg-primary text-white text-md3-body-md font-bold disabled:opacity-50 shadow-sm"
-                                    >
-                                      {submitting[mission.id] ? 'Submitting…' : mySubmission ? 'Update Proof' : 'Submit Proof'}
-                                    </motion.button>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-
-                            {!submitOpen[mission.id] && (!mySubmission || mySubmission.status === 'rejected') && (
-                              <motion.button
-                                whileTap={{ scale: 0.97 }}
-                                onClick={() => openSubmit(mission.id, mySubmission?.pr_link ?? '')}
-                                className="w-full font-bold text-md3-body-md py-3 rounded-full shadow-sm bg-primary text-white"
-                              >
-                                {mySubmission?.status === 'rejected' ? 'Try Again' : 'Submit Proof'}
-                              </motion.button>
-                            )}
-                          </>
+                            <motion.button
+                              whileTap={{ scale: 0.97 }}
+                              onClick={() => void handleSubmit(mission.id)}
+                              disabled={submitting[mission.id]}
+                              className="w-full bg-primary text-white font-bold text-md3-body-md py-3 rounded-full shadow-sm disabled:opacity-50"
+                            >
+                              {submitting[mission.id] ? 'Submitting…' : mySubmission?.status === 'rejected' ? 'Try Again' : 'Submit Proof'}
+                            </motion.button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1098,15 +1064,15 @@ export default function Rewards() {
 
         {/* ── Segmented Toggle: Missions / Redeem ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="bg-primary/5 inline-flex w-full rounded-lg p-1 gap-1 max-w-4xl mx-auto">
+          <div className="inline-flex w-full gap-2 max-w-4xl mx-auto">
             {(['missions', 'redeem'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setMainTab(t)}
-                className={`flex-1 h-[38px] flex items-center justify-center rounded-lg text-[14px] font-proxima transition-all ${
+                className={`flex-1 h-[38px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all ${
                   mainTab === t
                     ? 'bg-primary text-white font-semibold shadow-sm'
-                    : 'text-slate-500 font-medium'
+                    : 'bg-primary/10 text-primary font-medium'
                 }`}
               >
                 {t === 'missions' ? 'Missions' : 'Redeem'}
@@ -1125,8 +1091,8 @@ export default function Rewards() {
                   onClick={() => setMissionFilter(f.id)}
                   className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
                     missionFilter === f.id
-                      ? 'bg-primary/5 border border-primary text-primary font-semibold'
-                      : 'bg-white border border-slate-300 text-slate-500 font-medium'
+                      ? 'bg-primary text-white font-semibold'
+                      : 'bg-primary/10 text-primary font-medium'
                   }`}
                 >
                   {f.label}
@@ -1139,8 +1105,8 @@ export default function Rewards() {
                   onClick={() => handleTabClick(tab.id, tab.label)}
                   className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
                     activeTab === tab.id
-                      ? 'bg-primary/5 border border-primary text-primary font-semibold'
-                      : 'bg-white border border-slate-300 text-slate-500 font-medium'
+                      ? 'bg-primary text-white font-semibold'
+                      : 'bg-primary/10 text-primary font-medium'
                   }`}
                 >
                   {tab.label}

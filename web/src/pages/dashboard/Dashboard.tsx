@@ -521,11 +521,11 @@ useEffect(() => {
 
         {/* Switcher: Updates / Featured */}
         <section className="flex flex-col gap-4">
-          <div className="bg-primary/5 inline-flex self-start items-center p-1 rounded-full gap-1">
+          <div className="inline-flex self-start items-center gap-2">
             <button
               onClick={() => setActiveTab('updates')}
               className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
-                activeTab === 'updates' ? 'bg-primary text-white font-semibold shadow-sm' : 'text-slate-500 font-medium'
+                activeTab === 'updates' ? 'bg-primary text-white font-semibold shadow-sm' : 'bg-primary/10 text-primary font-medium'
               }`}
             >
               <span className="font-proxima text-[16px]">
@@ -535,7 +535,7 @@ useEffect(() => {
             <button
               onClick={() => setActiveTab('featured')}
               className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
-                activeTab === 'featured' ? 'bg-primary text-white font-semibold shadow-sm' : 'text-slate-500 font-medium'
+                activeTab === 'featured' ? 'bg-primary text-white font-semibold shadow-sm' : 'bg-primary/10 text-primary font-medium'
               }`}
             >
               <span className="font-proxima text-[16px]">

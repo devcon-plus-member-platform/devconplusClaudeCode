@@ -167,8 +167,8 @@ export default function PointsHistory() {
                 onClick={() => setActiveFilter(chip.id)}
                 className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
                   activeFilter === chip.id
-                    ? 'bg-primary/5 border border-primary text-primary font-semibold'
-                    : 'bg-white border border-slate-300 text-slate-500 font-medium'
+                    ? 'bg-primary text-white font-semibold'
+                    : 'bg-primary/10 text-primary font-medium'
                 }`}
               >
                 {chip.label}
