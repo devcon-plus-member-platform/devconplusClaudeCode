@@ -6,6 +6,10 @@ let _chanSeq = 0
 const nextChan = (base: string) => `${base}-${++_chanSeq}`
 import { toast } from 'sonner'
 
+// Whether fetchRecent has populated at least once this session. Gates the
+// poll-path toast so the first load doesn't fire a burst for the whole backlog.
+let firstLoadDone = false
+
 export interface Notification {
   id: string
   event_id: string
@@ -33,7 +37,7 @@ interface AnnouncementRow {
   created_at: string | null
 }
 
-export const useNotificationsStore = create<NotificationsState>((set) => ({
+export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   isLoading: false,
@@ -65,15 +69,37 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
       set({ isLoading: false })
       return
     }
-    const notifications: Notification[] = data.map((row) => ({
-      id: row.id,
-      event_id: row.event_id,
-      message: row.message,
-      created_at: row.created_at ?? new Date().toISOString(),
-      event_title: eventTitles[row.event_id] ?? 'Event',
-      read: false,
-    }))
-    set({ notifications, unreadCount: notifications.length, isLoading: false })
+
+    // Merge by id so repeated polls don't reset read-state or re-toast the backlog.
+    // This is what lets polling stand in for the realtime push for overflow users
+    // (those past the 200-connection cap whose announcements channel gave up).
+    const prevById = new Map(get().notifications.map((n) => [n.id, n]))
+    const notifications: Notification[] = data.map((row) => {
+      const prev = prevById.get(row.id)
+      return {
+        id: row.id,
+        event_id: row.event_id,
+        message: row.message,
+        created_at: row.created_at ?? prev?.created_at ?? new Date().toISOString(),
+        event_title: eventTitles[row.event_id] ?? prev?.event_title ?? 'Event',
+        read: prev?.read ?? false,
+      }
+    })
+
+    // Toast only genuinely-new announcements, and never on the first population
+    // (avoids a burst for the whole history when the app opens). The realtime
+    // path toasts connected users; this covers the polling fallback.
+    if (firstLoadDone) {
+      for (const n of notifications) {
+        if (!prevById.has(n.id)) {
+          const preview = n.message.length > 60 ? `${n.message.slice(0, 60)}…` : n.message
+          toast.info(`${n.event_title}: ${preview}`)
+        }
+      }
+    }
+    firstLoadDone = true
+
+    set({ notifications, unreadCount: notifications.filter((n) => !n.read).length, isLoading: false })
   },
 
   subscribe: (approvedIds, eventTitles) => {
@@ -119,10 +145,12 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
         }
       )
       .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.error('[member-announcements] channel error:', err)
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[member-announcements] timed out — Supabase will retry')
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Best-effort: give up (don't retry) so the 201st+ client doesn't storm
+          // Supabase past the 200-connection cap. The fetchRecent poll delivers
+          // announcements (with toast) instead — see the polling recovery model.
+          console.warn('[member-announcements] channel unavailable, falling back to polling:', status, err)
+          void supabase.removeChannel(channel)
         }
       })
 

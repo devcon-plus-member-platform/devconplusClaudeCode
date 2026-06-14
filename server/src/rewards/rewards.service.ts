@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { AppCacheService } from '../cache/app-cache.service';
+import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
 import type {
   Reward,
   RewardRedemption,
@@ -10,39 +12,55 @@ import { RewardsRepository } from './rewards.repository';
 
 @Injectable()
 export class RewardsService {
-  constructor(private readonly rewardsRepo: RewardsRepository) {}
+  constructor(
+    private readonly rewardsRepo: RewardsRepository,
+    private readonly cache: AppCacheService,
+  ) {}
 
   // ── Public catalog ────────────────────────────────────────────────────
 
   getPublicCatalog(): Promise<Reward[]> {
-    return this.rewardsRepo.findActiveRewards();
+    return this.cache.getOrSet(CacheKeys.REWARDS_CATALOG, CACHE_TTL.REWARDS, () =>
+      this.rewardsRepo.findActiveRewards(),
+    );
   }
 
   getAllRewards(): Promise<Reward[]> {
-    return this.rewardsRepo.findAllRewards();
+    return this.cache.getOrSet(CacheKeys.REWARDS_ALL, CACHE_TTL.REWARDS, () =>
+      this.rewardsRepo.findAllRewards(),
+    );
   }
 
   // ── Reward CRUD (hq_admin / super_admin only) ─────────────────────────
 
-  createReward(dto: CreateRewardDto): Promise<Reward> {
-    return this.rewardsRepo.createReward(dto);
+  async createReward(dto: CreateRewardDto): Promise<Reward> {
+    const reward = await this.rewardsRepo.createReward(dto);
+    await this.invalidateCatalog();
+    return reward;
   }
 
-  updateReward(id: string, dto: UpdateRewardDto): Promise<Reward> {
-    return this.rewardsRepo.updateReward(id, dto);
+  async updateReward(id: string, dto: UpdateRewardDto): Promise<Reward> {
+    const reward = await this.rewardsRepo.updateReward(id, dto);
+    await this.invalidateCatalog();
+    return reward;
   }
 
-  deleteReward(id: string): Promise<void> {
-    return this.rewardsRepo.deleteReward(id);
+  async deleteReward(id: string): Promise<void> {
+    await this.rewardsRepo.deleteReward(id);
+    await this.invalidateCatalog();
   }
 
   // ── Redemption flows ──────────────────────────────────────────────────
 
-  redeemReward(
+  async redeemReward(
     userId: string,
     rewardId: string,
   ): Promise<{ redemptionId: string; claimPin: string | null }> {
-    return this.rewardsRepo.redeemReward(userId, rewardId);
+    const result = await this.rewardsRepo.redeemReward(userId, rewardId);
+    // redeem_reward decrements rewards.stock_remaining, which the catalog shows
+    // to every user → user A's redeem must bust the shared catalog (cross-user).
+    await this.invalidateCatalog();
+    return result;
   }
 
   getMemberRedemptions(userId: string): Promise<RewardRedemption[]> {
@@ -57,7 +75,14 @@ export class RewardsService {
     return this.rewardsRepo.approveRedemption(redemptionId, organizerId);
   }
 
-  refundClaim(redemptionId: string, organizerId: string): Promise<void> {
-    return this.rewardsRepo.refundRedemption(redemptionId, organizerId);
+  async refundClaim(redemptionId: string, organizerId: string): Promise<void> {
+    await this.rewardsRepo.refundRedemption(redemptionId, organizerId);
+    // A refund may restore stock → bust the catalog for everyone.
+    await this.invalidateCatalog();
+  }
+
+  // Both catalog views derive from the rewards table.
+  private invalidateCatalog(): Promise<void> {
+    return this.cache.del(CacheKeys.REWARDS_CATALOG, CacheKeys.REWARDS_ALL);
   }
 }

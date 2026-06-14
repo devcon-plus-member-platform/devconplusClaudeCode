@@ -87,6 +87,24 @@ class EnvVariables {
   @IsNotEmpty()
   @IsString()
   CORS_ORIGIN!: string;
+
+  // ── Cache (Upstash Redis) ────────────────────────────────────────────────
+  // All optional: when absent the cache layer runs in no-op mode and the app
+  // behaves exactly as it did pre-cache. Provision a Redis DB in ap-southeast-1
+  // (Upstash console) and copy the REST URL + token here.
+  @IsOptional()
+  @IsString()
+  UPSTASH_REDIS_REST_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  UPSTASH_REDIS_REST_TOKEN?: string;
+
+  // Key namespace so staging + prod containers can share one Upstash DB safely.
+  // Defaults to NODE_ENV when unset.
+  @IsOptional()
+  @IsString()
+  CACHE_PREFIX?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvVariables {

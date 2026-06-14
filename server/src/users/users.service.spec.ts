@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { AppCacheService } from '../cache/app-cache.service';
 import type { Profile } from '../supabase/types';
 import { UsersRepository } from './users.repository';
 import { MAX_AVATAR_BYTES, UsersService } from './users.service';
@@ -65,6 +66,16 @@ function makeUsersRepo() {
     findById:     jest.fn().mockResolvedValue(mockProfile),
     update:       jest.fn().mockResolvedValue(mockProfile),
     uploadAvatar: jest.fn().mockResolvedValue('https://cdn.supabase.co/avatars/user.jpg'),
+    deleteAccount: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function makeCache() {
+  return {
+    getOrSet: jest.fn((_k: string, _ttl: number, loader: () => unknown) => loader()),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -73,11 +84,17 @@ function makeUsersRepo() {
 describe('UsersService', () => {
   let service: UsersService;
   let repo: ReturnType<typeof makeUsersRepo>;
+  let cache: ReturnType<typeof makeCache>;
 
   beforeEach(async () => {
     repo = makeUsersRepo();
+    cache = makeCache();
     const module = await Test.createTestingModule({
-      providers: [UsersService, { provide: UsersRepository, useValue: repo }],
+      providers: [
+        UsersService,
+        { provide: UsersRepository, useValue: repo },
+        { provide: AppCacheService, useValue: cache },
+      ],
     }).compile();
     service = module.get(UsersService);
   });
@@ -108,6 +125,16 @@ describe('UsersService', () => {
       const updated = { ...mockProfile, full_name: 'New Name' };
       repo.update.mockResolvedValue(updated);
       expect(await service.updateProfile(MOCK_USER_ID, { full_name: 'New Name' })).toEqual(updated);
+    });
+
+    it('busts the caller\'s auth-profile cache when authUid is provided', async () => {
+      await service.updateProfile(MOCK_USER_ID, { full_name: 'New Name' }, 'firebase-uid');
+      expect(cache.del).toHaveBeenCalledWith('authprofile:firebase-uid');
+    });
+
+    it('does not bust the cache when authUid is absent', async () => {
+      await service.updateProfile(MOCK_USER_ID, { full_name: 'New Name' });
+      expect(cache.del).not.toHaveBeenCalled();
     });
   });
 

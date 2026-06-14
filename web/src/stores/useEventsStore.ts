@@ -135,44 +135,14 @@ export const useEventsStore = create<EventsState>((set) => ({
     return updated
   },
 
+  // Neutralized 2026-06-14: the always-on, global, unfiltered `events` realtime
+  // firehose was the single heaviest connection + fan-out cost (every session held
+  // it for life). The events list now refreshes via polling — recover() in the
+  // layouts (focus / online / 60 s interval) calls fetchEvents, and writes go
+  // through the cached backend. Git history has the original INSERT/UPDATE/DELETE
+  // handlers if Supabase Pro later lifts the 200-connection cap.
   subscribeToChanges: () => {
-    const channel = supabase
-      .channel(nextChan('events-realtime'))
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'events' },
-        (payload) => {
-          set((s) => ({
-            events: sortByEventDate([...s.events, payload.new as Event]),
-          }))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'events' },
-        (payload) => {
-          const deletedId = (payload.old as Partial<Event>).id
-          if (deletedId) set((s) => ({ events: s.events.filter((e) => e.id !== deletedId) }))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'events' },
-        (payload) => {
-          const updated = payload.new as Event
-          set((s) => ({
-            events: s.events.map((e) => (e.id === updated.id ? updated : e)),
-          }))
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.error('[events-realtime] channel error:', err)
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[events-realtime] connection timed out — Supabase will retry')
-        }
-      })
-    return () => { void supabase.removeChannel(channel) }
+    return () => {}
   },
 
   fetchRegistrations: async (_userId) => {
@@ -243,10 +213,12 @@ export const useEventsStore = create<EventsState>((set) => ({
         }
       )
       .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.error(`[reg-${registrationId}] channel error:`, err)
-        } else if (status === 'TIMED_OUT') {
-          console.warn(`[reg-${registrationId}] timed out — Supabase will retry`)
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Best-effort: give up (don't retry) so we never storm Supabase past the
+          // 200-connection cap. EventPending's 5 s poll of /registrations/mine
+          // covers the approval/rejection flip when realtime is unavailable.
+          console.warn(`[reg-${registrationId}] channel unavailable, falling back to polling:`, status, err)
+          void supabase.removeChannel(channel)
         }
       })
 

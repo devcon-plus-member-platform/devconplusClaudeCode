@@ -9,6 +9,7 @@ import { validateEnv } from './config/env.validation';
 import { EmailModule } from './email/email.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { SupabaseModule } from './supabase/supabase.module';
+import { CacheModule } from './cache/cache.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { UsersModule } from './users/users.module';
 import { VolunteersModule } from './volunteers/volunteers.module';
@@ -45,6 +46,8 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
     ]),
     FirebaseModule,
     SupabaseModule,
+    // Global cache layer (Upstash Redis; no-op when UPSTASH_* env is absent).
+    CacheModule,
     EmailModule,
     AuthModule,
     UsersModule,

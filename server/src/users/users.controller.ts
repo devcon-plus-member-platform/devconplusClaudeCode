@@ -54,7 +54,7 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: UpdateProfileDto,
   ): Promise<Profile> {
-    return this.usersService.updateProfile(user.profileId, dto);
+    return this.usersService.updateProfile(user.profileId, dto, user.firebaseUid);
   }
 
   /**
@@ -66,7 +66,7 @@ export class UsersController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AuthGuard)
   deleteMe(@CurrentUser() user: AuthenticatedUser): Promise<void> {
-    return this.usersService.deleteAccount(user.profileId);
+    return this.usersService.deleteAccount(user.profileId, user.firebaseUid);
   }
 
   /**
@@ -89,7 +89,7 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<{ avatar_url: string }> {
-    const avatarUrl = await this.usersService.uploadAvatar(user.profileId, file);
+    const avatarUrl = await this.usersService.uploadAvatar(user.profileId, file, user.firebaseUid);
     return { avatar_url: avatarUrl };
   }
 }

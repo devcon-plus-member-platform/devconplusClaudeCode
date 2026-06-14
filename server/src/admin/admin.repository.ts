@@ -44,6 +44,17 @@ export class AdminRepository extends BaseRepository {
     if (error) throw new BadRequestException(error.message);
   }
 
+  /** Look up a profile's Firebase auth_uid by profile id (for cache invalidation). */
+  async getAuthUidById(profileId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('auth_uid')
+      .eq('id', profileId)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.auth_uid as string | null) ?? null;
+  }
+
   // ── Analytics (all 7 queries run in parallel) ─────────────────────────────
 
   async getAnalytics(): Promise<AdminAnalytics> {
