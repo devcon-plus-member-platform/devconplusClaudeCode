@@ -1,0 +1,5 @@
+# Secrets / generated artifacts — never commit
+test-accounts.json
+tokens.json
+results/
+*.json.tmp

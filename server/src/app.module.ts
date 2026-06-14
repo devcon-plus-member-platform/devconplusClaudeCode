@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
@@ -38,12 +38,18 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
     // Coarse per-IP flood guard (in-memory, single-instance EC2).
     // Identity-keyed security buckets (qr_scan, org_upgrade, etc.) use the
     // custom RateLimitGuard + check_rate_limit RPC instead.
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60_000, // 1 minute window
-        limit: 300,  // 300 requests per IP per minute before flood-blocking
-      },
-    ]),
+    // Env-configurable (defaults to 300 req / 60 s, unchanged) so the limit can be
+    // temporarily raised on staging for load testing — a single load generator is
+    // one IP and would otherwise trip this at ~5 req/s. Real users are distinct IPs.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: Number(config.get('THROTTLE_TTL') ?? 60_000),
+          limit: Number(config.get('THROTTLE_LIMIT') ?? 300),
+        },
+      ],
+    }),
     FirebaseModule,
     SupabaseModule,
     // Global cache layer (Upstash Redis; no-op when UPSTASH_* env is absent).

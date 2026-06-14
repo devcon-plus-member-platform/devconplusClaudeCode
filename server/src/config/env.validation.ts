@@ -105,6 +105,18 @@ class EnvVariables {
   @IsOptional()
   @IsString()
   CACHE_PREFIX?: string;
+
+  // ── Throttler (coarse per-IP flood guard) ────────────────────────────────
+  // Both optional; default to 300 req / 60_000 ms (unchanged behavior). Raise
+  // THROTTLE_LIMIT temporarily on staging for load testing (a single load
+  // generator is one IP), then revert. Numeric strings.
+  @IsOptional()
+  @IsString()
+  THROTTLE_LIMIT?: string;
+
+  @IsOptional()
+  @IsString()
+  THROTTLE_TTL?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvVariables {
