@@ -30,6 +30,8 @@ function buildConfirmationEmail({ memberName, eventTitle, eventDate, eventLocati
 
 const inputCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20'
 
+const readOnlyFieldCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500'
+
 function renderField(
   field: CustomFormField,
   value: string | string[],
@@ -159,7 +161,11 @@ export default function EventRegister() {
     ? (event.custom_form_schema as CustomFormField[])
     : []
 
-  const existingReg = registrations.find((r) => r.event_id === eventId)
+  // A cancelled registration is treated as "not registered" — the member may
+  // re-join, and the server reactivates the cancelled row on the next register call.
+  const existingReg = registrations.find(
+    (r) => r.event_id === eventId && r.status !== 'cancelled',
+  )
   const isExternal = event?.is_external === true
   const externalUrl = event?.external_registration_url ?? ''
 
@@ -312,24 +318,16 @@ export default function EventRegister() {
         {/* Pre-filled profile fields */}
         <p className="text-md3-label-md text-slate-400 font-semibold uppercase tracking-wide">Your Details</p>
 
-        {/* Read-only: Full Name */}
+        {/* Display-only: Full Name */}
         <div>
           <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Full Name</label>
-          <input
-            value={user.full_name}
-            readOnly
-            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
-          />
+          <div className={readOnlyFieldCls}>{user.full_name}</div>
         </div>
 
-        {/* Read-only: Email */}
+        {/* Display-only: Email */}
         <div>
           <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Email</label>
-          <input
-            value={user.email}
-            readOnly
-            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
-          />
+          <div className={readOnlyFieldCls}>{user.email}</div>
         </div>
 
         {/* School / Company — read-only if already on profile, editable only when empty */}
@@ -338,11 +336,7 @@ export default function EventRegister() {
             School / Company
           </label>
           {hasSchoolOnProfile ? (
-            <input
-              value={user.school_or_company ?? ''}
-              readOnly
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500 cursor-default"
-            />
+            <div className={readOnlyFieldCls}>{user.school_or_company}</div>
           ) : (
             <input
               type="text"
