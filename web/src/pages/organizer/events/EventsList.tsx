@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
 import { StatusBadge } from '../../../components/StatusBadge'
+import { SkeletonOrgEventRow } from '../../../components/Skeleton'
 import { staggerContainer, cardItem, fadeUp } from '../../../lib/animation'
 import { isEventArchived } from '../../../lib/dates'
 
@@ -14,7 +15,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
 export function OrgEventsList() {
   const navigate = useNavigate()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, isLoading } = useEventsStore()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
@@ -84,6 +85,22 @@ export function OrgEventsList() {
             </button>
           ))}
         </motion.div>
+
+        {/* First-load skeleton — only while fetching with no cached events */}
+        {isLoading && events.length === 0 &&
+          Array.from({ length: 4 }).map((_, i) => <SkeletonOrgEventRow key={i} />)}
+
+        {/* Empty state — once loaded with nothing to show in this tab */}
+        {!isLoading && displayEvents.length === 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center md:col-span-2 lg:col-span-3">
+            <p className="text-md3-body-lg font-bold text-slate-700">
+              No {activeTab} events
+            </p>
+            <p className="text-md3-body-md text-slate-400 mt-1">
+              {activeTab === 'upcoming' ? 'Create your first chapter event.' : 'Past events will appear here.'}
+            </p>
+          </div>
+        )}
 
         {displayEvents.map((event) => {
           const dateParts = event.event_date ? {

@@ -18,6 +18,7 @@ export interface Notification {
 interface NotificationsState {
   notifications: Notification[]
   unreadCount: number
+  isLoading: boolean
   fetchRecent: (approvedIds: string[], eventTitles: Record<string, string>) => Promise<void>
   subscribe: (approvedIds: string[], eventTitles: Record<string, string>) => () => void
   markAllRead: () => void
@@ -35,9 +36,19 @@ interface AnnouncementRow {
 export const useNotificationsStore = create<NotificationsState>((set) => ({
   notifications: [],
   unreadCount: 0,
+  isLoading: false,
 
   fetchRecent: async (approvedIds, eventTitles) => {
-    if (approvedIds.length === 0) return
+    // No approved events → nothing to load; resolve to the empty state, never stay loading.
+    if (approvedIds.length === 0) {
+      set({ isLoading: false })
+      return
+    }
+
+    // Show a loading state only on the first load (no cached notifications yet),
+    // mirroring the other data stores — avoids a skeleton flash on recovery refetches.
+    set((s) => ({ isLoading: s.notifications.length === 0 }))
+
     let data: AnnouncementRow[] | null = null
 
     try {
@@ -46,10 +57,14 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
       )
     } catch (err) {
       console.warn('[fetchRecent] failed:', err instanceof Error ? err.message : String(err))
+      set({ isLoading: false })
       return
     }
 
-    if (!data) return
+    if (!data) {
+      set({ isLoading: false })
+      return
+    }
     const notifications: Notification[] = data.map((row) => ({
       id: row.id,
       event_id: row.event_id,
@@ -58,7 +73,7 @@ export const useNotificationsStore = create<NotificationsState>((set) => ({
       event_title: eventTitles[row.event_id] ?? 'Event',
       read: false,
     }))
-    set({ notifications, unreadCount: notifications.length })
+    set({ notifications, unreadCount: notifications.length, isLoading: false })
   },
 
   subscribe: (approvedIds, eventTitles) => {
