@@ -80,9 +80,12 @@ export default function JobsList() {
   }, [idParam, isLoading])
 
   const filteredJobs = useMemo(() =>
-    jobs.filter(job =>
-      fuzzySearchFilter(deferredQuery, job, ['title', 'description', 'company'])
-    ), [jobs, deferredQuery]
+    [...jobs]
+      .filter(job =>
+        fuzzySearchFilter(deferredQuery, job, ['title', 'description', 'company'])
+      )
+      .sort((a, b) => Number(b.is_promoted) - Number(a.is_promoted)),
+    [jobs, deferredQuery]
   )
 
   const toggleSearch = () => {
