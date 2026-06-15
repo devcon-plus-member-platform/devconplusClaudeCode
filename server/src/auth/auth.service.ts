@@ -34,6 +34,43 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * Verify a Cloudflare Turnstile token server-side.
+   * - Secret not configured → skip (fail-open) so dev/unconfigured envs still work.
+   * - Secret set + token missing or invalid → reject.
+   * - Network error reaching Cloudflare → fail-open (a provider outage shouldn't block all signups).
+   */
+  private async verifyTurnstile(token: string | undefined): Promise<void> {
+    const secret = this.config.get<string>('TURNSTILE_SECRET_KEY');
+    if (!secret) {
+      this.logger.warn(
+        'TURNSTILE_SECRET_KEY not set — skipping captcha verification (fail-open)',
+      );
+      return;
+    }
+    if (!token) {
+      throw new BadRequestException('Captcha verification required. Please try again.');
+    }
+    try {
+      const res = await fetch(
+        'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ secret, response: token }),
+        },
+      );
+      const data = (await res.json()) as { success?: boolean };
+      if (!data.success) {
+        throw new BadRequestException('Captcha verification failed. Please try again.');
+      }
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Turnstile verify request failed, allowing signup (fail-open): ${msg}`);
+    }
+  }
+
   // ── /auth/firebase/exchange ──────────────────────────────────────────────
 
   /**
@@ -130,7 +167,11 @@ export class AuthService {
     username?: string;
     chapter_id?: string;
     school_or_company?: string;
+    captchaToken?: string;
   }): Promise<{ message: string }> {
+    // Bot gate first — reject before any Firebase/DB work.
+    await this.verifyTurnstile(input.captchaToken);
+
     const email = input.email.toLowerCase();
 
     const existing = await this.supabase.findProfileByEmail(email);

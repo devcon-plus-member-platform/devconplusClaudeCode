@@ -21,6 +21,8 @@ import { FirebaseExchangeDto } from './dto/firebase-exchange.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { AuthGuard, AuthenticatedUser } from './auth.guard';
+import { RateLimit } from '../common/throttler/rate-limit.decorator';
+import { RateLimitGuard } from '../common/throttler/rate-limit.guard';
 import { BridgeSession } from './types';
 
 @Controller('auth')
@@ -81,6 +83,7 @@ export class AuthController {
       username: body.username,
       chapter_id: body.chapter_id,
       school_or_company: body.school_or_company,
+      captchaToken: body.captchaToken,
     });
   }
 
@@ -97,6 +100,8 @@ export class AuthController {
    */
   @Post('email/signin')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('login')
   signin(@Body() body: EmailSigninDto): Promise<BridgeSession> {
     return this.auth.emailSignin({
       email: body.email,
@@ -115,6 +120,8 @@ export class AuthController {
    */
   @Post('email/reset')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('password_reset')
   reset(@Body() body: EmailResetDto): Promise<{ message: string }> {
     return this.auth.emailReset(body.email, this.supabaseUrl);
   }
@@ -143,6 +150,8 @@ export class AuthController {
    */
   @Post('email/resend-verification')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('send_email')
   resendVerification(
     @Body() body: ResendVerificationDto,
   ): Promise<{ message: string }> {

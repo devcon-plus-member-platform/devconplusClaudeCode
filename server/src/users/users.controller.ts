@@ -16,6 +16,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { RateLimit } from '../common/throttler/rate-limit.decorator';
+import { RateLimitGuard } from '../common/throttler/rate-limit.guard';
 import type { Profile } from '../supabase/types';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { MAX_AVATAR_BYTES, UsersService } from './users.service';
@@ -30,6 +32,8 @@ export class UsersController {
    * Returns { available: boolean }.
    */
   @Get('check-username')
+  @UseGuards(RateLimitGuard)
+  @RateLimit('username_check')
   async checkUsername(
     @Query('username') username: string,
   ): Promise<{ available: boolean }> {

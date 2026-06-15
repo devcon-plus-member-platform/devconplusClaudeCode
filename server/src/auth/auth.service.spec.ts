@@ -96,6 +96,8 @@ function makeConfig() {
       if (key in map) return map[key];
       throw new Error(`Missing env: ${key}`);
     }),
+    // Optional vars (e.g. TURNSTILE_SECRET_KEY) — unset in tests → captcha verify fail-opens.
+    get: jest.fn(() => undefined),
   };
 }
 

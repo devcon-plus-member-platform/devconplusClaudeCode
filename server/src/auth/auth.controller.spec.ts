@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthGuard, AuthenticatedUser } from './auth.guard';
+import { RateLimitGuard } from '../common/throttler/rate-limit.guard';
 
 // ── Mock factories ────────────────────────────────────────────────────────
 
@@ -55,6 +56,8 @@ describe('AuthController', () => {
       ],
     })
       .overrideGuard(AuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RateLimitGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
