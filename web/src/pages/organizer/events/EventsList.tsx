@@ -4,7 +4,7 @@ import { MapPointOutline, BoltOutline, ClockCircleOutline, AddCircleOutline } fr
 import { motion } from 'framer-motion'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
-import { StatusBadge } from '../../../components/StatusBadge'
+import { EventStatusBadge } from '../../../components/EventStatusBadge'
 import { SkeletonOrgEventRow } from '../../../components/Skeleton'
 import { staggerContainer, cardItem, fadeUp } from '../../../lib/animation'
 import { isEventArchived } from '../../../lib/dates'
@@ -160,17 +160,7 @@ export function OrgEventsList() {
                   <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
                     {event.title}
                   </p>
-                  {!isEventArchived(event) && (
-                    <StatusBadge
-                      status={
-                        event.status === 'upcoming'
-                          ? 'pending'
-                          : event.status === 'ongoing'
-                          ? 'approved'
-                          : 'rejected'
-                      }
-                    />
-                  )}
+                  {!isEventArchived(event) && <EventStatusBadge status={event.status} />}
                 </div>
 
                 <p className="text-[11px] text-slate-500 mb-0.5">

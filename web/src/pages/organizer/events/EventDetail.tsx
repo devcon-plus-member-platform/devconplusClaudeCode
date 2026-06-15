@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, BoltOutline, PenOutline, UserSpeakOutline, MapPointOutline } from 'solar-icon-set'
-import { motion } from 'framer-motion'
+import { ArrowLeftOutline, BoltOutline, PenOutline, UserSpeakOutline, MapPointOutline, ShareOutline, CopyOutline } from 'solar-icon-set'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
@@ -17,6 +17,7 @@ export function OrgEventDetail() {
   const navigate = useNavigate()
   const { events, fetchEvents, isLoading } = useEventsStore()
   const [showAnnounce, setShowAnnounce] = useState(false)
+  const [shareToast, setShareToast]     = useState(false)
   const [statsTotal, setStatsTotal]       = useState(0)
   const [statsPending, setStatsPending]   = useState(0)
   const [statsCheckedIn, setStatsCheckedIn] = useState(0)
@@ -64,6 +65,30 @@ export function OrgEventDetail() {
       })
     : 'Date TBA'
 
+  // Share the public, attendee-facing event page (/events/:slug), never the
+  // organizer management URL. `slug` is NOT NULL in the DB, but the generated
+  // type is `string | null`, so guard to avoid ever emitting `/events/null`.
+  const publicUrl = event.slug ? `${window.location.origin}/events/${event.slug}` : null
+
+  const handleShare = async () => {
+    if (!publicUrl) return
+    if ('share' in navigator) {
+      try {
+        await navigator.share({ title: event.title, text: `${event.title} — DEVCON+`, url: publicUrl })
+      } catch {
+        // user cancelled — do nothing
+      }
+    } else {
+      try {
+        await (navigator as Navigator).clipboard.writeText(publicUrl)
+        setShareToast(true)
+        setTimeout(() => setShareToast(false), 2500)
+      } catch {
+        // clipboard unavailable
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Floating back + edit buttons (Sticky/Fixed) */}
@@ -74,13 +99,40 @@ export function OrgEventDetail() {
         >
           <ArrowLeftOutline className="w-5 h-5" color="white" />
         </button>
-        <button
-          onClick={() => navigate(`/organizer/events/${id}/edit`)}
-          className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-black/40 transition-colors shadow-lg pointer-events-auto"
-        >
-          <PenOutline className="w-4 h-4" color="white" />
-        </button>
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={() => void handleShare()}
+            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-black/40 transition-colors shadow-lg"
+            aria-label="Share event"
+          >
+            <ShareOutline className="w-5 h-5" color="white" />
+          </button>
+          <button
+            onClick={() => navigate(`/organizer/events/${id}/edit`)}
+            className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-black/40 transition-colors shadow-lg"
+            aria-label="Edit event"
+          >
+            <PenOutline className="w-4 h-4" color="white" />
+          </button>
+        </div>
       </div>
+
+      {/* Clipboard copy toast */}
+      <AnimatePresence>
+        {shareToast && (
+          <motion.div
+            key="share-toast"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            className="fixed bottom-28 inset-x-0 mx-auto w-fit z-[100] flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[13px] font-proxima font-semibold px-4 py-2.5 rounded-full shadow-xl whitespace-nowrap"
+          >
+            <CopyOutline color="white" size={14} />
+            Link copied to clipboard
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Header ── */}
       <header 
