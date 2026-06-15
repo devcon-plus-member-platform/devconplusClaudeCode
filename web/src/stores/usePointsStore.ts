@@ -1,14 +1,9 @@
 import { create } from 'zustand'
 import type { PointTransaction, Profile } from '@devcon-plus/supabase'
-import { supabase } from '../lib/supabase'
 import { apiFetch } from '../lib/api'
 import { useAuthStore } from './useAuthStore'
 
 import { getTier, getNextTier, getTierProgress, TIERS, type Tier } from '../lib/tiers'
-
-// Monotonic counter to generate unique channel names on every subscribe call.
-let _chanSeq = 0
-const nextChan = (base: string) => `${base}-${++_chanSeq}`
 
 interface PointsState {
   spendablePoints: number
@@ -22,12 +17,12 @@ interface PointsState {
   pendingLoads: number
   error: string | null
 
-  loadTransactions: () => Promise<void>
+  loadTransactions: (limit?: number) => Promise<void>
   loadTotalPoints: () => Promise<void>
   subscribeToChanges: () => () => void
 }
 
-export const usePointsStore = create<PointsState>((set, get) => ({
+export const usePointsStore = create<PointsState>((set) => ({
   spendablePoints: 0,
   lifetimePoints: 0,
   prestigeUnlocked: false,
@@ -39,12 +34,14 @@ export const usePointsStore = create<PointsState>((set, get) => ({
   pendingLoads: 0,
   error: null,
 
-  loadTransactions: async () => {
+  loadTransactions: async (limit?: number) => {
     const user = useAuthStore.getState().user
     if (!user) return
     set((s) => ({ pendingLoads: s.pendingLoads + 1, isLoading: true, error: null }))
     try {
-      const data = await apiFetch<PointTransaction[]>('/api/points/transactions')
+      // Server clamps to [1, 200]; pass a small limit where only a preview is shown.
+      const qs = limit != null ? `?limit=${limit}` : ''
+      const data = await apiFetch<PointTransaction[]>(`/api/points/transactions${qs}`)
       set({ transactions: data })
     } catch (err) {
       set({ transactions: [], error: err instanceof Error ? err.message : String(err) })
@@ -96,50 +93,11 @@ export const usePointsStore = create<PointsState>((set, get) => ({
     }
   },
 
+  // Neutralized 2026-06-14: the always-on `point_transactions` realtime sub was
+  // removed to cut connection pressure. Points refresh via polling — recover() in
+  // the layouts calls loadTotalPoints/loadTransactions on focus / online / 60 s,
+  // and after any action that awards points. Git history has the original handler.
   subscribeToChanges: () => {
-    const user = useAuthStore.getState().user
-    if (!user) return () => {}
-
-    const channel = supabase
-      .channel(nextChan('points-realtime'))
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'point_transactions',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          // New transaction — refresh both list and totals
-          void get().loadTransactions()
-          void get().loadTotalPoints()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          // Profile updated (points changed via trigger or admin)
-          const updated = payload.new as Profile
-          if (updated.spendable_points !== undefined || updated.lifetime_points !== undefined) {
-            void get().loadTotalPoints()
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.error('[points-realtime] channel error:', err)
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[points-realtime] timed out — Supabase will retry')
-        }
-      })
-
-    return () => { void supabase.removeChannel(channel) }
+    return () => {}
   },
 }))

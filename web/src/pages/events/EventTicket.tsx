@@ -65,7 +65,7 @@ export default function EventTicket() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
 
-  const { events, registrations, cancelRegistration } = useEventsStore()
+  const { events, registrations, cancelRegistration, fetchRegistrations } = useEventsStore()
   const { user } = useAuthStore()
   const { activeTheme } = useThemeStore()
   const theme = activeTheme()
@@ -131,78 +131,44 @@ export default function EventTicket() {
     }
   }, [reg?.id, retryKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check-in detection — Realtime channel with recovery on visibility/network events
+  // Best-effort realtime: instant "✓ checked in" when the channel connects. On
+  // error (e.g. past the 200-connection cap) it gives up — no retry, no rebuild —
+  // and the 5 s poll below delivers within a few seconds instead. The poll is the
+  // safety net, so we don't need to rebuild the channel on visibility/network changes.
   useEffect(() => {
     if (!reg || event?.status === 'past') return
-
     const regId = reg.id
-    let channel: ReturnType<typeof supabase.channel> | null = null
-
-    function subscribe() {
-      if (channel) void supabase.removeChannel(channel)
-
-      // Unique channel name per subscription prevents Supabase reusing a stale channel state
-      channel = supabase
-        .channel(`checkin-${regId}-${Date.now()}`)
-        .on(
-          'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'event_registrations', filter: `id=eq.${regId}` },
-          (payload) => {
-            if ((payload.new as { checked_in: boolean | null }).checked_in) setCheckedIn(true)
-          }
-        )
-        .subscribe((status) => {
-          // Re-check once subscribed — catches any scan that happened in the
-          // ~200ms window between component mount and subscription confirmation,
-          // and catches scans that arrived while the channel was being rebuilt
-          if (status === 'SUBSCRIBED') {
-            void supabase
-              .from('event_registrations')
-              .select('checked_in')
-              .eq('id', regId)
-              .single()
-              .then(({ data }) => { if (data?.checked_in) setCheckedIn(true) })
-          }
-        })
-    }
-
-    subscribe()
-
-    // Rebuild the channel when the tab regains visibility or the network reconnects.
-    // Mobile browsers close WebSockets aggressively on screen lock / app background,
-    // so a channel that was alive on mount may be CLOSED by the time the organizer scans.
-    const handleVisibility = () => { if (document.visibilityState === 'visible') subscribe() }
-    const handleOnline = () => subscribe()
-
-    document.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('online', handleOnline)
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('online', handleOnline)
-      if (channel) void supabase.removeChannel(channel)
-    }
+    const channel = supabase
+      .channel(`checkin-${regId}-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'event_registrations', filter: `id=eq.${regId}` },
+        (payload) => {
+          if ((payload.new as { checked_in: boolean | null }).checked_in) setCheckedIn(true)
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[checkin] channel unavailable, falling back to polling:', status, err)
+          void supabase.removeChannel(channel)
+        }
+      })
+    return () => { void supabase.removeChannel(channel) }
   }, [reg?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling fallback: re-fetch checked_in every 10 s while waiting for scan.
-  // Handles cases where the Realtime channel is dead and no recovery event fires
-  // (e.g. the device was offline the entire time and just reconnected silently).
-  // The interval clears itself automatically once checkedIn becomes true.
+  // Polling baseline: refetch registrations every 5 s while waiting for the scan,
+  // through the backend (no direct Supabase query). Covers the mount-window scan
+  // and the case where the realtime channel gave up. Clears once checked-in.
   useEffect(() => {
-    if (!reg || checkedIn || event?.status === 'past') return
-
-    const regId = reg.id
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from('event_registrations')
-        .select('checked_in')
-        .eq('id', regId)
-        .single()
-      if (data?.checked_in) setCheckedIn(true)
-    }, 10_000)
-
+    if (!reg || checkedIn || event?.status === 'past' || !user) return
+    const interval = setInterval(() => { void fetchRegistrations(user.id) }, 5000)
     return () => clearInterval(interval)
-  }, [reg?.id, checkedIn]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reg?.id, checkedIn, event?.status, user, fetchRegistrations])
+
+  // Reflect a checked_in flip from the store (set by the poll above) into local state.
+  useEffect(() => {
+    if (reg?.checked_in) setCheckedIn(true)
+  }, [reg?.checked_in])
 
   if (!event || !reg || reg.status !== 'approved') {
     return (

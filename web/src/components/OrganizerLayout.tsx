@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
 import { useRewardsStore } from '../stores/useRewardsStore'
 import { useOrgVolunteerStore } from '../stores/useOrgVolunteerStore'
-import { supabase, onRealtimeDisconnect } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import DesktopGuard from './DesktopGuard'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -35,10 +35,7 @@ export default function OrganizerLayout() {
   const navigate = useNavigate()
   const scrollRef = useRef<HTMLDivElement>(null)
   const fetchEvents = useEventsStore((s) => s.fetchEvents)
-  const subscribeToEventChanges = useEventsStore((s) => s.subscribeToChanges)
   const fetchAllRewards = useRewardsStore((s) => s.fetchAllRewards)
-  const subscribeToRewardChanges = useRewardsStore((s) => s.subscribeToChanges)
-  const subscribeToRedemptions = useRewardsStore((s) => s.subscribeToRedemptions)
   const fetchAllRedemptions = useRewardsStore((s) => s.fetchAllRedemptions)
   const loadOrgVolunteerApps = useOrgVolunteerStore((s) => s.loadApplications)
 
@@ -50,24 +47,17 @@ export default function OrganizerLayout() {
     }
   }, [user, navigate])
 
-  // Data management for the organizer session.
-  // Fetches data and subscribes to realtime on mount; recovers and re-subscribes
-  // on visibility/online/idle-timeout events.
-  const unsubEventsRef = useRef<(() => void) | null>(null)
-  const unsubRewardsRef = useRef<(() => void) | null>(null)
-  const unsubRedemptionsRef = useRef<(() => void) | null>(null)
+  // Data management for the organizer session — polling only (no realtime channels;
+  // events refresh via recover() on focus / online / 60 s interval).
   const recoverRef = useRef<(() => void) | null>(null)
-  const resubscribeRef = useRef<(() => void) | null>(null)
   const lastRecoveryRef = useRef(0)
   const retryTimersRef = useRef<number[]>([])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // Re-establish channels AND refetch data — channels authenticated with
-        // the old token must be replaced after a token refresh.
+        // Refetch data after sign-in / token refresh. No realtime channels to rebuild.
         recoverRef.current?.()
-        resubscribeRef.current?.()
       }
     })
     return () => { subscription.unsubscribe() }
@@ -83,29 +73,17 @@ export default function OrganizerLayout() {
     }
     recoverRef.current = recover
 
-    const resubscribe = () => {
-      unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubRedemptionsRef.current?.()
-      unsubEventsRef.current = subscribeToEventChanges()
-      unsubRewardsRef.current = subscribeToRewardChanges()
-      unsubRedemptionsRef.current = subscribeToRedemptions()
-    }
-    resubscribeRef.current = resubscribe
-
     recover()
-    resubscribe()
 
     const runRecovery = () => {
       const now = Date.now()
       if (now - lastRecoveryRef.current < 3000) return
       lastRecoveryRef.current = now
       recover()
-      resubscribe()
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = [
-        window.setTimeout(() => { recover(); resubscribe() }, 5_000),
-        window.setTimeout(() => { recover(); resubscribe() }, 15_000),
+        window.setTimeout(() => { recover() }, 5_000),
+        window.setTimeout(() => { recover() }, 15_000),
       ]
     }
 
@@ -115,22 +93,15 @@ export default function OrganizerLayout() {
     const handleOnline = () => runRecovery()
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
-    const unregisterDisconnect = onRealtimeDisconnect(() => runRecovery())
-    // Polling fallback: refetch + re-subscribe every 300 s (exempt from debounce).
-    // 300s is 3× less IO than the previous 90s while still covering silent channel death.
-    // Fast recovery is handled by visibilitychange + online events above.
-    const pollInterval = setInterval(() => { recover(); resubscribe() }, 300_000)
+    // Polling keepalive every 60 s — primary freshness mechanism (no realtime channels).
+    const pollInterval = setInterval(() => { recover() }, 60_000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleOnline)
-      unregisterDisconnect()
       clearInterval(pollInterval)
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = []
-      unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubRedemptionsRef.current?.()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

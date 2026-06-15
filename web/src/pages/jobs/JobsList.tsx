@@ -47,11 +47,10 @@ export default function JobsList() {
 
   const { jobs, isLoading, error, fetchJobs } = useJobsStore()
   const [expandedId, setExpandedId] = useState<string | null>(idParam)
-  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  useEffect(() => {
-    setExpandedId(idParam)
-  }, [idParam])
+  useEffect(() => { setExpandedId(idParam) }, [idParam])
+
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -81,9 +80,12 @@ export default function JobsList() {
   }, [idParam, isLoading])
 
   const filteredJobs = useMemo(() =>
-    jobs.filter(job =>
-      fuzzySearchFilter(deferredQuery, job, ['title', 'description', 'company'])
-    ), [jobs, deferredQuery]
+    [...jobs]
+      .filter(job =>
+        fuzzySearchFilter(deferredQuery, job, ['title', 'description', 'company'])
+      )
+      .sort((a, b) => Number(b.is_promoted) - Number(a.is_promoted)),
+    [jobs, deferredQuery]
   )
 
   const toggleSearch = () => {
@@ -180,7 +182,7 @@ export default function JobsList() {
                   key={job.id}
                   variants={cardItem}
                   ref={(el) => { cardRefs.current[job.id] = el }}
-                  className="bg-white border border-[rgba(156,163,175,0.3)] rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] overflow-hidden"
+                  className="bg-white border border-slate-200 rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] overflow-hidden"
                 >
                   <motion.button
                     onClick={() => setExpandedId(prev => prev === job.id ? null : job.id)}
@@ -200,7 +202,7 @@ export default function JobsList() {
                             </p>
 
                             {/* Company */}
-                            <p className="font-proxima text-[#6b7280] text-[12px]">
+                            <p className="font-proxima text-slate-500 text-[12px]">
                               Posted by {job.company}
                             </p>
                           </div>
@@ -209,16 +211,16 @@ export default function JobsList() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <div className="flex items-center gap-2">
                               {job.work_type && (
-                                <div className="bg-[rgba(102,102,102,0.2)] px-[12px] py-[6px] rounded-[100px] flex items-center justify-center shrink-0">
-                                  <span className="text-[#6b7280] text-[9px] font-bold tracking-[0.9px] uppercase leading-none">
+                                <div className="bg-slate-100 px-[12px] py-[6px] rounded-full flex items-center justify-center shrink-0">
+                                  <span className="text-slate-500 text-[9px] font-bold tracking-[0.9px] uppercase leading-none">
                                     {WORK_TYPE_LABELS[job.work_type] ?? job.work_type}
                                   </span>
                                 </div>
                               )}
 
                               {job.is_promoted && (
-                                <div className="bg-[rgba(255,111,11,0.2)] px-[12px] py-[6px] rounded-[100px] flex items-center justify-center shrink-0">
-                                  <span className="text-[#ff6f0b] text-[9px] font-bold tracking-[0.9px] uppercase leading-none">
+                                <div className="bg-orange-100 px-[12px] py-[6px] rounded-full flex items-center justify-center shrink-0">
+                                  <span className="text-[#F97316] text-[9px] font-bold tracking-[0.9px] uppercase leading-none">
                                     PROMOTED
                                   </span>
                                 </div>
@@ -227,8 +229,8 @@ export default function JobsList() {
 
                             {job.location && (
                               <div className="flex items-center gap-1 py-[6px]">
-                                <MapPointOutline color="#6b7280" size={10} />
-                                <span className="font-proxima text-[#6b7280] text-[12px]">{job.location}</span>
+                                <MapPointOutline color="#64748B" size={10} />
+                                <span className="font-proxima text-slate-500 text-[12px]">{job.location}</span>
                               </div>
                             )}
                           </div>

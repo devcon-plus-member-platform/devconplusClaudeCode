@@ -25,7 +25,7 @@ export function OrgProfile() {
   const user = useOrganizerUser()
   const { logout: orgLogout } = useOrgAuthStore()
   const { user: profile, setOrganizerSession } = useAuthStore()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, isLoading } = useEventsStore()
   const navigate = useNavigate()
   const [activeModal, setActiveModal] = useState<string | null>(null)
 
@@ -96,7 +96,19 @@ export function OrgProfile() {
             </button>
           </div>
 
-          {chapterEvents.length === 0 ? (
+          {isLoading && events.length === 0 ? (
+            <div className="divide-y divide-slate-50" aria-busy="true" aria-label="Loading events">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-200 animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-2/3 bg-slate-200 rounded animate-pulse" />
+                    <div className="h-3 w-1/3 bg-slate-200 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : chapterEvents.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-4 py-8">
               <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-2">
                 <CalendarOutline className="w-5 h-5" color="#CBD5E1" />

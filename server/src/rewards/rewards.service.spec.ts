@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { AppCacheService } from '../cache/app-cache.service';
 import { RewardsRepository } from './rewards.repository';
 import { RewardsService } from './rewards.service';
 
@@ -40,16 +41,31 @@ function makeRepo() {
   };
 }
 
+function makeCache() {
+  return {
+    getOrSet: jest.fn((_k: string, _ttl: number, loader: () => unknown) => loader()),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
 // ── Suite ─────────────────────────────────────────────────────────────────
 
 describe('RewardsService', () => {
   let service: RewardsService;
   let repo: ReturnType<typeof makeRepo>;
+  let cache: ReturnType<typeof makeCache>;
 
   beforeEach(async () => {
     repo = makeRepo();
+    cache = makeCache();
     const module = await Test.createTestingModule({
-      providers: [RewardsService, { provide: RewardsRepository, useValue: repo }],
+      providers: [
+        RewardsService,
+        { provide: RewardsRepository, useValue: repo },
+        { provide: AppCacheService, useValue: cache },
+      ],
     }).compile();
     service = module.get(RewardsService);
   });
@@ -86,6 +102,11 @@ describe('RewardsService', () => {
     it('returns the redemption result', async () => {
       const result = await service.redeemReward(MEMBER_ID, REWARD_ID);
       expect(result).toEqual({ redemptionId: REDEMPTION_ID, claimPin: 'PIN1' });
+    });
+
+    it('busts the shared catalog cache (redeem decrements stock for everyone)', async () => {
+      await service.redeemReward(MEMBER_ID, REWARD_ID);
+      expect(cache.del).toHaveBeenCalledWith('rewards:catalog', 'rewards:all');
     });
 
     it('propagates BadRequestException from the repository (e.g. insufficient points)', async () => {

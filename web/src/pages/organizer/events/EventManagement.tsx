@@ -5,7 +5,8 @@ import { motion } from 'framer-motion'
 import type { Event } from '@devcon-plus/supabase'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
-import { StatusBadge } from '../../../components/StatusBadge'
+import { EventStatusBadge } from '../../../components/EventStatusBadge'
+import { SkeletonOrgEventRow } from '../../../components/Skeleton'
 import { staggerContainer, cardItem, fadeUp } from '../../../lib/animation'
 import { isEventArchived } from '../../../lib/dates'
 
@@ -15,7 +16,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
 export function OrgEventManagement() {
   const navigate = useNavigate()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, isLoading } = useEventsStore()
   const { user } = useAuthStore()
 
   useEffect(() => { void fetchEvents() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -63,6 +64,15 @@ export function OrgEventManagement() {
         initial="hidden"
         animate="visible"
       >
+        {/* First-load skeleton — only while fetching with no cached events */}
+        {isLoading && events.length === 0 && (
+          <div className="space-y-3" aria-busy="true" aria-label="Loading events">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonOrgEventRow key={i} />
+            ))}
+          </div>
+        )}
+
         {/* Upcoming events */}
         {upcomingEvents.length > 0 && (
           <motion.div variants={fadeUp} className="space-y-4">
@@ -168,7 +178,7 @@ export function OrgEventManagement() {
           </motion.div>
         )}
 
-        {pastEvents.length === 0 && upcomingEvents.length === 0 && (
+        {!isLoading && pastEvents.length === 0 && upcomingEvents.length === 0 && (
           <motion.div variants={fadeUp} className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
             <p className="text-md3-body-lg font-bold text-slate-700">No events yet</p>
             <p className="text-md3-body-md text-slate-400 mt-1">Create your first chapter event.</p>
@@ -248,17 +258,7 @@ function EventRow({ event, onTap }: EventRowProps) {
           <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
             {event.title}
           </p>
-          {!isExpired && (
-            <StatusBadge
-              status={
-                event.status === 'upcoming'
-                  ? 'pending'
-                  : event.status === 'ongoing'
-                  ? 'approved'
-                  : 'rejected'
-              }
-            />
-          )}
+          {!isExpired && <EventStatusBadge status={event.status} />}
         </div>
 
         {/* Date Text */}

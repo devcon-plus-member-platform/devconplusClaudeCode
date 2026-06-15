@@ -245,22 +245,22 @@ export default function EventsList() {
 
         {/* ── Tabs Wrapper ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="flex gap-[6px] overflow-x-auto no-scrollbar max-w-4xl mx-auto">
+          <div className="inline-flex w-full gap-2">
             {(['discover', 'tickets'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => { setTab(t); setSearchQuery('') }}
-                className={`whitespace-nowrap px-[12px] h-[32px] flex-1 flex items-center justify-center rounded-[128px] text-[14px] font-proxima font-bold transition-all shrink-0 ${
+                className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all shrink-0 ${
                   tab === t
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-primary/10 text-primary'
+                    ? 'bg-primary text-white font-semibold shadow-sm'
+                    : 'bg-primary/10 text-primary font-medium'
                 }`}
               >
                 <span className="flex items-center gap-1.5">
                   {t === 'discover' ? 'Discover' : 'My Tickets'}
                   {t === 'tickets' && ticketCount > 0 && (
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
-                      tab === 'tickets' ? 'bg-white text-primary' : 'bg-primary/20 text-primary'
+                      tab === 'tickets' ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'
                     }`}>
                       {ticketCount}
                     </span>
@@ -279,10 +279,10 @@ export default function EventsList() {
                 <motion.button
                   key={id}
                   onClick={() => setEventFilter(id)}
-                  className={`flex-shrink-0 h-[30px] px-3.5 rounded-full text-[12px] font-proxima font-semibold transition-colors ${
+                  className={`flex-shrink-0 h-[30px] px-4 rounded-full text-[12px] font-proxima transition-colors ${
                     eventFilter === id
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'bg-primary/10 text-primary'
+                      ? 'bg-primary text-white font-semibold'
+                      : 'bg-primary/10 text-primary font-medium'
                   }`}
                   whileTap={{ scale: 0.95 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 25 }}
@@ -330,7 +330,7 @@ export default function EventsList() {
             {!isLoading && events.length === 0 && (
               <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <CalendarMarkOutline className="w-8 h-8" color="#0b46a3" />
+                  <CalendarMarkOutline className="w-8 h-8" color="rgb(var(--color-primary))" />
                 </div>
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">Events coming soon</h3>
                 <p className="text-md3-body-md text-slate-500 text-center">
@@ -351,7 +351,7 @@ export default function EventsList() {
             {!isLoading && !deferredQuery && events.length > 0 && chapterFilteredEvents.length === 0 && (
               <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <CalendarMarkOutline className="w-8 h-8" color="#0b46a3" />
+                  <CalendarMarkOutline className="w-8 h-8" color="rgb(var(--color-primary))" />
                 </div>
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">
                   {eventFilter === 'near_you' && 'No upcoming events nearby'}
@@ -411,7 +411,7 @@ export default function EventsList() {
                       key={event.id}
                       variants={cardItem}
                       onClick={() => navigate(`/events/${event.slug}`)}
-                      className={`w-full bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 flex items-center gap-4 text-left ${
+                      className={`w-full bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 flex items-center gap-4 text-left ${
                         isArchived ? 'opacity-60 grayscale' : ''
                       }`}
                       whileTap={{ scale: 0.98 }}
@@ -475,7 +475,7 @@ export default function EventsList() {
 
                         <div className="flex items-center gap-2">
                           {!isExternal && (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-[100px]">
+                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                               +{event.points_value} pts
                             </span>
                           )}
@@ -486,7 +486,7 @@ export default function EventsList() {
                             </span>
                           )}
                           {isArchived && (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-[100px]">
+                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                               Past
                             </span>
                           )}
@@ -515,7 +515,7 @@ export default function EventsList() {
             {allTickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-4 pt-24">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <TicketOutline className="w-8 h-8" color="#0b46a3" />
+                  <TicketOutline className="w-8 h-8" color="rgb(var(--color-primary))" />
                 </div>
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">No tickets yet</h3>
                 <p className="text-md3-body-md text-slate-500 text-center mb-5">
@@ -558,7 +558,7 @@ export default function EventsList() {
                       variants={cardItem}
                       onClick={isExpired ? undefined : () => navigate(destination)}
                       whileTap={isExpired ? undefined : { scale: 0.98 }}
-                      className={`w-full bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 flex items-center gap-4 text-left ${
+                      className={`w-full bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 flex items-center gap-4 text-left ${
                         isExpired ? 'opacity-50 grayscale cursor-not-allowed' : ''
                       }`}
                     >
@@ -621,23 +621,23 @@ export default function EventsList() {
 
                         <div className="flex items-center gap-1.5">
                           {lifecycle === 'in_progress' ? (
-                            <span className="backdrop-blur-[16px] flex items-center gap-1 font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-green bg-green/10 px-2 py-0.5 rounded-[100px] shrink-0">
+                            <span className="backdrop-blur-[16px] flex items-center gap-1 font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-green bg-green/10 px-2 py-0.5 rounded-full shrink-0">
                               <span className="w-1 h-1 rounded-full bg-green animate-ping" />
                               Live
                             </span>
                           ) : isExpired ? (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-[100px] shrink-0">
+                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">
                               Expired
                             </span>
                           ) : (
-                            <span className={`backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] px-2 py-0.5 rounded-[100px] whitespace-nowrap ${
-                              isApproved ? 'bg-[rgba(208,224,255,0.9)] text-[#0b46a3]' : 'bg-yellow-100/90 text-yellow-700'
+                            <span className={`backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] px-2 py-0.5 rounded-full whitespace-nowrap ${
+                              isApproved ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100/90 text-yellow-700'
                             }`}>
                               {isApproved ? 'Approved' : 'Pending'}
                             </span>
                           )}
 
-                          <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-[100px]">
+                          <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
                             +{ev.points_value} pts
                           </span>
                         </div>
@@ -692,7 +692,7 @@ export default function EventsList() {
                   All Chapters
                 </span>
                 {selectedChapterId === null && (
-                  <CheckCircleOutline className="w-4 h-4" color="#0b46a3" />
+                  <CheckCircleOutline className="w-4 h-4" color="rgb(var(--color-primary))" />
                 )}
               </button>
 
@@ -715,7 +715,7 @@ export default function EventsList() {
                           {ch.name}
                         </span>
                         {selectedChapterId === ch.id && (
-                          <CheckCircleOutline className="w-4 h-4" color="#0b46a3" />
+                          <CheckCircleOutline className="w-4 h-4" color="rgb(var(--color-primary))" />
                         )}
                       </button>
                     ))}

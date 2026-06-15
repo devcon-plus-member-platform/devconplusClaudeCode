@@ -107,7 +107,7 @@ describe('UsersController', () => {
     it('delegates to usersService.updateProfile with the caller profileId', async () => {
       const dto: UpdateProfileDto = { full_name: 'Updated Name' };
       await controller.updateMe(mockUser, dto);
-      expect(usersService.updateProfile).toHaveBeenCalledWith(MOCK_PROFILE_ID, dto);
+      expect(usersService.updateProfile).toHaveBeenCalledWith(MOCK_PROFILE_ID, dto, 'firebase-uid');
     });
 
     it('returns the updated profile from the service', async () => {
@@ -124,6 +124,7 @@ describe('UsersController', () => {
       expect(usersService.updateProfile).toHaveBeenCalledWith(
         MOCK_PROFILE_ID, // token-derived, not from body
         expect.anything(),
+        'firebase-uid',
       );
     });
   });
@@ -134,7 +135,7 @@ describe('UsersController', () => {
     it('delegates to usersService.uploadAvatar with the caller profileId', async () => {
       const file = makeFile();
       await controller.uploadAvatar(mockUser, file);
-      expect(usersService.uploadAvatar).toHaveBeenCalledWith(MOCK_PROFILE_ID, file);
+      expect(usersService.uploadAvatar).toHaveBeenCalledWith(MOCK_PROFILE_ID, file, 'firebase-uid');
     });
 
     it('returns { avatar_url } from the service result', async () => {

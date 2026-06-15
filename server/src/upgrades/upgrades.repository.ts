@@ -316,14 +316,30 @@ export class UpgradesRepository extends BaseRepository {
     if (result && !result.success) throw new BadRequestException(result.error ?? 'Demotion failed');
   }
 
-  async findRequestForChapterScope(requestId: string): Promise<{ chapter_id: string | null }> {
+  async findRequestForChapterScope(
+    requestId: string,
+  ): Promise<{ chapter_id: string | null; user_id: string | null }> {
     const { data, error } = await this.db
       .from('organizer_upgrade_requests')
-      .select('chapter_id')
+      .select('chapter_id, user_id')
       .eq('id', requestId)
       .single();
     if (error || !data) throw new NotFoundException(`Upgrade request ${requestId} not found`);
-    return { chapter_id: (data.chapter_id ?? null) as string | null };
+    return {
+      chapter_id: (data.chapter_id ?? null) as string | null,
+      user_id: (data.user_id ?? null) as string | null,
+    };
+  }
+
+  /** Look up a profile's Firebase auth_uid by profile id (for cache invalidation). */
+  async getAuthUidById(profileId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('auth_uid')
+      .eq('id', profileId)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.auth_uid as string | null) ?? null;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+﻿import { useState, useCallback, useEffect, useRef } from 'react'
 import LegalModal, { type LegalModalType } from '../../components/LegalModal'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { useForm } from 'react-hook-form'
@@ -278,7 +278,7 @@ export default function SignUp() {
       <header className="flex flex-col pointer-events-none">
         {/* ── Blue Background Container ── */}
         <div 
-          className="bg-[#1152d4] relative overflow-hidden z-0 pointer-events-auto pb-[48px] pt-16 text-center"
+          className="bg-primary relative overflow-hidden z-0 pointer-events-auto pb-[48px] pt-16 text-center"
           style={{ 
             clipPath: 'ellipse(100% 100% at 50% 0%)',
             backgroundImage: PATTERN_BG,
@@ -520,7 +520,7 @@ export default function SignUp() {
           <button
             type="submit"
             disabled={isSubmitting || (!isOAuthMode && !turnstileToken)}
-            className="w-full bg-[#1152d4] text-white font-bold py-4 rounded-2xl disabled:opacity-60 hover:bg-blue-dark transition-colors"
+            className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm disabled:opacity-60 hover:bg-blue-dark transition-colors"
           >
             {isSubmitting
               ? (isOAuthMode ? 'Completing sign-up…' : 'Creating account…')

@@ -54,6 +54,7 @@ export function OrgEventCreate() {
   const { draft, saveDraft, clearDraft } = useFormDraft<EventCreateDraft>(
     'org-event-create',
     'local',
+    { exclude: ['chapter_id'] },
   )
 
   // Cover image (managed outside RHF)
@@ -124,7 +125,7 @@ export function OrgEventCreate() {
       is_free:           (draft.is_free            as boolean) ?? true,
       ticket_price_php:  (draft.ticket_price_php   as number)  ?? 0,
       capacity:          (draft.capacity           as number)  ?? undefined,
-      chapter_id:        (draft.chapter_id         as string)  ?? (user?.chapter_id ?? ''),
+      chapter_id:        isAdmin ? ((draft.chapter_id as string) ?? '') : (user?.chapter_id ?? ''),
       visibility:        'public',
       tags:              [],
     },
@@ -132,6 +133,9 @@ export function OrgEventCreate() {
 
   const isFree     = watch('is_free')
   const category   = watch('category')
+  const selectedChapterId = watch('chapter_id')
+  // HQ events ("HQ — All Chapters") span every chapter, so "Lock to Chapter" doesn't apply.
+  const isHqSelected = isAdmin && selectedChapterId === '__hq__'
 
   const submitStartRef = useRef<number | null>(null)
   const [submitStalled, setSubmitStalled] = useState(false)
@@ -178,6 +182,13 @@ export function OrgEventCreate() {
     if (!isAdmin) return
     void fetchChapters()
   }, [isAdmin, fetchChapters])
+
+  // HQ events are open to all chapters — keep the lock off so a stale "true"
+  // (restored from a draft or left over after switching away from a chapter)
+  // can never be submitted.
+  useEffect(() => {
+    if (isHqSelected) setValue('is_chapter_locked', false)
+  }, [isHqSelected, setValue])
 
   // ── Cover image handlers ─────────────────────────────────────────────────
 
@@ -424,6 +435,7 @@ export function OrgEventCreate() {
               <GalleryAddOutline className="w-6 h-6" />
               <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
               <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
+              <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
             </button>
           )}
 
@@ -769,23 +781,26 @@ export function OrgEventCreate() {
               </div>
             </div>
 
-            {/* Chapter lock toggle */}
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+            {/* Chapter lock toggle — N/A for HQ events (they span every chapter) */}
+            <div className={`flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4 ${isHqSelected ? 'opacity-60' : ''}`}>
               <input
                 {...register('is_chapter_locked')}
                 type="checkbox"
                 id="is_chapter_locked"
-                className="w-4 h-4 accent-blue rounded"
+                disabled={isHqSelected}
+                className="w-4 h-4 accent-blue rounded disabled:cursor-not-allowed"
               />
               <div>
                 <label
                   htmlFor="is_chapter_locked"
-                  className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+                  className={`text-md3-body-md font-semibold text-slate-900 ${isHqSelected ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   Lock to Chapter
                 </label>
                 <p className="text-md3-label-md text-slate-400 mt-0.5">
-                  Only members of your chapter can register for this event. Disable to allow members from any chapter to join.
+                  {isHqSelected
+                    ? 'HQ events are open to members from every chapter, so chapter locking does not apply.'
+                    : 'Only members of your chapter can register for this event. Disable to allow members from any chapter to join.'}
                 </p>
               </div>
             </div>

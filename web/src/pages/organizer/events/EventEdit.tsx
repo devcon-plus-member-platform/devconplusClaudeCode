@@ -153,6 +153,8 @@ export function OrgEventEdit() {
 
   const isFree    = watch('is_free')
   const category  = watch('category')
+  // HQ events (no chapter) span every chapter, so "Lock to Chapter" doesn't apply.
+  const isHqEvent = !!event && event.chapter_id === null
 
   // Auto-set attendance points when category changes (mirrors EventCreate)
   const prevCategoryRef = useRef<string | undefined>(undefined)
@@ -177,6 +179,12 @@ export function OrgEventEdit() {
     saveDraft({ ...getValues(), tags, visibility, customFields })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tags, visibility, customFields])
+
+  // HQ events are open to all chapters — keep the lock off regardless of any
+  // stale stored value so it can't be re-enabled on save.
+  useEffect(() => {
+    if (isHqEvent) setValue('is_chapter_locked', false)
+  }, [isHqEvent, setValue])
 
   // Stall detection: tab backgrounded mid-submit throttles browser timers
   useEffect(() => {
@@ -430,6 +438,7 @@ export function OrgEventEdit() {
               <GalleryAddOutline className="w-6 h-6" />
               <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
               <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
+              <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
             </button>
           )}
           <input
@@ -628,23 +637,26 @@ export function OrgEventEdit() {
               </div>
             )}
 
-            {/* Chapter lock toggle */}
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+            {/* Chapter lock toggle — N/A for HQ events (they span every chapter) */}
+            <div className={`flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4 ${isHqEvent ? 'opacity-60' : ''}`}>
               <input
                 {...register('is_chapter_locked')}
                 type="checkbox"
                 id="is_chapter_locked"
-                className="w-4 h-4 accent-blue rounded"
+                disabled={isHqEvent}
+                className="w-4 h-4 accent-blue rounded disabled:cursor-not-allowed"
               />
               <div>
                 <label
                   htmlFor="is_chapter_locked"
-                  className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+                  className={`text-md3-body-md font-semibold text-slate-900 ${isHqEvent ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   Lock to Chapter
                 </label>
                 <p className="text-md3-label-md text-slate-400 mt-0.5">
-                  Only members of your chapter can register for this event. Disable to allow members from any chapter to join.
+                  {isHqEvent
+                    ? 'HQ events are open to members from every chapter, so chapter locking does not apply.'
+                    : 'Only members of your chapter can register for this event. Disable to allow members from any chapter to join.'}
                 </p>
               </div>
             </div>

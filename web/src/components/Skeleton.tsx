@@ -38,7 +38,7 @@ export function SkeletonFeaturedEvent() {
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <S className="h-10 w-32 rounded-[24px] bg-slate-400/30" />
+          <S className="h-10 w-32 rounded-2xl bg-slate-400/30" />
           <div className="flex -space-x-2">
             <S className="w-6 h-6 rounded-full bg-slate-400/20" />
             <S className="w-6 h-6 rounded-full bg-slate-400/20" />
@@ -52,7 +52,7 @@ export function SkeletonFeaturedEvent() {
 /** Horizontal job card for dashboard carousel (compact) */
 export function SkeletonJobCardCompact() {
   return (
-    <div className="flex-shrink-0 w-52 bg-white rounded-[24px] border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
+    <div className="flex-shrink-0 w-52 bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
       <div className="w-10 h-10 rounded-full bg-primary/20 animate-pulse" />
       <div className="space-y-1.5">
         <S className="h-4 w-full" />
@@ -68,7 +68,7 @@ export function SkeletonJobCardCompact() {
 /** Full-width job card skeleton matching new high-fidelity design */
 export function SkeletonJobCard() {
   return (
-    <div className="bg-white rounded-[24px] border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-[12px] space-y-2">
       <div className="w-12 h-12 rounded-full bg-primary/20 animate-pulse shrink-0" />
       <div className="flex flex-col gap-1">
         <div className="flex flex-col gap-[2px]">
@@ -88,7 +88,7 @@ export function SkeletonJobCard() {
 /** Mission card skeleton */
 export function SkeletonMissionCard() {
   return (
-    <div className="bg-white border border-[rgba(156,163,175,0.3)] rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-4 space-y-3">
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-[18px] py-4 space-y-3">
       <div className="flex items-center gap-2">
         <S className="h-4 w-16 rounded-full" />
         <S className="h-4 w-20 rounded-full" />
@@ -143,6 +143,37 @@ export function SkeletonTransactionGroup({ rows = 3 }: { rows?: number }) {
         {Array.from({ length: rows }).map((_, i) => (
           <SkeletonXPRow key={i} />
         ))}
+      </div>
+    </div>
+  )
+}
+
+/** Notification announcement card */
+export function SkeletonNotificationCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 mb-3">
+      <div className="flex items-center justify-between mb-2.5 pr-6">
+        <S className="h-4 w-24 rounded-full" />
+        <S className="h-3 w-14" />
+      </div>
+      <div className="space-y-2">
+        <S className="h-3.5 w-full" />
+        <S className="h-3.5 w-2/3" />
+      </div>
+    </div>
+  )
+}
+
+/** Organizer horizontal event row (72px thumb + details) */
+export function SkeletonOrgEventRow() {
+  return (
+    <div className="w-full bg-white border border-[rgba(156,163,175,0.3)] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-[16px] p-3 flex items-center gap-4">
+      <S className="size-[72px] rounded-[12px] shrink-0" />
+      <div className="flex-1 space-y-2 min-w-0">
+        <S className="h-4 w-3/4" />
+        <S className="h-3 w-1/3" />
+        <S className="h-3 w-1/2" />
+        <S className="h-4 w-14 rounded-full" />
       </div>
     </div>
   )

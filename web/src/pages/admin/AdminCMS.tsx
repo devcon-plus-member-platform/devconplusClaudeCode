@@ -3,6 +3,8 @@ import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuot
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import AdminUpgradeRequests from './AdminUpgradeRequests'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -135,6 +137,7 @@ const defaultRewardForm = (): RewardForm => ({
 
 function RewardsTab() {
   const [rows, setRows] = useState<Reward[]>([])
+  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -215,7 +218,7 @@ function RewardsTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Rewards</h2>
@@ -237,9 +240,10 @@ function RewardsTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Points Cost</th>
@@ -251,7 +255,7 @@ function RewardsTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pageItems.map((r) => (
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-semibold text-slate-900">{r.name}</td>
                   <td className="px-4 py-3 text-slate-700 font-mono text-md3-label-md">{r.points_cost.toLocaleString()} pts</td>
@@ -284,6 +288,8 @@ function RewardsTab() {
           {rows.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No rewards yet.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="reward" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
 
@@ -360,6 +366,7 @@ const defaultJobForm = (): JobForm => ({
 
 function JobsTab() {
   const [rows, setRows] = useState<Job[]>([])
+  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -446,7 +453,7 @@ function JobsTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Jobs</h2>
@@ -468,9 +475,10 @@ function JobsTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Title</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Company</th>
@@ -482,7 +490,7 @@ function JobsTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((j) => (
+              {pageItems.map((j) => (
                 <tr key={j.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-semibold text-slate-900">{j.title}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{j.company}</td>
@@ -515,6 +523,8 @@ function JobsTab() {
           {rows.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No jobs yet.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="job" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
 
@@ -620,6 +630,7 @@ const defaultArticleForm = (): ArticleForm => ({
 
 function ArticlesTab() {
   const [rows, setRows] = useState<NewsPost[]>([])
+  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -701,7 +712,7 @@ function ArticlesTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Articles</h2>
@@ -723,9 +734,10 @@ function ArticlesTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Title</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Category</th>
@@ -735,7 +747,7 @@ function ArticlesTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((n) => (
+              {pageItems.map((n) => (
                 <tr key={n.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-semibold text-slate-900 max-w-xs truncate">{n.title}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md capitalize">{n.category.replace('_', ' ')}</td>
@@ -766,6 +778,8 @@ function ArticlesTab() {
           {rows.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No articles yet.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="article" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
 
@@ -854,11 +868,13 @@ interface MissionSubmissionRow {
   id: string
   mission_id: string
   user_id: string
-  pr_link: string
+  pr_link: string | null
   status: 'pending' | 'approved'
   submitted_at: string
-  missions?: { title: string } | null
-  profiles?: { full_name: string; email: string } | null
+  // Flat fields returned by GET /api/missions/queue (see server MissionSubmissionWithDetails)
+  mission_title: string
+  member_name: string
+  member_email: string
 }
 
 interface MissionForm {
@@ -906,6 +922,9 @@ function MissionsTab() {
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [approveError, setApproveError] = useState<string | null>(null)
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null)
+
+  const { pageItems: missionItems, ...missionPagination } = usePagination(rows, 10)
+  const { pageItems: queueItems, ...queuePagination } = usePagination(queue, 10)
 
   const loadMissions = async () => {
     setLoadingMissions(true)
@@ -1025,7 +1044,7 @@ function MissionsTab() {
       setForm((p) => ({ ...p, [key]: e.target.value }))
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1071,8 +1090,9 @@ function MissionsTab() {
         ) : rows.length === 0 ? (
           <p className="text-md3-body-md text-slate-400 text-center py-12">No missions yet. Add one to get started.</p>
         ) : (
-          <div className="space-y-2">
-            {rows.map((m) => (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+            {missionItems.map((m) => (
               <div key={m.id} className="flex items-center gap-4 bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-card">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1108,6 +1128,8 @@ function MissionsTab() {
                 </div>
               </div>
             ))}
+            </div>
+            <Pagination controller={missionPagination} itemLabel="mission" className="shrink-0" />
           </div>
         )
       )}
@@ -1123,16 +1145,17 @@ function MissionsTab() {
         ) : queue.length === 0 ? (
           <p className="text-md3-body-md text-slate-400 text-center py-12">No pending submissions. The queue is clear.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="flex-1 min-h-0 flex flex-col">
             {approveError && <p className="text-md3-body-md text-red mb-2">{approveError}</p>}
-            {queue.map((sub) => (
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
+            {queueItems.map((sub) => (
               <div key={sub.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-card">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <p className="text-md3-body-md font-semibold text-slate-900">{sub.profiles?.full_name ?? 'Unknown'}</p>
-                    <p className="text-md3-label-md text-slate-400">{sub.profiles?.email}</p>
-                    <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.missions?.title}</p>
-                    {sub.pr_link === 'submitted-for-approval' ? (
+                    <p className="text-md3-body-md font-semibold text-slate-900">{sub.member_name || 'Unknown'}</p>
+                    <p className="text-md3-label-md text-slate-400">{sub.member_email}</p>
+                    <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.mission_title}</p>
+                    {!sub.pr_link || sub.pr_link === 'submitted-for-approval' ? (
                       <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
                     ) : (
                       <a
@@ -1159,6 +1182,8 @@ function MissionsTab() {
                 </div>
               </div>
             ))}
+            </div>
+            <Pagination controller={queuePagination} itemLabel="submission" className="shrink-0" />
           </div>
         )
       )}
@@ -1238,6 +1263,7 @@ const defaultXpTierForm = (): XpTierForm => ({
 
 function XpTiersTab() {
   const [rows, setRows] = useState<XpTier[]>([])
+  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -1317,7 +1343,7 @@ function XpTiersTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">XP Tiers</h2>
@@ -1339,9 +1365,10 @@ function XpTiersTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Label</th>
@@ -1352,7 +1379,7 @@ function XpTiersTab() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((t) => (
+              {pageItems.map((t) => (
                 <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-semibold text-slate-900">{t.name}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{t.label}</td>
@@ -1386,6 +1413,8 @@ function XpTiersTab() {
           {rows.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No XP tiers yet.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="tier" className="border-t border-slate-100 shrink-0" />
         </div>
       )}
 
@@ -1444,15 +1473,15 @@ export default function AdminCMS() {
   const [activeTab, setActiveTab] = useState<Tab>('Upgrade Requests')
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="h-full flex flex-col bg-slate-50">
       {/* Page header */}
-      <div className="px-8 pt-8 pb-4">
+      <div className="px-8 pt-8 pb-4 shrink-0">
         <h1 className="text-md3-headline-sm font-black text-slate-900">CMS</h1>
         <p className="text-md3-body-md text-slate-500 mt-0.5">Manage platform content and access requests</p>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-100 px-8 pt-6 pb-0">
+      <div className="flex gap-1 border-b border-slate-100 px-8 pt-6 pb-0 shrink-0">
         {TABS.map((tab) => (
           <button
             key={tab}
@@ -1469,7 +1498,7 @@ export default function AdminCMS() {
       </div>
 
       {/* Tab content */}
-      <div className="bg-white min-h-[calc(100vh-10rem)]">
+      <div className="flex-1 min-h-0 bg-white">
         {activeTab === 'Upgrade Requests' && <UpgradeRequestsTab />}
         {activeTab === 'Rewards' && <RewardsTab />}
         {activeTab === 'Jobs' && <JobsTab />}

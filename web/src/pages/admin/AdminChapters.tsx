@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { PenOutline, CheckCircleOutline, CloseCircleLineDuotone, AddCircleOutline, TrashBinTrashOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { apiFetch, publicFetch } from '../../lib/api'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
 import type { Chapter, Region } from '@devcon-plus/supabase'
 
 const REGIONS: Region[] = ['Luzon', 'Visayas', 'Mindanao']
@@ -241,6 +243,8 @@ export default function AdminChapters() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const { pageItems, ...pagination } = usePagination(chapters, 10)
+
   // Expand state
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -354,7 +358,7 @@ export default function AdminChapters() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">Chapters</h1>
@@ -402,8 +406,9 @@ export default function AdminChapters() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading chapters…</p>
       ) : (
-        <div className="space-y-3">
-          {chapters.map((chapter) => (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
+          {pageItems.map((chapter) => (
             <ChapterCard
               key={chapter.id}
               chapter={chapter}
@@ -431,6 +436,8 @@ export default function AdminChapters() {
           {chapters.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">No chapters found.</p>
           )}
+          </div>
+          <Pagination controller={pagination} itemLabel="chapter" className="shrink-0" />
         </div>
       )}
     </div>

@@ -6,13 +6,13 @@ export default function ProfileExpCard() {
   const { spendablePoints, lifetimePoints, tierProgress } = usePointsStore()
 
   return (
-    <div className="bg-white rounded-[24px] border border-slate-400/30 p-[24px] flex flex-col gap-5 shadow-card">
+    <div className="bg-white rounded-2xl border border-slate-200 p-[24px] flex flex-col gap-5 shadow-card">
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <div className="shrink-0 size-[48px] flex items-center justify-center">
             <MedalStarCircleBoldDuotone color="#F8C630" size={48} />
           </div>
-          <p className="font-proxima leading-none text-[#464646] tracking-[-1.226px]">
+          <p className="font-proxima leading-none text-slate-900 tracking-[-1.226px]">
             <span className="font-extrabold text-[40.867px]">{spendablePoints.toLocaleString()}</span>
             {' '}
             <span className="font-semibold text-[24px]">XP</span>
@@ -24,7 +24,7 @@ export default function ProfileExpCard() {
             <div className="shrink-0 size-[16px] flex items-center justify-center">
               <BoltOutline color="#94A3B8" size={14} />
             </div>
-            <span className="font-proxima text-[14px] text-[#6b7280]">
+            <span className="font-proxima text-[14px] text-slate-500">
               {lifetimePoints.toLocaleString()} lifetime points
             </span>
           </div>
@@ -32,7 +32,7 @@ export default function ProfileExpCard() {
           <div className="relative w-full h-2 bg-black/[0.16] rounded-full overflow-hidden">
             <motion.div
               className="absolute inset-y-0 left-0 rounded-full"
-              style={{ backgroundColor: '#eab308' }}
+              style={{ backgroundColor: '#F8C630' }}
               initial={{ width: 0 }}
               animate={{ width: `${tierProgress}%` }}
               transition={{ 

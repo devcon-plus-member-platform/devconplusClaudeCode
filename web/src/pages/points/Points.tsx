@@ -87,7 +87,7 @@ export default function Points() {
 
         {/* ── Stats Card Overlay ── */}
         <div className="relative z-10 flex flex-col px-4 -mt-[40px] pointer-events-none">
-          <div className="bg-white rounded-[24px] shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-400/30 p-[20px] flex flex-col gap-4 pointer-events-auto">
+          <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-200 p-[20px] flex flex-col gap-4 pointer-events-auto">
             {/* Dual balance display */}
             <div className="space-y-3">
               {/* Spendable */}
@@ -96,10 +96,10 @@ export default function Points() {
                   <StarOutline className="w-6 h-6" color="#F8C630" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[#464646] font-black text-md3-headline-sm leading-none">
+                  <span className="text-slate-900 font-black text-md3-headline-sm leading-none">
                     {spendablePoints.toLocaleString()} XP
                   </span>
-                  <span className="text-[#6b7280] text-[11px] font-proxima uppercase tracking-wider mt-1">Available to spend</span>
+                  <span className="text-slate-500 text-[11px] font-proxima uppercase tracking-wider mt-1">Available to spend</span>
                 </div>
               </div>
 
@@ -139,15 +139,15 @@ export default function Points() {
 
         {/* ── Tabs Wrapper ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="flex gap-[6px] overflow-x-auto no-scrollbar max-w-4xl mx-auto">
+          <div className="inline-flex w-full gap-2">
             {(['earn', 'share'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`whitespace-nowrap px-[12px] h-[32px] flex-1 flex items-center justify-center rounded-[128px] text-[14px] font-proxima font-bold transition-all shrink-0 ${
+                className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all shrink-0 ${
                   tab === t
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'bg-primary/10 text-primary'
+                    ? 'bg-primary text-white font-semibold shadow-sm'
+                    : 'bg-primary/10 text-primary font-medium'
                 }`}
               >
                 {t === 'earn' ? 'Ways to Earn' : 'Share & Earn'}

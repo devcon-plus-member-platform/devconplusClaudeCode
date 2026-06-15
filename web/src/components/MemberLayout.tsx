@@ -12,7 +12,7 @@ import { useNewsStore } from '../stores/useNewsStore'
 import { useVolunteerStore } from '../stores/useVolunteerStore'
 import { useReferralsStore } from '../stores/useReferralsStore'
 import { useMissionsStore } from '../stores/useMissionsStore'
-import { supabase, onRealtimeDisconnect } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 
 import DesktopGuard from './DesktopGuard'
@@ -30,9 +30,6 @@ export default function MemberLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const scrollRef = useRef<HTMLDivElement>(null)
-  const subscribeToEventChanges = useEventsStore((s) => s.subscribeToChanges)
-  const subscribeToRewardChanges = useRewardsStore((s) => s.subscribeToChanges)
-  const subscribeToPointsChanges = usePointsStore((s) => s.subscribeToChanges)
   const fetchEvents = useEventsStore((s) => s.fetchEvents)
   const fetchRegistrations = useEventsStore((s) => s.fetchRegistrations)
   const registrations = useEventsStore((s) => s.registrations)
@@ -45,7 +42,6 @@ export default function MemberLayout() {
   const loadVolunteerApplications = useVolunteerStore((s) => s.loadApplications)
   const loadReferralData = useReferralsStore((s) => s.loadReferralData)
   const fetchMissions = useMissionsStore((s) => s.fetchAll)
-  const subscribeMissions = useMissionsStore((s) => s.subscribeToChanges)
   const { fetchRecent, subscribe: subscribeNotifications } = useNotificationsStore()
 
 
@@ -82,28 +78,25 @@ export default function MemberLayout() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // Re-establish channels AND refetch data — channels authenticated with
-        // the old token must be replaced after a token refresh.
+        // Refetch data after sign-in / token refresh. The best-effort announcements
+        // channel re-auths itself or falls back to polling, so no channel rebuild here.
         recoverRef.current?.()
-        resubscribeRef.current?.()
       }
     })
     return () => { subscription.unsubscribe() }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Unified data + realtime management for the member session.
-  const unsubEventsRef = useRef<(() => void) | null>(null)
-  const unsubRewardsRef = useRef<(() => void) | null>(null)
-  const unsubMissionsRef = useRef<(() => void) | null>(null)
-  const unsubPointsRef = useRef<(() => void) | null>(null)
+  // Data management for the member session. The only realtime channel is the
+  // best-effort announcements subscription (owned by the effect below); events
+  // and points are polling-only now, so there is no events/points channel ref.
   const unsubNotifsRef = useRef<(() => void) | null>(null)
+  const lastAnnounceKeyRef = useRef<string>('')
 
-  // Stable refs so async handlers/event listeners (empty deps or stale closures)
-  // always call the current store-aware logic.
+  // Stable ref so async handlers/event listeners (empty deps) always call the
+  // current store-aware recover logic.
   const recoverRef = useRef<(() => void) | null>(null)
-  const resubscribeRef = useRef<(() => void) | null>(null)
-  // Debounce guard: prevents concurrent recovery runs when visibilitychange,
-  // online, and onRealtimeDisconnect all fire within the same "wake-up" burst.
+  // Debounce guard: prevents concurrent recovery runs when visibilitychange and
+  // online fire within the same "wake-up" burst.
   const lastRecoveryRef = useRef(0)
   // Scheduled follow-up recovery attempts (cleared on next runRecovery or unmount).
   const retryTimersRef = useRef<number[]>([])
@@ -142,53 +135,20 @@ export default function MemberLayout() {
     }
     recoverRef.current = recover
 
-    const resubscribe = () => {
-      // Force reconnect if the socket is truly closed
-      const state = supabase.realtime.connectionState()
-      if (state === 'closed') {
-        supabase.realtime.connect()
-      }
-      
-      // Cleanup existing subscriptions
-      unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubMissionsRef.current?.()
-      unsubPointsRef.current?.()
-      unsubNotifsRef.current?.()
-      
-      // Re-establish general subscriptions
-      unsubEventsRef.current = subscribeToEventChanges()
-      unsubRewardsRef.current = subscribeToRewardChanges()
-      unsubMissionsRef.current = subscribeMissions()
-      unsubPointsRef.current = subscribeToPointsChanges()
-      
-      // Re-establish notification subscription using the latest store state
-      const regs = useEventsStore.getState().registrations
-      const evs = useEventsStore.getState().events
-      const approvedIds = regs.filter(r => r.status === 'approved').map(r => r.event_id)
-      const eventTitles = Object.fromEntries(evs.map(e => [e.id, e.title]))
-      if (approvedIds.length > 0) {
-        unsubNotifsRef.current = subscribeNotifications(approvedIds, eventTitles)
-      }
-    }
-    resubscribeRef.current = resubscribe
-
     // Initial load on mount
     recover()
-    resubscribe()
 
     const runRecovery = () => {
       const now = Date.now()
       if (now - lastRecoveryRef.current < 3000) return
       lastRecoveryRef.current = now
       recover()
-      resubscribe()
       // Follow-up attempts in case the first round hits a stale TCP connection.
       // Stores preserve stale data so these retries are invisible to the user.
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = [
-        window.setTimeout(() => { recover(); resubscribe() }, 5_000),
-        window.setTimeout(() => { recover(); resubscribe() }, 15_000),
+        window.setTimeout(() => { recover() }, 5_000),
+        window.setTimeout(() => { recover() }, 15_000),
       ]
     }
 
@@ -198,42 +158,42 @@ export default function MemberLayout() {
 
     const handleOnline = () => runRecovery()
 
-    // Socket-level disconnect handler (heartbeat/network loss)
-    const unregisterDisconnect = onRealtimeDisconnect(() => runRecovery())
-
     document.addEventListener('visibilitychange', handleVisibility)
     window.addEventListener('online', handleOnline)
 
-    // Polling fallback: refetch + re-subscribe every 300 s (exempt from debounce).
-    // 300s is 3× less IO than the previous 90s while still covering silent channel death.
-    // Fast recovery is handled by visibilitychange + online events above.
-    const pollInterval = setInterval(() => { recover(); resubscribe() }, 300_000)
+    // Polling keepalive every 60 s — the primary freshness mechanism now that the
+    // events/points realtime channels are gone. recover() is cheap (backend reads
+    // are Upstash-cached). Fast recovery still comes from visibilitychange + online.
+    const pollInterval = setInterval(() => { recover() }, 60_000)
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('online', handleOnline)
-      unregisterDisconnect()
       clearInterval(pollInterval)
       retryTimersRef.current.forEach(clearTimeout)
       retryTimersRef.current = []
-      unsubEventsRef.current?.()
-      unsubRewardsRef.current?.()
-      unsubMissionsRef.current?.()
-      unsubPointsRef.current?.()
       unsubNotifsRef.current?.()
     }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Specialized effect for notifications that re-runs when registration status
-  // changes (e.g. pending -> approved), which happens without a full resubscribe call.
+  // Best-effort announcements channel — the only realtime subscription left in the
+  // layout. Rebuilt ONLY when the SET of approved event ids changes (keyed below),
+  // never on every poll-driven registrations refetch — otherwise it would churn the
+  // realtime subscription manager every 60 s. fetchRecent (here + in recover()) is
+  // the polling fallback; the channel gives up on error past the 200-connection cap.
   useEffect(() => {
     if (!user) return
     const approvedIds = registrations.filter(r => r.status === 'approved').map(r => r.event_id)
+    const key = [...approvedIds].sort().join(',')
+    if (key === lastAnnounceKeyRef.current) return // approved set unchanged → keep existing channel
+    lastAnnounceKeyRef.current = key
+
+    unsubNotifsRef.current?.()
+    unsubNotifsRef.current = null
     if (approvedIds.length === 0) return
-    
+
     const eventTitles = Object.fromEntries(events.map(e => [e.id, e.title]))
     void fetchRecent(approvedIds, eventTitles)
-    unsubNotifsRef.current?.()
     unsubNotifsRef.current = subscribeNotifications(approvedIds, eventTitles)
   }, [registrations, events, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -429,7 +389,7 @@ export default function MemberLayout() {
             </NavLink>
 
             <NavLink
-              to="/missions"
+              to="/rewards"
               className={({ isActive }) =>
                 `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium transition-colors ${
                   isActive ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'

@@ -541,7 +541,7 @@ export default function ProfileEdit() {
           type="submit"
           form="profile-form"
           disabled={isSubmitting}
-          className="w-full bg-primary text-white font-bold py-4 rounded-2xl disabled:opacity-60"
+          className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm disabled:opacity-60"
         >
           {isSubmitting ? 'Saving…' : 'Save Changes'}
         </button>
