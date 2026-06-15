@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import type { Event } from '@devcon-plus/supabase'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
-import { StatusBadge } from '../../../components/StatusBadge'
+import { EventStatusBadge } from '../../../components/EventStatusBadge'
 import { SkeletonOrgEventRow } from '../../../components/Skeleton'
 import { staggerContainer, cardItem, fadeUp } from '../../../lib/animation'
 import { isEventArchived } from '../../../lib/dates'
@@ -258,17 +258,7 @@ function EventRow({ event, onTap }: EventRowProps) {
           <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate">
             {event.title}
           </p>
-          {!isExpired && (
-            <StatusBadge
-              status={
-                event.status === 'upcoming'
-                  ? 'pending'
-                  : event.status === 'ongoing'
-                  ? 'approved'
-                  : 'rejected'
-              }
-            />
-          )}
+          {!isExpired && <EventStatusBadge status={event.status} />}
         </div>
 
         {/* Date Text */}
