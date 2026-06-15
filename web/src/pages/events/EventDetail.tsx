@@ -216,7 +216,7 @@ export default function EventDetail() {
                 onClick={handleExternalRegistration}
                 className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm"
               >
-                Open Registration
+                Learn More
               </button>
             )
           ) : !user ? (

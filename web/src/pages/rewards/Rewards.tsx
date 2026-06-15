@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { createPortal } from 'react-dom'
 import {
@@ -54,11 +54,12 @@ interface RedemptionModalProps {
   reward: Reward
   spendablePoints: number
   onClose: () => void
+  onGoToMissions: () => void
 }
 
 type SheetState = 'confirm' | 'loading' | 'success' | 'error'
 
-function RedemptionModal({ reward, spendablePoints, onClose }: RedemptionModalProps) {
+function RedemptionModal({ reward, spendablePoints, onClose, onGoToMissions }: RedemptionModalProps) {
   const { redeemReward } = useRewardsStore()
   const [sheetState, setSheetState] = useState<SheetState>('confirm')
   const [errorMessage, setErrorMessage] = useState<string>('')
@@ -144,13 +145,13 @@ function RedemptionModal({ reward, spendablePoints, onClose }: RedemptionModalPr
                       </p>
                       <p className="text-[12px] text-red/80">
                         You need {(reward.points_cost - spendablePoints).toLocaleString()} more points to redeem this item. Earn more by completing{' '}
-                        <Link
-                          to="/rewards"
+                        <button
+                          onClick={() => { handleClose(); onGoToMissions() }}
                           className="font-semibold underline underline-offset-2"
                           style={{ color: 'rgb(var(--color-primary))' }}
                         >
                           Missions
-                        </Link>
+                        </button>
                         !
                       </p>
                     </div>
@@ -975,7 +976,8 @@ const TABS = [
 
 export default function Rewards() {
   const location = useLocation()
-  const initialExpandId = (location.state as { expandMissionId?: string } | null)?.expandMissionId
+  const locationState = location.state as { expandMissionId?: string; tab?: string } | null
+  const initialExpandId = locationState?.expandMissionId
   const { user } = useAuthStore()
   const { spendablePoints, loadTotalPoints } = usePointsStore()
   const { rewards, allRewards, fetchRewards, isLoading } = useRewardsStore()
@@ -983,7 +985,9 @@ export default function Rewards() {
   const [selectedReceipt, setSelectedReceipt] = useState<RewardRedemption | null>(null)
   const [activeTab, setActiveTab] = useState<typeof TABS[number]['id']>('redeem')
   const [comingSoonFeature, setComingSoonFeature] = useState<string | null>(null)
-  const [mainTab, setMainTab] = useState<'redeem' | 'missions'>('missions')
+  const [mainTab, setMainTab] = useState<'redeem' | 'missions'>(
+    locationState?.tab === 'missions' ? 'missions' : 'redeem'
+  )
   const [missionFilter, setMissionFilter] = useState<MissionFilterId>('all')
 
   useEffect(() => {
@@ -1065,7 +1069,7 @@ export default function Rewards() {
         {/* ── Segmented Toggle: Missions / Redeem ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
           <div className="inline-flex w-full gap-2 max-w-4xl mx-auto">
-            {(['missions', 'redeem'] as const).map((t) => (
+            {(['redeem', 'missions'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setMainTab(t)}
@@ -1150,6 +1154,21 @@ export default function Rewards() {
                 ))}
               </motion.div>
             )}
+
+            {/* ── Missions CTA ── */}
+            <div className="mt-5 bg-slate-100 rounded-2xl px-4 py-4 flex items-center justify-center gap-2">
+              <StarOutline color="#F8C630" size={16} />
+              <p className="text-md3-body-md text-slate-700 font-proxima">
+                Earn more XP, Go on a{' '}
+                <button
+                  onClick={() => setMainTab('missions')}
+                  className="font-bold underline underline-offset-2"
+                  style={{ color: 'rgb(var(--color-primary))' }}
+                >
+                  Mission!
+                </button>
+              </p>
+            </div>
           </>
         ) : activeTab === 'receipts' ? (
           <ClaimReceiptsTab onSelectReceipt={setSelectedReceipt} />
@@ -1161,6 +1180,7 @@ export default function Rewards() {
           reward={selectedReward}
           spendablePoints={spendablePoints}
           onClose={handleSheetClose}
+          onGoToMissions={() => { handleSheetClose(); setMainTab('missions') }}
         />
       )}
 
