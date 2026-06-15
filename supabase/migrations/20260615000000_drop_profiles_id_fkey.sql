@@ -1,0 +1,13 @@
+-- Drop the stale FK that still ties profiles.id to auth.users.
+--
+-- Phase 4 (Firebase auth) makes Firebase the identity source, so profiles.id is now an
+-- app-generated UUID with no matching auth.users row. The constraint below is NOT VALID,
+-- which skips checking existing rows but STILL enforces on every new INSERT — so it rejects
+-- every new sign-up (Google 500s on /auth/firebase/exchange; email signup silently skips
+-- profile creation then 500s on first sign-in).
+--
+-- 20260531_phase4_cut_supabase_auth.sql intended this drop, but on project
+-- rrztmvoknmyrpuffutvh it was recorded as applied (schema_migrations version 20260531064423)
+-- while the constraint remained present — the DROP never took. This migration re-applies it
+-- idempotently so the live DB and the repo agree.
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
