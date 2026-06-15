@@ -107,7 +107,7 @@ function EventCard({
             {isExternal
               ? externalIsTba
                 ? 'Registration Coming Soon'
-                : 'Open Registration'
+                : 'Learn More'
               : 'Register Now'}
           </div>
 

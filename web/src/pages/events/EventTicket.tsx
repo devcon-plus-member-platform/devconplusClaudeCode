@@ -478,6 +478,28 @@ export default function EventTicket() {
               ))}
             </motion.div>
 
+            {/* Missions cross-promo — shown only after successful check-in */}
+            {checkedIn && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.3, ease: 'easeOut' }}
+                className="mx-4 mb-4 bg-slate-100 rounded-2xl px-4 py-4 flex items-center justify-center gap-2"
+              >
+                <BoltOutline color="#F8C630" size={16} />
+                <p className="text-md3-body-md text-slate-700 font-proxima">
+                  Earn more XP, Go on a{' '}
+                  <button
+                    onClick={() => navigate('/rewards', { state: { tab: 'missions' } })}
+                    className="font-bold underline underline-offset-2"
+                    style={{ color: 'rgb(var(--color-primary))' }}
+                  >
+                    Mission!
+                  </button>
+                </p>
+              </motion.div>
+            )}
+
             {/* Cancel registration — only shown when not yet checked in */}
             {!reg.checked_in && !checkedIn && !eventEnded && (
               <div className="px-4 pb-5">

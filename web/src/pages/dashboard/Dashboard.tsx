@@ -122,7 +122,7 @@ useEffect(() => {
     title: e.title,
     sub:   e.location ?? 'DEVCON Philippines',
     date:  e.event_date ? formatDate.compact(e.event_date) : undefined,
-    cta:   e.is_external ? 'Open Registration' : 'Register Now',
+    cta:   e.is_external ? 'Learn More' : 'Register Now',
     image: e.cover_image_url ?? '/photos/devcon-certificate-ceremony.jpg',
     isExternal: e.is_external === true,
     onClick: () => navigate(`/events/${e.slug}`),
