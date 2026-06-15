@@ -59,8 +59,8 @@ export default function OAuthProfileComplete() {
     }
     setUsernameStatus('checking')
     usernameTimerRef.current = setTimeout(async () => {
-      const available = await checkUsernameAvailable(value)
-      setUsernameStatus(available ? 'available' : 'taken')
+      const result = await checkUsernameAvailable(value)
+      setUsernameStatus(result === 'unknown' ? 'idle' : result)
     }, 400)
   }, [checkUsernameAvailable])
 

@@ -110,8 +110,8 @@ export default function ProfileEdit() {
     }
     setUsernameStatus('checking')
     const t = setTimeout(async () => {
-      const available = await checkUsernameAvailable(value)
-      setUsernameStatus(available ? 'available' : 'taken')
+      const result = await checkUsernameAvailable(value)
+      setUsernameStatus(result === 'unknown' ? 'idle' : result)
     }, 400)
     setUsernameTimer(t)
   }, [usernameTimer, checkUsernameAvailable, user?.username])
