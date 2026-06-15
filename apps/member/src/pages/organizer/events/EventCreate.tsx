@@ -430,6 +430,7 @@ export function OrgEventCreate() {
               <GalleryAddOutline className="w-6 h-6" />
               <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
               <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
+              <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
             </button>
           )}
 
