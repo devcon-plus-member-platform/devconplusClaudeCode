@@ -1,0 +1,31 @@
+# Production slot — deployed from master by deploy-backend-production.yml.
+# Dormant until the dev -> master structural merge: runs on the same EC2 host
+# as the staging slot, on port 8010, behind nginx server_name api.devcon.ph.
+# See the merge-day runbook before first use (prod-repo checkout + .env.prod).
+services:
+  api:
+    container_name: devcon-plus-api-prod
+    image: ghcr.io/devcon-plus-member-platform/devcon-plus-api:prod
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    ports:
+      - "127.0.0.1:8010:8000"

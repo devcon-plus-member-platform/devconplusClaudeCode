@@ -9,6 +9,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { logger } from '../_shared/logger.ts'
+import { verifyCallerJwt } from '../_shared/auth.ts'
 
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
@@ -136,24 +137,17 @@ Deno.serve(async (req: Request) => {
       identifier = `ip:${extractIp(req)}`
     }
   } else if (bucket === 'org_upgrade') {
-    // User-keyed bucket: JWT required
-    const authHeader = req.headers.get('Authorization')
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: { headers: { Authorization: authHeader ?? '' } },
-        auth: { autoRefreshToken: false, persistSession: false },
-      }
-    )
-    const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser()
-    if (authErr || !user) {
+    // User-keyed bucket: JWT required (Phase 4 — replaces supabase.auth.getUser())
+    let callerId: string
+    try {
+      callerId = await verifyCallerJwt(req)
+    } catch {
       return new Response(
         JSON.stringify({ allowed: false, error: 'Unauthorized.' }),
         { status: 401, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
       )
     }
-    identifier = `user:${user.id}`
+    identifier = `user:${callerId}`
   } else {
     // Unknown bucket → 400 Bad Request (not 429 — this is a caller error, not a rate limit event)
     return new Response(

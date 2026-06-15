@@ -1,0 +1,63 @@
+{
+  "name": "@devcon-plus/web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src",
+    "test": "vitest",
+    "test:ci": "vitest run"
+  },
+  "overrides": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.10.0",
+    "@marsidev/react-turnstile": "^1.5.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "firebase": "^12.14.0",
+    "framer-motion": "^12.40.0",
+    "html-to-image": "^1.11.13",
+    "motion-dom": "^12.40.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hook-form": "^7.56.1",
+    "react-is": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.6.2",
+    "recharts": "^3.8.0",
+    "remark-gfm": "^4.0.1",
+    "solar-icon-set": "^2.0.1",
+    "sonner": "^2.0.7",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^10.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.59.4",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.7"
+  }
+}

@@ -1,5 +1,5 @@
 # DEVCON+ — Claude Code Master Context File
-> Last Updated: May 14, 2026
+> Last Updated: May 24, 2026
 > Version: MVP 1.7
 > Team: 3 interns + Claude Code
 > Hard Deadline: April 30, 2026 (Cohort 3 Graduation)
@@ -18,13 +18,15 @@ These rules are non-negotiable. Read before generating anything.
 4. **Never create dead-end navigation.** Every tap must resolve to content or a `ComingSoonModal`.
 5. **Always pre-fill registration forms** from the authenticated Supabase user's profile data.
 6. **Always use TypeScript strict mode.** No `any` types.
-7. **The Member App and Organizer flow share ONE codebase** (`apps/member/`) but use separate layouts and route trees. Member routes are under `MemberLayout`. Organizer routes are under `OrganizerLayout` at `/organizer/*`. Do not mix their components.
+7. **The Member App and Organizer flow share ONE codebase** (`web/`) but use separate layouts and route trees. Member routes are under `MemberLayout`. Organizer routes are under `OrganizerLayout` at `/organizer/*`. Do not mix their components.
 8. **Jobs Board is manually seeded in Supabase for MVP.** No external API integration needed.
 9. **Photos in onboarding are real chapter group photos** served from `public/photos/`. If assets are missing, use named gradient placeholders — never stock illustration components.
 10. **The 2nd job listing and 2nd news post always get an orange `PROMOTED` badge.** This is a design mandate, not optional.
 11. **The member app is a mobile-first web app** (React + Vite, not Expo). All UI must be designed for a 390px-wide mobile viewport. On desktop (md+), `MemberLayout` and `OrganizerLayout` switch to a sidebar + main card layout — they are fully responsive, not blocked. `<DesktopGuard />` is a pass-through no-op.
 12. **Primary color is CSS-custom-property driven** (`rgb(var(--color-primary))`). Always use `text-primary`, `bg-primary`, etc. — not hardcoded hex. Only use `text-blue` / `bg-blue` when you explicitly need the non-themed DEVCON blue alias.
-13. **Supabase is now live.** All stores use the real Supabase client (`apps/member/src/lib/supabase.ts`). The `MOCK_*` exports in `@devcon-plus/supabase` are kept for reference but are no longer used by the app. Always use the Supabase client for new data calls.
+16. **Never use `lucide-react`.** The icon library is `solar-icon-set` (outline variant only). `solar-icon-set` icons do NOT respond to Tailwind `text-*` color classes — use the `color` prop instead: `<HomeOutline color="rgb(var(--color-primary))" />`.
+17. **Never use Tailwind `slate-600` or `slate-800`.** These steps don't exist in the configured scale. Use `slate-500` or `slate-700`.
+13. **Supabase is now live.** All stores use the real Supabase client (`web/src/lib/supabase.ts`). The `MOCK_*` exports in `web/src/types/mock/` are kept for reference but are no longer used by the app. Always use the Supabase client for new data calls.
 14. **Figma MCP: Claude Code supports it (native claude.ai integration — no setup needed) but captures elements poorly per developer observation. Gemini CLI is preferred when available.** Both tools can connect to Figma MCP. Claude Code has a built-in Figma integration via claude.ai (tools: `get_design_context`, `get_screenshot`, `get_metadata`, etc. — available in any claude.ai/code session without `.mcp.json` config). However, per developer observation, Claude Code does not read Figma elements accurately — layouts and tokens are often misread. Gemini CLI produces better design-to-code results. Use Gemini CLI for Figma work if access is provisioned; otherwise use Claude Code + Figma MCP with manual verification, or fall back to the human Figma Inspect panel method. **Figma MCP is free; Figma Dev Mode (recommended for accurate specs) requires a paid Figma plan.**
 15. **MCPs are recommended for automated workflows.** Supabase MCP is already configured in `.mcp.json`. Figma MCP (local server) and Vercel MCP should be added when the corresponding tokens are available. Note: Figma MCP is also available natively in claude.ai sessions without any `.mcp.json` setup. See `README.md` Section 15 for setup instructions.
 
@@ -62,19 +64,27 @@ These rules are non-negotiable. Read before generating anything.
 
 ## 2. REPOSITORY STRUCTURE
 
-Monorepo using npm workspaces + Turbo.
+Co-located independent apps (no npm workspace manager at root).
 
 ```
 devcon-plus/
-├── apps/
-│   ├── member/              # React + Vite — mobile-first web app
+├── web/                     # React + Vite — mobile-first web app (self-contained)
 │   │                        # Contains BOTH member UI and organizer UI
 │   │                        # (organizer is a separate route tree at /organizer/*)
-│   └── landing/             # Static landing page (index.html only)
-├── packages/
-│   └── supabase/            # Shared DB types, mock data, client config
-├── package.json             # Workspace root (framer-motion lives here)
-└── turbo.json
+│   ├── src/
+│   ├── public/
+│   │   └── app-screenshots/ # App screenshots for documentation
+│   ├── package.json         # Frontend deps (framer-motion lives here)
+│   ├── vercel.json          # Vercel deployment config
+│   ├── .env.example
+│   └── ...
+├── server/                  # NestJS backend (self-contained)
+│   ├── src/
+│   ├── package.json
+│   ├── .env.example
+│   └── ...
+├── supabase/                # Supabase CLI — migrations, Edge Functions, seed
+└── docs/
 ```
 
 ---
@@ -82,13 +92,13 @@ devcon-plus/
 ## 3. TECH STACK
 
 
-### Member App + Organizer UI (`apps/member/`)
+### Member App + Organizer UI (`web/`)
 | Concern | Choice |
 |---------|--------|
 | Framework | **React 19** + **Vite 7** |
 | Router | **React Router DOM v7** (flat `createBrowserRouter`) |
 | Styling | **Tailwind CSS v3** |
-| Animation | **framer-motion** (workspace root dependency) |
+| Animation | **framer-motion** (`web/` dependency) |
 | State | **Zustand v5** |
 | Forms | **React Hook Form v7** + **Zod** |
 | Backend client | `@supabase/supabase-js` (live — wired to production project) |
@@ -103,12 +113,14 @@ devcon-plus/
 
 > **Responsive layout:** `MemberLayout` and `OrganizerLayout` are fully responsive. On mobile (< md): floating pill bottom nav + full-screen scroll container. On desktop (md+): fixed sidebar (bg-primary / bg-blue) + main content card. `<DesktopGuard />` is now a pass-through component — it renders its children directly. All UI still targets 390px-wide as the primary viewport.
 
-### Shared Package (`packages/supabase/`)
-| Concern | Choice |
-|---------|--------|
-| Exports | TypeScript types + mock data |
-| Mock data | `MOCK_PROFILE`, `MOCK_EVENTS`, `MOCK_JOBS`, `NEWS_POSTS`, etc. (kept for reference, not used by the app) |
-| DB types | `packages/supabase/src/database.types.ts` — generated from live DB via `supabase gen types typescript` |
+### Type Definitions (`web/src/types/`)
+| File | Contents |
+|------|----------|
+| `types.ts` | Domain interfaces: Profile, Event, Job, Mission, etc. |
+| `database.types.ts` | Generated Supabase DB types — regenerate via `supabase gen types typescript > web/src/types/database.types.ts` |
+| `mock/` | Mock data (kept for reference, not used by the app) |
+
+All imports use the `@devcon-plus/supabase` alias (configured in `vite.config.ts` + `tsconfig.app.json` → resolves to `web/src/types/`).
 
 ---
 
@@ -439,7 +451,7 @@ CREATE POLICY "Users view own points" ON point_transactions
 
 ## 6. APPLICATION SCREENS & ROUTES
 
-### React Router (flat `createBrowserRouter` in `apps/member/src/router.tsx`)
+### React Router (flat `createBrowserRouter` in `web/src/router.tsx`)
 
 ```
 /                        → SplashScreen
@@ -727,7 +739,7 @@ Safe bottom:    pb-24 in scroll containers (clears floating nav)
 
 ### Animation (framer-motion)
 ```js
-// apps/member/src/lib/animation.ts — always import from here, never redefine inline
+// web/src/lib/animation.ts — always import from here, never redefine inline
 fadeUp            — page entrances, card list entry (y: 10→0, 0.22s)
 fade              — page-level opacity transitions (0.18s)
 slideUp           — bottom sheets and modals (y: 100%→0, custom easing)
@@ -788,7 +800,7 @@ Nav item:             whileTap={{ scale: 0.88 }}, type: 'spring', stiffness: 400
 
 ---
 
-## 10. STORES (`apps/member/src/stores/`)
+## 10. STORES (`web/src/stores/`)
 
 ```
 useAuthStore.ts           — user (Profile|null), initials, chapterName, isInitialized,
@@ -816,11 +828,11 @@ useThemeStore.ts          — themeId, setTheme(), activeTheme()
                             persisted to localStorage as 'devcon-theme'
 ```
 
-All stores use real Supabase queries via `apps/member/src/lib/supabase.ts`.
+All stores use real Supabase queries via `web/src/lib/supabase.ts`.
 
 ---
 
-## 11. LIB UTILITIES (`apps/member/src/lib/`)
+## 11. LIB UTILITIES (`web/src/lib/`)
 
 ```
 animation.ts         — framer-motion variants: fadeUp, fade, slideUp, backdrop,
@@ -839,7 +851,7 @@ useRecoverOnFocus.ts — recovery hook: refetches + resubscribes on visibilitych
                        online event, and 90-second polling interval
 ```
 
-### Hooks (`apps/member/src/hooks/`)
+### Hooks (`web/src/hooks/`)
 ```
 useRecoverOnFocus.ts — recovery hook: refetches + resubscribes on visibilitychange,
                        online event, and 90-second polling interval
@@ -936,7 +948,7 @@ INSERT INTO rewards (name, points_cost, type, claim_method, is_coming_soon) VALU
 
 ## 14. ENVIRONMENT VARIABLES
 
-### `apps/member/.env.local`
+### `web/.env.local`
 ```env
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
@@ -956,7 +968,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 - TypeScript strict mode — no `any`, no `@ts-ignore`
 - `PascalCase.tsx` for components, `camelCase.ts` for lib/store files
 - Co-locate component + types in the same folder when complex
-- All Supabase calls typed with generated types (`supabase gen types typescript`)
+- All Supabase calls typed with generated types — regenerate with `supabase gen types typescript > web/src/types/database.types.ts`
 - Every async call has loading + error + empty state
 - React Hook Form + Zod for every form — no uncontrolled inputs
 - Constants in `lib/constants.ts` — no magic strings/numbers inline
@@ -969,13 +981,19 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 ## 16. BUILD COMMANDS
 
+Each app is self-contained — run commands from the relevant subdirectory.
+
 ```bash
-npm install --legacy-peer-deps        # required — peer conflict
-npm run dev:member                    # Vite dev server for member app
-                                      # turbo filter: @devcon-plus/member
-npm run dev                           # all apps via turbo
-npm run build                         # production build
-npm run typecheck                     # tsc --noEmit across all packages
+# Frontend (web/)
+cd web && npm install        # install deps (no --legacy-peer-deps — uses overrides)
+cd web && npm run dev        # Vite dev server (port 5173)
+cd web && npm run build      # tsc -b && vite build (mirrors Vercel exactly)
+cd web && npm run typecheck  # tsc -b --noEmit (same strictness as build)
+
+# Backend (server/)
+cd server && npm install     # install NestJS deps
+cd server && npm run dev     # NestJS watch mode (port 3000)
+cd server && npm run build   # compile NestJS to dist/
 ```
 
 ---
@@ -983,7 +1001,7 @@ npm run typecheck                     # tsc --noEmit across all packages
 ## 17. CURRENT BUILD STATUS (as of May 11, 2026)
 
 ### Completed
-- [x] Monorepo scaffold (apps/member, packages/supabase)
+- [x] Monorepo scaffold (web, server) — types in web/src/types/
 - [x] Tailwind + Geist font + design tokens + CSS custom property theming
 - [x] Program theme system (4 themes, CSS vars, persisted via Zustand)
 - [x] Per-event theme overrides via `devcon_category` + `lib/eventTheme.ts`
@@ -1006,7 +1024,7 @@ npm run typecheck                     # tsc --noEmit across all packages
 - [x] Admin attendance CSV export with event/chapter/date/status filters (AdminEvents)
 - [x] All core components (see Section 9) including KonamiCodeWrapper + KonamiModal (Easter egg)
 - [x] framer-motion animations across all list/card sections
-- [x] Supabase project provisioned + real client wired (`apps/member/src/lib/supabase.ts`)
+- [x] Supabase project provisioned + real client wired (`web/src/lib/supabase.ts`)
 - [x] Custom navigator.locks auth (no timeout) + realtime throttle (10 events/sec)
 - [x] Real Supabase auth (signIn, signUp, Google OAuth, session persistence)
 - [x] All stores migrated to real Supabase queries (auth, events, jobs, news, points, rewards, notifications, volunteers, referrals)

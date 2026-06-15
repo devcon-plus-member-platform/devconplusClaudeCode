@@ -1,0 +1,85 @@
+#!/bin/bash
+set -euxo pipefail
+
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+dnf update -y
+dnf install -y docker nginx git certbot python3-certbot-nginx amazon-cloudwatch-agent
+
+install -d -m 0755 /usr/local/lib/docker/cli-plugins
+install -d -m 0755 /etc/docker
+curl -fsSL "https://github.com/docker/compose/releases/download/v${compose_version}/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+cat >/etc/docker/daemon.json <<'DOCKER'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "5"
+  }
+}
+DOCKER
+
+if ! id -u ${deploy_user} >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash ${deploy_user}
+fi
+
+usermod -aG docker ec2-user
+usermod -aG docker ${deploy_user}
+
+install -d -m 0755 -o ${deploy_user} -g ${deploy_user} ${deployment_dir}
+
+systemctl enable --now docker
+
+if systemctl list-unit-files | grep -q '^amazon-ssm-agent'; then
+  systemctl enable --now amazon-ssm-agent
+fi
+
+rm -f /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/example_ssl.conf
+find /etc/nginx/default.d -maxdepth 1 -type f -delete 2>/dev/null || true
+
+cat >/etc/nginx/nginx.conf <<'NGINX_MAIN'
+${nginx_main_config}
+NGINX_MAIN
+
+cat >/etc/nginx/conf.d/00-devcon-plus.conf <<'NGINX'
+${nginx_http_config}
+NGINX
+
+cat >/etc/logrotate.d/devcon-plus-nginx <<'LOGROTATE_NGINX'
+${nginx_logrotate}
+LOGROTATE_NGINX
+
+cat >/etc/logrotate.d/devcon-plus-docker <<'LOGROTATE_DOCKER'
+${docker_logrotate}
+LOGROTATE_DOCKER
+
+nginx -t
+systemctl enable --now nginx
+
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWAGENT'
+${cloudwatch_config}
+CWAGENT
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+  -s
+
+if systemctl list-unit-files | grep -q '^certbot-renew.timer'; then
+  systemctl enable --now certbot-renew.timer
+elif systemctl list-unit-files | grep -q '^certbot.timer'; then
+  systemctl enable --now certbot.timer
+fi
+
+cat >/etc/motd <<EOF
+DEVCON+ backend host ready.
+
+- HTTP endpoint: http://<elastic-ip>/api/health
+- Planned HTTPS hostname: https://${api_domain}/api/health
+- Repo checkout directory: ${deployment_dir}
+- Compose plugin version: v${compose_version}
+EOF

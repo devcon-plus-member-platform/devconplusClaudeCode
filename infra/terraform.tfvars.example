@@ -1,0 +1,9 @@
+ssh_public_key    = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... your-key-comment"
+allowed_admin_cidr = "203.0.113.10/32"
+api_domain        = "api.devcon.ph"
+
+# Optional: receive CloudWatch alarm notifications by email.
+# alarm_email = "you@example.com"
+
+# Optional: pin a specific default public subnet in ap-southeast-1.
+# subnet_id = "subnet-0123456789abcdef0"
