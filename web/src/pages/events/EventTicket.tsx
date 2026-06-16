@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, MapPointOutline, RefreshOutline, CheckCircleOutline, BoltOutline, DangerTriangleOutline, CalendarMarkOutline, CalendarAddOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, MapPointOutline, RefreshOutline, CheckCircleOutline, BoltOutline, DangerTriangleOutline, CalendarMarkOutline, CalendarAddOutline, StarOutline, AltArrowRightOutline } from 'solar-icon-set'
 import { QRCodeSVG } from 'qrcode.react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
@@ -39,6 +39,15 @@ const RECT_CIRCUMFERENCE = 4 * (RECT_SIZE - 2 * RECT_RX) + 2 * Math.PI * RECT_RX
 // Flower-of-life pattern matching Rewards/Dashboard/Events
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
 const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
+
+// Perforation mask — punches a 14px-radius semicircular hole into each side edge
+// of the divider strip (28px tall). Two radial gradients composited with
+// `intersect`: a pixel survives only where BOTH are opaque, so the transparent
+// circle at each edge becomes a true cut-out that reveals the page background
+// behind the card (matching the gradient + pattern exactly, no color guessing).
+const NOTCH_MASK =
+  'radial-gradient(circle 14px at 0 14px, transparent 13px, #000 14px), ' +
+  'radial-gradient(circle 14px at 100% 14px, transparent 13px, #000 14px)'
 
 // Inline horizontal logo — white text paths + multicolor ICON
 function LogoHorizontalWhite({ width = 132 }: { width?: number }) {
@@ -170,6 +179,13 @@ export default function EventTicket() {
     if (reg?.checked_in) setCheckedIn(true)
   }, [reg?.checked_in])
 
+  // Drop out of the enlarged QR view once check-in lands. The organizer scan can
+  // flip `checkedIn` while the member is in the fullscreen overlay; without this
+  // they'd keep staring at a now-stale QR instead of seeing the success card.
+  useEffect(() => {
+    if (checkedIn) setQrFullscreen(false)
+  }, [checkedIn])
+
   if (!event || !reg || reg.status !== 'approved') {
     return (
       <div className="p-4 text-center text-slate-400 pt-20">
@@ -243,7 +259,7 @@ export default function EventTicket() {
           initial="hidden"
           animate="visible"
           style={{ transitionDelay: '0.12s' }}
-          className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
+          className="w-full max-w-sm rounded-3xl overflow-hidden shadow-[0_14px_34px_-14px_rgba(0,0,0,0.35)]"
         >
           {/* ── Primary header strip ── */}
           <div
@@ -280,15 +296,16 @@ export default function EventTicket() {
             </motion.div>
           </div>
 
-          {/* ── White ticket body ── */}
-          <div className="bg-white">
+          {/* ── White ticket body (split sections so the divider's punched
+                notches reveal the page background, not white) ── */}
+          <div>
 
             {/* QR code / success card */}
             <motion.div
               initial={{ opacity: 0, scale: 0.88 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3, duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-col items-center pt-6 pb-3 px-4 gap-3"
+              className="bg-white flex flex-col items-center pt-6 pb-3 px-4 gap-3"
             >
               {/* Fixed-size wrapper so QR and success card share the same footprint */}
               <div className="relative w-[240px] h-[240px] flex items-center justify-center">
@@ -456,12 +473,30 @@ export default function EventTicket() {
               )}
             </motion.div>
 
-            {/* Perforated divider with side notches */}
-            <div className="relative flex items-center mx-0">
-              <div className="absolute -left-3 w-6 h-6 rounded-full bg-slate-100" />
-              <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-4" />
-              <div className="absolute -right-3 w-6 h-6 rounded-full bg-slate-100" />
+            {/* Perforated divider — true semicircular cut-outs at each edge.
+                The masked white strip reveals the page background through the
+                holes; the rim overlays add an inner shadow so each notch reads
+                as a recessed punched hole (small color diffs read as depth). */}
+            <div className="relative h-7">
+              {/* White strip with both side holes punched out */}
+              <div
+                className="absolute inset-0 bg-white"
+                style={{
+                  WebkitMaskImage: NOTCH_MASK,
+                  WebkitMaskComposite: 'source-in',
+                  maskImage: NOTCH_MASK,
+                  maskComposite: 'intersect',
+                }}
+              />
+              {/* Dashed tear line */}
+              <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-slate-200" />
+              {/* Hole depth rims (siblings of the mask so they survive the cut) */}
+              <div className="absolute left-[-14px] top-0 w-7 h-7 rounded-full pointer-events-none shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.16)]" />
+              <div className="absolute right-[-14px] top-0 w-7 h-7 rounded-full pointer-events-none shadow-[inset_0_1.5px_3px_rgba(0,0,0,0.16)]" />
             </div>
+
+            {/* Info + cancel — own white background so it stays opaque below the cut */}
+            <div className="bg-white">
 
             {/* Member info rows */}
             <motion.div
@@ -478,28 +513,6 @@ export default function EventTicket() {
               ))}
             </motion.div>
 
-            {/* Missions cross-promo — shown only after successful check-in */}
-            {checkedIn && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.3, ease: 'easeOut' }}
-                className="mx-4 mb-4 bg-slate-100 rounded-2xl px-4 py-4 flex items-center justify-center gap-2"
-              >
-                <BoltOutline color="#F8C630" size={16} />
-                <p className="text-md3-body-md text-slate-700 font-proxima">
-                  Earn more XP, Go on a{' '}
-                  <button
-                    onClick={() => navigate('/rewards', { state: { tab: 'missions' } })}
-                    className="font-bold underline underline-offset-2"
-                    style={{ color: 'rgb(var(--color-primary))' }}
-                  >
-                    Mission!
-                  </button>
-                </p>
-              </motion.div>
-            )}
-
             {/* Cancel registration — only shown when not yet checked in */}
             {!reg.checked_in && !checkedIn && !eventEnded && (
               <div className="px-4 pb-5">
@@ -512,6 +525,8 @@ export default function EventTicket() {
                 </motion.button>
               </div>
             )}
+
+            </div>
 
           </div>
         </motion.div>
@@ -530,6 +545,24 @@ export default function EventTicket() {
           >
             <CalendarAddOutline className="w-4 h-4" />
             Add to Calendar
+          </motion.button>
+        )}
+
+        {/* Earn more XP — missions cross-promo, shown only after successful check-in */}
+        {checkedIn && (
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.68, duration: 0.3 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate('/rewards', { state: { tab: 'missions' } })}
+            className="w-full max-w-sm flex items-center justify-center gap-2
+                       bg-white/[0.18] border border-white/30 text-white
+                       rounded-2xl py-3 text-md3-body-md font-semibold backdrop-blur-sm mt-3"
+          >
+            <StarOutline color="#F8C630" width={16} height={16} />
+            Earn more XP
+            <AltArrowRightOutline className="w-4 h-4" />
           </motion.button>
         )}
 

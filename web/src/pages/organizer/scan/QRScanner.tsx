@@ -67,8 +67,8 @@ export function OrgQRScanner() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
   const [isSwitching, setIsSwitching] = useState(false)
 
-  // Mirror defaults to true — most organisers face the member (front camera / mirrored rear)
-  const [isMirrored, setIsMirrored] = useState(true)
+  // Mirror defaults to false — organiser can toggle it on from the settings panel if needed
+  const [isMirrored, setIsMirrored] = useState(false)
 
   // Event context — which event is being scanned at this door
   const [availableEvents, setAvailableEvents] = useState<EventContext[]>([])

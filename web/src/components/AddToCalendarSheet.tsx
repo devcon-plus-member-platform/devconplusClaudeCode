@@ -9,16 +9,19 @@ interface Props {
   onClose: () => void
 }
 
-/** Convert a UTC Date to Asia/Manila (UTC+8) and format as YYYYMMDDTHHmmss */
-function toManilaLocal(date: Date): string {
-  const manilaOffset = 8 * 60 * 60 * 1000
-  const local = new Date(date.getTime() + manilaOffset)
-  return local.toISOString().replace(/[-:]/g, '').slice(0, 15)
-}
-
-/** Format a Date as YYYYMMDDTHHmmssZ (UTC, for Google CalendarOutline) */
-function toUTCCompact(date: Date): string {
-  return date.toISOString().replace(/[:\-.]/g, '').slice(0, 15) + 'Z'
+/**
+ * Format an event time as a floating `YYYYMMDDTHHmmss` wall-clock string (no `Z`).
+ *
+ * Events are entered via `<input type="datetime-local">` — a zone-less Asia/Manila
+ * wall-clock — and stored in a `timestamptz` column whose session zone is UTC, so
+ * the digits the organizer typed survive in the UTC components of the value
+ * (6:00 PM round-trips as `18:00Z`). We read those components straight back out
+ * (no offset shift) and declare them as Asia/Manila to each calendar — via `ctz`
+ * for Google and `TZID` for the .ics file. Adding a +8h offset here was the bug
+ * that pushed every export forward by 8 hours.
+ */
+function toManilaWallClock(date: Date): string {
+  return date.toISOString().replace(/[-:]/g, '').slice(0, 15)
 }
 
 export default function AddToCalendarSheet({ event, isOpen, onClose }: Props) {
@@ -33,7 +36,7 @@ export default function AddToCalendarSheet({ event, isOpen, onClose }: Props) {
     const params = new URLSearchParams({
       action: 'TEMPLATE',
       text: event.title,
-      dates: `${toUTCCompact(start)}/${toUTCCompact(end)}`,
+      dates: `${toManilaWallClock(start)}/${toManilaWallClock(end)}`,
       details: event.description ?? '',
       location: event.location ?? '',
       ctz: 'Asia/Manila',
@@ -53,8 +56,8 @@ export default function AddToCalendarSheet({ event, isOpen, onClose }: Props) {
       'PRODID:-//DEVCON+//Events//EN',
       'BEGIN:VEVENT',
       `UID:${event.id}@devconplus`,
-      `DTSTART;TZID=Asia/Manila:${toManilaLocal(start)}`,
-      `DTEND;TZID=Asia/Manila:${toManilaLocal(end)}`,
+      `DTSTART;TZID=Asia/Manila:${toManilaWallClock(start)}`,
+      `DTEND;TZID=Asia/Manila:${toManilaWallClock(end)}`,
       `SUMMARY:${event.title}`,
       `DESCRIPTION:${(event.description ?? '').replace(/\n/g, '\\n')}`,
       `LOCATION:${event.location ?? ''}`,
