@@ -408,7 +408,7 @@ export default function EventRegister() {
               onClick={(e) => { e.stopPropagation(); setLegalModal('terms') }}
               className="text-primary underline underline-offset-2"
             >
-              Terms &amp; Conditions
+              Code of Conduct
             </button>
             {', and '}
             <button
