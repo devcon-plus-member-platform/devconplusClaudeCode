@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { AdminService } from './admin.service';
+import { SendOfficerInviteDto } from './dto/send-officer-invite.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Controller('admin')
@@ -35,5 +36,12 @@ export class AdminController {
   @Get('analytics')
   getAnalytics() {
     return this.service.getAnalytics();
+  }
+
+  /** POST /api/admin/officers/invite — hq_admin+: send officer invitation email */
+  @Post('officers/invite')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  sendOfficerInvitation(@Body() dto: SendOfficerInviteDto) {
+    return this.service.sendOfficerInvitation(dto.email, dto.chapterName);
   }
 }

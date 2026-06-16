@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AddCircleOutline, FilterOutline, TrashBinTrashOutline } from 'solar-icon-set'
+import { AddCircleOutline, FilterOutline, LetterOutline, TrashBinTrashOutline } from 'solar-icon-set'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 
@@ -39,6 +40,9 @@ export default function AdminChapterOfficers() {
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const [filterChapterId, setFilterChapterId] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<'all' | 'applied' | 'pending'>('all')
 
@@ -94,17 +98,53 @@ export default function AdminChapterOfficers() {
 
   const { pageItems: pagedGroups, ...pagination } = usePagination(groupedByChapter, 10)
 
+  const sendInviteEmail = async (email: string, chapterName: string): Promise<void> => {
+    await apiFetch('/api/admin/officers/invite', {
+      method: 'POST',
+      body: JSON.stringify({ email, chapterName }),
+    })
+  }
+
   const onSubmit = async (data: FormData) => {
     setError(null)
+    setEmailSuccess(null)
+    setEmailError(null)
+
     const { error: rpcErr } = await supabase.rpc('assign_officer_email', {
       p_email: data.email,
       p_chapter_id: data.chapter_id,
     })
     if (rpcErr) { setError(rpcErr.message); return }
+
     // Re-fetch so the new/updated row (with joined chapter name + applied status) is accurate.
     await load()
+
+    const chapterName = chapters.find((c) => c.id === data.chapter_id)?.name ?? data.chapter_id
+    try {
+      await sendInviteEmail(data.email, chapterName)
+      setEmailSuccess(`Invitation email sent to ${data.email}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setEmailError(`Assignment saved but invitation email failed: ${msg}`)
+    }
+
     reset({ email: '', chapter_id: '' })
     setShowForm(false)
+  }
+
+  const handleResendInvite = async (assignment: Assignment) => {
+    setResendingId(assignment.id)
+    setEmailSuccess(null)
+    setEmailError(null)
+    const chapterName = assignment.chapters?.name ?? 'your chapter'
+    try {
+      await sendInviteEmail(assignment.email, chapterName)
+      setEmailSuccess(`Invitation resent to ${assignment.email}`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setEmailError(`Could not send invitation email: ${msg}`)
+    }
+    setResendingId(null)
   }
 
   const handleDelete = async (id: string) => {
@@ -139,6 +179,12 @@ export default function AdminChapterOfficers() {
 
       {error && (
         <p className="text-red text-md3-label-md bg-red/5 border border-red/20 rounded-lg px-3 py-2 mb-4">{error}</p>
+      )}
+      {emailSuccess && (
+        <p className="text-green text-md3-label-md bg-green/5 border border-green/20 rounded-lg px-3 py-2 mb-4">{emailSuccess}</p>
+      )}
+      {emailError && (
+        <p className="text-[#D97706] text-md3-label-md bg-[#FFF7ED] border border-[#FED7AA] rounded-lg px-3 py-2 mb-4">{emailError}</p>
       )}
 
       {showForm && (
@@ -286,13 +332,28 @@ export default function AdminChapterOfficers() {
                             >{deletingId === a.id ? '…' : 'Delete'}</button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setConfirmDeleteId(a.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                            title="Remove assignment"
-                          >
-                            <TrashBinTrashOutline color="#94A3B8" size={16} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            {!a.applied_at && (
+                              <button
+                                onClick={() => void handleResendInvite(a)}
+                                disabled={resendingId === a.id}
+                                className="p-1 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-50 transition-colors"
+                                title="Resend invitation email"
+                              >
+                                {resendingId === a.id
+                                  ? <span className="text-[10px] text-blue font-bold px-1">…</span>
+                                  : <LetterOutline color="#94A3B8" size={16} />
+                                }
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConfirmDeleteId(a.id)}
+                              className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
+                              title="Remove assignment"
+                            >
+                              <TrashBinTrashOutline color="#94A3B8" size={16} />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

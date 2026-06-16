@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CacheKeys } from '../cache/cache-keys';
+import { EmailService } from '../email/email.service';
 import type { AdminAnalytics, PointTransaction, Profile, ProfileRole } from '../supabase/types';
 import { AdminRepository } from './admin.repository';
 
@@ -9,6 +10,7 @@ export class AdminService {
   constructor(
     private readonly repo: AdminRepository,
     private readonly cache: AppCacheService,
+    private readonly email: EmailService,
   ) {}
 
   getUsers(): Promise<Profile[]> {
@@ -30,5 +32,9 @@ export class AdminService {
 
   getAnalytics(): Promise<AdminAnalytics> {
     return this.repo.getAnalytics();
+  }
+
+  sendOfficerInvitation(email: string, chapterName: string): Promise<void> {
+    return this.email.sendOfficerInvitationEmail(email, chapterName);
   }
 }

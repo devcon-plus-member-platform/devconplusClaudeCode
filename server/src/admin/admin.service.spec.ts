@@ -1,4 +1,5 @@
 import type { AppCacheService } from '../cache/app-cache.service';
+import type { EmailService } from '../email/email.service';
 import { AdminRepository } from './admin.repository';
 import { AdminService } from './admin.service';
 
@@ -26,6 +27,12 @@ function makeCache() {
   } as unknown as jest.Mocked<AppCacheService>;
 }
 
+function makeEmail() {
+  return {
+    sendOfficerInvitationEmail: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<EmailService>;
+}
+
 describe('AdminService', () => {
   let service: AdminService;
   let repo: jest.Mocked<AdminRepository>;
@@ -34,7 +41,7 @@ describe('AdminService', () => {
   beforeEach(() => {
     repo = makeRepo();
     cache = makeCache();
-    service = new AdminService(repo, cache);
+    service = new AdminService(repo, cache, makeEmail());
   });
 
   it('getUsers — delegates to repo', async () => {
