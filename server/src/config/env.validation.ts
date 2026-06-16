@@ -48,17 +48,20 @@ class EnvVariables {
   @IsString()
   FIREBASE_WEB_API_KEY!: string;
 
-  // ── Email (Gmail SMTP) ───────────────────────────────────────────────────
+  // ── Email (Gmail SMTP) — OPTIONAL ────────────────────────────────────────
+  // When either is unset the EmailService runs in disabled mode: the app boots
+  // normally and Google sign-in works, but verification emails are not sent
+  // (email sign-up returns a clear 503). Set BOTH to enable email.
   // Gmail address used as sender. In production use a Workspace account.
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  GMAIL_USER!: string;
+  GMAIL_USER?: string;
 
   // Gmail App Password (16 chars). Create at Google Account → Security → App Passwords.
   // This is NOT the account password.
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  GMAIL_APP_PASSWORD!: string;
+  GMAIL_APP_PASSWORD?: string;
 
   // Secret for signing email verification JWTs (stateless, 24h TTL).
   @IsNotEmpty()
