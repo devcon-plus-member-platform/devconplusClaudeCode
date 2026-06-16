@@ -15,6 +15,8 @@ import { verifyCallerJwt } from '../_shared/auth.ts'
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
   'https://devconplusbeta-v1.vercel.app',
+  'https://devcon.plus',
+  'https://www.devcon.plus',
 ])
 
 function getCorsHeaders(req: Request): Record<string, string> {
