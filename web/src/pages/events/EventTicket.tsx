@@ -560,7 +560,7 @@ export default function EventTicket() {
                        bg-white/[0.18] border border-white/30 text-white
                        rounded-2xl py-3 text-md3-body-md font-semibold backdrop-blur-sm mt-3"
           >
-            <StarOutline color="#F8C630" width={16} height={16} />
+            <StarOutline color="#F8C630" size={16} />
             Earn more XP
             <AltArrowRightOutline className="w-4 h-4" />
           </motion.button>
