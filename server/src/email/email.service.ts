@@ -62,10 +62,33 @@ export class EmailService implements OnModuleInit {
     await this.transporter.sendMail({
       from: this.fromAddress,
       to,
-      subject: 'Verify your email — DEVCON+ is waiting for you',
+      // Plain, transactional subject — promotional/urgency phrasing
+      // ("…is waiting for you") raises spam scores on a verification email.
+      subject: 'Verify your DEVCON+ email address',
+      // Always send a text/plain alternative alongside the HTML. An HTML-only
+      // message (no multipart/alternative) is a well-known spam-score signal.
+      text: this.verificationText(link),
       html: this.verificationTemplate(link),
     });
     this.logger.log(`Verification email sent to ${to}`);
+  }
+
+  // Plain-text counterpart to verificationTemplate(). Kept intentionally plain
+  // and transactional (no marketing copy) so the multipart/alternative message
+  // reads as a genuine verification email to spam filters.
+  private verificationText(link: string): string {
+    return [
+      'Verify your DEVCON+ email address',
+      '',
+      'Welcome to DEVCON+. Confirm your email address to activate your account.',
+      '',
+      'Open this link to verify (it expires in 24 hours):',
+      link,
+      '',
+      "If you didn't sign up for DEVCON+, you can safely ignore this email.",
+      '',
+      'DEVCON Philippines — Sync. Support. Succeed.',
+    ].join('\n');
   }
 
   private verificationTemplate(link: string): string {
@@ -87,7 +110,7 @@ export class EmailService implements OnModuleInit {
     the email client from pulling in body copy after it.
   -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F1F5F9;visibility:hidden;">
-    Confirm your email to unlock 500 Points+ and join 60,000+ geeks across 11 Philippine chapters.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    Confirm your email address to activate your DEVCON+ account.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
 
   <!-- Outer wrapper -->
