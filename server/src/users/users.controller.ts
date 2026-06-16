@@ -19,6 +19,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { RateLimit } from '../common/throttler/rate-limit.decorator';
 import { RateLimitGuard } from '../common/throttler/rate-limit.guard';
 import type { Profile } from '../supabase/types';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { MAX_AVATAR_BYTES, UsersService } from './users.service';
 
@@ -59,6 +60,21 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ): Promise<Profile> {
     return this.usersService.updateProfile(user.profileId, dto, user.firebaseUid);
+  }
+
+  /**
+   * PATCH /api/users/me/complete — one-time profile completion for OAuth users.
+   * Sets username + chapter_id + full_name on a profile that was created with a
+   * null username during the Firebase exchange. Rejected once the profile is
+   * already complete (so chapter_id can only be set here on first completion).
+   */
+  @Patch('me/complete')
+  @UseGuards(AuthGuard)
+  completeMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CompleteProfileDto,
+  ): Promise<Profile> {
+    return this.usersService.completeProfile(user.profileId, dto, user.firebaseUid);
   }
 
   /**
