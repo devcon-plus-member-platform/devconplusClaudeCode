@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -8,27 +13,48 @@ export class EmailService implements OnModuleInit {
   private transporter!: nodemailer.Transporter;
   private fromAddress!: string;
   private serverUrl!: string;
+  private enabled = false;
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit(): void {
-    const user = this.config.getOrThrow<string>('GMAIL_USER');
-    const pass = this.config.getOrThrow<string>('GMAIL_APP_PASSWORD');
+    const user = this.config.get<string>('GMAIL_USER');
+    const pass = this.config.get<string>('GMAIL_APP_PASSWORD');
     // SERVER_URL: the NestJS server's own public URL. The verification link
     // must hit the backend first so it can verify the JWT and update Firebase +
     // Supabase before redirecting the browser to the frontend with ?status=success.
     this.serverUrl = this.config.getOrThrow<string>('SERVER_URL');
-    this.fromAddress = `DEVCON+ <${user}>`;
 
+    // GMAIL_USER / GMAIL_APP_PASSWORD are optional. When either is unset the
+    // service runs in disabled mode: the app boots normally (Google sign-in
+    // works) and only email sending is unavailable.
+    if (!user || !pass) {
+      this.logger.warn(
+        'Email service disabled — GMAIL_USER / GMAIL_APP_PASSWORD not set. ' +
+          'Verification emails will not be sent; email sign-up is unavailable.',
+      );
+      return;
+    }
+
+    this.fromAddress = `DEVCON+ <${user}>`;
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user, pass },
     });
+    this.enabled = true;
 
     this.logger.log(`Email service initialized (sender: ${user})`);
   }
 
   async sendVerificationEmail(to: string, token: string): Promise<void> {
+    if (!this.enabled) {
+      this.logger.warn(
+        `Email service disabled — cannot send verification email to ${to}`,
+      );
+      throw new ServiceUnavailableException(
+        'Email service is not configured. Please use Google sign-in or contact support.',
+      );
+    }
     // Link goes to the BACKEND (/auth/email/verify), not the frontend.
     // The backend verifies the JWT, marks Firebase + DB as verified, then
     // redirects the browser to APP_URL/email-confirm?status=success.
