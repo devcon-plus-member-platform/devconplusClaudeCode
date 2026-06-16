@@ -22,7 +22,8 @@ function compactToUuid(compact: string): string {
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
   'https://devconplusbeta-v1.vercel.app',
-  'https://devconplusbeta-v1.vercel.app',
+  'https://devcon.plus',
+  'https://www.devcon.plus',
 ])
 
 function getCorsHeaders(req: Request): Record<string, string> {
