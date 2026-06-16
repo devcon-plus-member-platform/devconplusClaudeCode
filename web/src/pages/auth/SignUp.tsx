@@ -123,43 +123,37 @@ export default function SignUp() {
     return unsubscribe
   }, [watch, saveDraft, isOAuthMode])
 
-  // OAuth completion detection. Runs on mount (redirect flow lands here) AND is
-  // called explicitly after the Google popup resolves — signInWithPopup does NOT
-  // remount the page, so a mount-only effect would never react to a popup sign-in.
-  const detectOAuthCompletion = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const provider = session.user.app_metadata?.provider as string | undefined
-    if (!provider || provider === 'email') return  // normal email signup
+  // OAuth completion handler. Runs after the Google popup resolves (signInWithPopup
+  // does NOT remount the page) and on mount. Reads the user from the store — which
+  // signInWithGoogle() sets synchronously via applyProfile() — instead of polling
+  // supabase.auth.getSession(), whose Firebase-bridge session is often null at this
+  // instant and was silently skipping navigation (the "stays on /sign-up" bug).
+  const detectOAuthCompletion = useCallback(() => {
+    const { user, isOAuthOnly } = useAuthStore.getState()
+    // React only to a Google (OAuth) sign-in that populated the store.
+    if (!user || !isOAuthOnly) return
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, username, email, chapter_id')
-      .eq('id', session.user.id)
-      .maybeSingle()
-
-    const isComplete = Boolean(profile?.chapter_id && profile?.username)
+    const isComplete = Boolean(user.chapter_id && user.username)
     if (isComplete) {
-      navigate('/home', { replace: true })
+      if (isSafeReturnTo(returnTo)) {
+        navigate(returnTo, { replace: true })
+      } else {
+        navigate(
+          user.role === 'super_admin' || user.role === 'hq_admin' ? '/admin' : '/home',
+          { replace: true },
+        )
+      }
       return
     }
 
+    // New Google user → inline completion form, prefilled from the created profile.
     setIsOAuthMode(true)
-    setOauthEmail(session.user.email ?? '')
-    const meta = session.user.user_metadata
-
-    if (profile) {
-      setValue('full_name',  profile.full_name ?? '')
-      setValue('username',   profile.username ?? '')
-      setValue('chapter_id', profile.chapter_id ?? '')
-    } else {
-      const googleName = (meta.full_name as string | undefined)
-        ?? (meta.name as string | undefined)
-        ?? ''
-      setValue('full_name', googleName)
-    }
-    setValue('email', session.user.email ?? '')
-  }, [setValue, navigate])
+    setOauthEmail(user.email ?? '')
+    setValue('full_name',  user.full_name ?? '')
+    setValue('username',   user.username ?? '')
+    setValue('chapter_id', user.chapter_id ?? '')
+    setValue('email',      user.email ?? '')
+  }, [setValue, navigate, returnTo])
 
   useEffect(() => { void detectOAuthCompletion() }, [detectOAuthCompletion])
 
@@ -316,7 +310,7 @@ export default function SignUp() {
                   const storeError = useAuthStore.getState().error
                   if (storeError) { setFormError(storeError); return }
                   // Popup succeeded — react to it (no remount happens with a popup).
-                  await detectOAuthCompletion()
+                  detectOAuthCompletion()
                 } catch (err) {
                   // Surface the real reason (e.g. the /auth/firebase/exchange error)
                   // instead of a generic message that hides the cause.
