@@ -76,12 +76,20 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false)
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileError, setTurnstileError] = useState(false)
   const [legalModal, setLegalModal] = useState<LegalModalType | null>(null)
   const turnstileRef = useRef<TurnstileInstance>(null)
   const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { chapters, fetchChapters } = useChaptersStore()
+  const { chapters, isLoading: chaptersLoading, error: chaptersError, fetchChapters } = useChaptersStore()
   const [isOAuthMode, setIsOAuthMode] = useState(false)
   const [oauthEmail, setOauthEmail] = useState('')
+
+  // CAPTCHA only gates the form when a site key is configured AND we're not in
+  // OAuth completion mode. If the widget never loads (missing key, network,
+  // ad-blocker) the gate fails open — the backend doesn't verify the token, so
+  // blocking sign-up on it would only lock out legitimate users.
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
+  const captchaRequired = !isOAuthMode && turnstileSiteKey !== ''
 
   useEffect(() => { void fetchChapters() }, [fetchChapters])
 
@@ -115,50 +123,45 @@ export default function SignUp() {
     return unsubscribe
   }, [watch, saveDraft, isOAuthMode])
 
-  // OAuth completion mode detection — fires when OAuthCallback redirects here
-  useEffect(() => {
-    void supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return
-      const provider = session.user.app_metadata?.provider as string | undefined
-      if (!provider || provider === 'email') return  // normal email signup
+  // OAuth completion detection. Runs on mount (redirect flow lands here) AND is
+  // called explicitly after the Google popup resolves — signInWithPopup does NOT
+  // remount the page, so a mount-only effect would never react to a popup sign-in.
+  const detectOAuthCompletion = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const provider = session.user.app_metadata?.provider as string | undefined
+    if (!provider || provider === 'email') return  // normal email signup
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, username, email, chapter_id')
+      .eq('id', session.user.id)
+      .maybeSingle()
 
-      void supabase
-        .from('profiles')
-        // .select('full_name, username, email, school_or_company, chapter_id, linkedin_url, github_url, portfolio_url')
-        .select('full_name, username, email, chapter_id')
-        .eq('id', session.user.id)
-        .maybeSingle()
-        .then(({ data: profile }) => {
-          const isComplete = Boolean(profile?.chapter_id && profile?.username)
+    const isComplete = Boolean(profile?.chapter_id && profile?.username)
+    if (isComplete) {
+      navigate('/home', { replace: true })
+      return
+    }
 
-          if (isComplete) {
-            navigate('/home', { replace: true })
-            return
-          }
+    setIsOAuthMode(true)
+    setOauthEmail(session.user.email ?? '')
+    const meta = session.user.user_metadata
 
-          setIsOAuthMode(true)
-          setOauthEmail(session.user.email ?? '')
-          const meta = session.user.user_metadata
-
-          if (profile) {
-            setValue('full_name',  profile.full_name ?? '')
-            setValue('username',   profile.username ?? '')
-            // setValue('school_or_company', profile.school_or_company ?? '')
-            setValue('chapter_id', profile.chapter_id ?? '')
-            // setValue('linkedin_url',  profile.linkedin_url  ?? '')
-            // setValue('github_url',    profile.github_url    ?? '')
-            // setValue('portfolio_url', profile.portfolio_url ?? '')
-          } else {
-            const googleName = (meta.full_name as string | undefined)
-              ?? (meta.name as string | undefined)
-              ?? ''
-            setValue('full_name', googleName)
-          }
-          setValue('email', session.user.email ?? '')
-        })
-    })
+    if (profile) {
+      setValue('full_name',  profile.full_name ?? '')
+      setValue('username',   profile.username ?? '')
+      setValue('chapter_id', profile.chapter_id ?? '')
+    } else {
+      const googleName = (meta.full_name as string | undefined)
+        ?? (meta.name as string | undefined)
+        ?? ''
+      setValue('full_name', googleName)
+    }
+    setValue('email', session.user.email ?? '')
   }, [setValue, navigate])
+
+  useEffect(() => { void detectOAuthCompletion() }, [detectOAuthCompletion])
 
   const handleUsernameChange = useCallback((value: string) => {
     if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current)
@@ -168,8 +171,8 @@ export default function SignUp() {
     }
     setUsernameStatus('checking')
     usernameTimerRef.current = setTimeout(async () => {
-      const available = await checkUsernameAvailable(value)
-      setUsernameStatus(available ? 'available' : 'taken')
+      const result = await checkUsernameAvailable(value)
+      setUsernameStatus(result === 'unknown' ? 'idle' : result)
     }, 400)
   }, [checkUsernameAvailable])
 
@@ -311,9 +314,19 @@ export default function SignUp() {
                   // "Redirecting…" with no feedback.
                   await signInWithGoogle()
                   const storeError = useAuthStore.getState().error
-                  if (storeError) setFormError(storeError)
-                } catch {
-                  setFormError('Unable to connect to Google Sign-In. Please try again or use email.')
+                  if (storeError) { setFormError(storeError); return }
+                  // Popup succeeded — react to it (no remount happens with a popup).
+                  await detectOAuthCompletion()
+                } catch (err) {
+                  // Surface the real reason (e.g. the /auth/firebase/exchange error)
+                  // instead of a generic message that hides the cause.
+                  const storeError = useAuthStore.getState().error
+                  setFormError(
+                    storeError ||
+                      (err instanceof Error
+                        ? err.message
+                        : 'Unable to connect to Google Sign-In. Please try again or use email.'),
+                  )
                 } finally {
                   setGoogleLoading(false)
                 }
@@ -491,6 +504,21 @@ export default function SignUp() {
               })}
             </select>
             {errors.chapter_id && <p className="text-red text-md3-label-md mt-1">{errors.chapter_id.message}</p>}
+            {chaptersLoading && chapters.length === 0 && (
+              <p className="text-md3-label-md text-slate-400 mt-1">Loading chapters…</p>
+            )}
+            {chaptersError && chapters.length === 0 && !chaptersLoading && (
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-red text-md3-label-md">Couldn't load chapters.</p>
+                <button
+                  type="button"
+                  onClick={() => void fetchChapters()}
+                  className="text-blue text-md3-label-md font-semibold underline"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
           </div>
 
           {formError && (
@@ -499,15 +527,22 @@ export default function SignUp() {
             </p>
           )}
 
-          {!isOAuthMode && (
-            <Turnstile
-              ref={turnstileRef}
-              siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''}
-              onSuccess={(token) => setTurnstileToken(token)}
-              onExpire={() => setTurnstileToken(null)}
-              onError={() => setTurnstileToken(null)}
-              options={{ theme: 'light', size: 'normal' }}
-            />
+          {captchaRequired && (
+            <div>
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={turnstileSiteKey}
+                onSuccess={(token) => { setTurnstileToken(token); setTurnstileError(false) }}
+                onExpire={() => setTurnstileToken(null)}
+                onError={() => { setTurnstileToken(null); setTurnstileError(true) }}
+                options={{ theme: 'light', size: 'normal' }}
+              />
+              {turnstileError && (
+                <p className="text-md3-label-md text-slate-500 mt-2">
+                  Couldn't load the verification check — you can still create your account.
+                </p>
+              )}
+            </div>
           )}
 
           <p className="text-md3-label-md text-slate-400 text-center">
@@ -519,7 +554,7 @@ export default function SignUp() {
 
           <button
             type="submit"
-            disabled={isSubmitting || (!isOAuthMode && !turnstileToken)}
+            disabled={isSubmitting || (captchaRequired && !turnstileToken && !turnstileError)}
             className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm disabled:opacity-60 hover:bg-blue-dark transition-colors"
           >
             {isSubmitting

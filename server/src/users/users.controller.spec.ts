@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
+import { RateLimitGuard } from '../common/throttler/rate-limit.guard';
 import type { Profile } from '../supabase/types';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersController } from './users.controller';
@@ -81,6 +82,8 @@ describe('UsersController', () => {
       providers: [{ provide: UsersService, useValue: usersService }],
     })
       .overrideGuard(AuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RateLimitGuard)
       .useValue({ canActivate: () => true })
       .compile();
 

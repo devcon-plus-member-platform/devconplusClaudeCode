@@ -82,7 +82,7 @@ interface AuthState {
   deleteAccount: () => Promise<void>
   resetPassword: (email: string, captchaToken?: string) => Promise<void>
   requestOrganizerUpgrade: (code: string) => Promise<UpgradeResult>
-  checkUsernameAvailable: (username: string) => Promise<boolean>
+  checkUsernameAvailable: (username: string) => Promise<'available' | 'taken' | 'unknown'>
   signInWithGoogle: () => Promise<void>
   setPassword: (newPassword: string) => Promise<void>
 }
@@ -245,12 +245,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: false, isInitialized: true })
   },
 
-  signUp: async (email, password, full_name, username, chapter_id, school_or_company) => {
+  signUp: async (email, password, full_name, username, chapter_id, school_or_company, captchaToken) => {
     set({ isLoading: true, error: null })
     try {
       await apiFetch('/auth/email/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company }),
+        body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company, captchaToken }),
       })
       set({ isLoading: false })
       return { emailConfirmationPending: true }
@@ -467,14 +467,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   checkUsernameAvailable: async (username) => {
-    // Rate limit: 30 checks per IP per 60s. Blocked → return false (silent degradation —
-    // shows username as "unavailable", no error message shown to the user).
+    // Returns 'unknown' on rate-limit (30/IP/60s) or network error so callers can
+    // treat it as non-blocking — failing closed here would show a valid username as
+    // "taken" and block sign-up. DB UNIQUE constraint + server RPC are the real backstop.
     const limit = await callRateLimit('username_check')
-    if (!limit.allowed) return false
+    if (!limit.allowed) return 'unknown'
 
-    const result = await publicFetch<{ available: boolean }>(
-      `/api/users/check-username?username=${encodeURIComponent(username.toLowerCase())}`
-    ).catch(() => ({ available: false }))
-    return result.available
+    try {
+      const result = await publicFetch<{ available: boolean }>(
+        `/api/users/check-username?username=${encodeURIComponent(username.toLowerCase())}`
+      )
+      return result.available ? 'available' : 'taken'
+    } catch {
+      return 'unknown'
+    }
   },
 }))
