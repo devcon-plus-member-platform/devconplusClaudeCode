@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CacheKeys } from '../cache/cache-keys';
 import type { Profile } from '../supabase/types';
+import type { CompleteProfileDto } from './dto/complete-profile.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersRepository } from './users.repository';
 
@@ -57,6 +58,34 @@ export class UsersService {
 
   isUsernameAvailable(username: string): Promise<boolean> {
     return this.usersRepo.isUsernameAvailable(username);
+  }
+
+  /**
+   * One-time profile completion for OAuth users (null username after exchange).
+   * Allowed to set chapter_id ONLY while the profile is still incomplete — once a
+   * username exists the profile is "complete" and chapter changes must go through
+   * the organizer-upgrade workflow instead.
+   */
+  async completeProfile(
+    userId: string,
+    dto: CompleteProfileDto,
+    authUid?: string | null,
+  ): Promise<Profile> {
+    const existing = await this.usersRepo.findById(userId);
+    if (existing.username) {
+      throw new ConflictException('Profile already completed');
+    }
+    const username = dto.username.toLowerCase();
+    if (!(await this.usersRepo.isUsernameAvailable(username))) {
+      throw new ConflictException('Username is already taken');
+    }
+    const profile = await this.usersRepo.update(userId, {
+      full_name: dto.full_name,
+      username,
+      chapter_id: dto.chapter_id,
+    });
+    await this.invalidateAuthProfile(authUid);
+    return profile;
   }
 
   async deleteAccount(userId: string, authUid?: string | null): Promise<void> {

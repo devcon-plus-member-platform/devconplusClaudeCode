@@ -28,6 +28,8 @@ export default function AdminLayout() {
   useEffect(() => {
     if (!user) {
       navigate('/sign-in', { replace: true })
+    } else if (!user.username || !user.chapter_id) {
+      navigate('/complete-profile', { replace: true })
     } else if (!ADMIN_ROLES.includes(user.role as typeof ADMIN_ROLES[number])) {
       navigate('/home', { replace: true })
     }

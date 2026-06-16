@@ -81,15 +81,13 @@ export default function SignUp() {
   const turnstileRef = useRef<TurnstileInstance>(null)
   const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { chapters, isLoading: chaptersLoading, error: chaptersError, fetchChapters } = useChaptersStore()
-  const [isOAuthMode, setIsOAuthMode] = useState(false)
-  const [oauthEmail, setOauthEmail] = useState('')
 
-  // CAPTCHA only gates the form when a site key is configured AND we're not in
-  // OAuth completion mode. If the widget never loads (missing key, network,
-  // ad-blocker) the gate fails open — the backend doesn't verify the token, so
-  // blocking sign-up on it would only lock out legitimate users.
+  // CAPTCHA gates the form when a site key is configured. If the widget never
+  // loads (missing key, network, ad-blocker) the gate fails open — the backend
+  // doesn't verify the token, so blocking sign-up on it would only lock out
+  // legitimate users.
   const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
-  const captchaRequired = !isOAuthMode && turnstileSiteKey !== ''
+  const captchaRequired = turnstileSiteKey !== ''
 
   useEffect(() => { void fetchChapters() }, [fetchChapters])
 
@@ -99,7 +97,7 @@ export default function SignUp() {
     { exclude: ['password'] },
   )
 
-  const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       full_name:  (draft.full_name  as string) ?? '',
@@ -116,12 +114,11 @@ export default function SignUp() {
 
   useEffect(() => {
     const { unsubscribe } = watch((values) => {
-      if (isOAuthMode) return   // session is authoritative in OAuth mode
       const { password: _omit, ...rest } = values
       saveDraft(rest as Omit<FormData, 'password'>)
     })
     return unsubscribe
-  }, [watch, saveDraft, isOAuthMode])
+  }, [watch, saveDraft])
 
   // OAuth completion handler. Runs after the Google popup resolves (signInWithPopup
   // does NOT remount the page) and on mount. Reads the user from the store — which
@@ -133,27 +130,22 @@ export default function SignUp() {
     // React only to a Google (OAuth) sign-in that populated the store.
     if (!user || !isOAuthOnly) return
 
-    const isComplete = Boolean(user.chapter_id && user.username)
-    if (isComplete) {
-      if (isSafeReturnTo(returnTo)) {
-        navigate(returnTo, { replace: true })
-      } else {
-        navigate(
-          user.role === 'super_admin' || user.role === 'hq_admin' ? '/admin' : '/home',
-          { replace: true },
-        )
-      }
+    // New Google user (no username yet) → finish on the dedicated /complete-profile
+    // page. The layout guard enforces the same thing for every other entry point.
+    if (!user.username || !user.chapter_id) {
+      navigate('/complete-profile', { replace: true })
       return
     }
 
-    // New Google user → inline completion form, prefilled from the created profile.
-    setIsOAuthMode(true)
-    setOauthEmail(user.email ?? '')
-    setValue('full_name',  user.full_name ?? '')
-    setValue('username',   user.username ?? '')
-    setValue('chapter_id', user.chapter_id ?? '')
-    setValue('email',      user.email ?? '')
-  }, [setValue, navigate, returnTo])
+    if (isSafeReturnTo(returnTo)) {
+      navigate(returnTo, { replace: true })
+    } else {
+      navigate(
+        user.role === 'super_admin' || user.role === 'hq_admin' ? '/admin' : '/home',
+        { replace: true },
+      )
+    }
+  }, [navigate, returnTo])
 
   useEffect(() => { void detectOAuthCompletion() }, [detectOAuthCompletion])
 
@@ -181,53 +173,8 @@ export default function SignUp() {
     }
     setFormError(null)
 
-    // ── OAuth completion mode ─────────────────────────────────────────────────
-    if (isOAuthMode) {
-      try {
-        // 1. Set local password (no re-auth needed — OAuth session is active)
-        const { error: pwErr } = await supabase.auth.updateUser({ password: data.password })
-        if (pwErr) {
-          setFormError('Failed to set password. Please try again.')
-          return
-        }
-
-        // 2. Upsert profile (creates or updates — handles both new and existing users)
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) { navigate('/sign-in', { replace: true }); return }
-        const meta = session.user.user_metadata
-
-        const { error: profileErr } = await supabase.from('profiles').upsert({
-          id:         session.user.id,
-          full_name:  data.full_name,
-          username:   data.username.toLowerCase(),
-          email:      session.user.email ?? '',
-          chapter_id: data.chapter_id,
-          // school_or_company: data.school_or_company || null,
-          avatar_url: (meta.avatar_url as string | undefined) ?? null,
-          // linkedin_url:  data.linkedin_url  || null,
-          // github_url:    data.github_url    || null,
-          // portfolio_url: data.portfolio_url || null,
-          role:       'member',
-        }, { onConflict: 'id', ignoreDuplicates: false })
-
-        if (profileErr) {
-          setFormError('Something went wrong saving your profile. Please try again.')
-          return
-        }
-
-        // 3. Initialize store so the rest of the app has the correct user + isOAuthOnly=false
-        await useAuthStore.getState().initialize()
-        clearDraft()
-        navigate('/home', { replace: true }) // was: navigate('/organizer-code-gate') — temporarily disabled
-      } catch (err) {
-        const raw = err instanceof Error ? err.message : 'Sign-up failed. Please try again.'
-        setFormError(friendlyAuthError(raw))
-      }
-      return
-    }
-    // ── END OAuth completion mode ─────────────────────────────────────────────
-
-    // Normal email/password signup (unchanged below)
+    // Email/password signup — collects a complete profile, so there is no
+    // separate completion step (that path is Google-only, via /complete-profile).
     try {
       const { emailConfirmationPending } = await signUp(
         data.email, data.password, data.full_name, data.username, data.chapter_id,
@@ -286,58 +233,54 @@ export default function SignUp() {
         >
           <img src={logoHorizontal} alt="DEVCON+" className="h-8 w-auto mx-auto relative z-10" />
           <p className="text-white/60 mt-3 text-md3-body-md font-proxima relative z-10 uppercase tracking-widest font-bold">
-            {isOAuthMode ? 'Complete your profile' : 'Create your account'}
+            Create your account
           </p>
         </div>
       </header>
 
       {/* Floating card */}
       <div className="px-4 pt-10 pb-10 overflow-y-auto">
-        {!isOAuthMode && (
-          <>
-            <button
-              type="button"
-              disabled={googleLoading}
-              onClick={async () => {
-                setGoogleLoading(true)
-                setFormError(null)
-                if (isSafeReturnTo(returnTo)) sessionStorage.setItem('devcon_returnTo', returnTo)
-                try {
-                  // signInWithGoogle swallows popup failures (sets store error and
-                  // resolves) — surface that error here or the button hangs on
-                  // "Redirecting…" with no feedback.
-                  await signInWithGoogle()
-                  const storeError = useAuthStore.getState().error
-                  if (storeError) { setFormError(storeError); return }
-                  // Popup succeeded — react to it (no remount happens with a popup).
-                  detectOAuthCompletion()
-                } catch (err) {
-                  // Surface the real reason (e.g. the /auth/firebase/exchange error)
-                  // instead of a generic message that hides the cause.
-                  const storeError = useAuthStore.getState().error
-                  setFormError(
-                    storeError ||
-                      (err instanceof Error
-                        ? err.message
-                        : 'Unable to connect to Google Sign-In. Please try again or use email.'),
-                  )
-                } finally {
-                  setGoogleLoading(false)
-                }
-              }}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white border border-slate-200 rounded-xl text-md3-body-md font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-5 shadow-card disabled:opacity-60"
-            >
-              <GoogleIcon />
-              {googleLoading ? 'Redirecting…' : 'Continue with Google'}
-            </button>
+        <button
+          type="button"
+          disabled={googleLoading}
+          onClick={async () => {
+            setGoogleLoading(true)
+            setFormError(null)
+            if (isSafeReturnTo(returnTo)) sessionStorage.setItem('devcon_returnTo', returnTo)
+            try {
+              // signInWithGoogle swallows popup failures (sets store error and
+              // resolves) — surface that error here or the button hangs on
+              // "Redirecting…" with no feedback.
+              await signInWithGoogle()
+              const storeError = useAuthStore.getState().error
+              if (storeError) { setFormError(storeError); return }
+              // Popup succeeded — react to it (no remount happens with a popup).
+              detectOAuthCompletion()
+            } catch (err) {
+              // Surface the real reason (e.g. the /auth/firebase/exchange error)
+              // instead of a generic message that hides the cause.
+              const storeError = useAuthStore.getState().error
+              setFormError(
+                storeError ||
+                  (err instanceof Error
+                    ? err.message
+                    : 'Unable to connect to Google Sign-In. Please try again or use email.'),
+              )
+            } finally {
+              setGoogleLoading(false)
+            }
+          }}
+          className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white border border-slate-200 rounded-xl text-md3-body-md font-semibold text-slate-700 hover:bg-slate-50 transition-colors mb-5 shadow-card disabled:opacity-60"
+        >
+          <GoogleIcon />
+          {googleLoading ? 'Redirecting…' : 'Continue with Google'}
+        </button>
 
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-slate-200" />
-              <span className="text-md3-label-md text-slate-400 font-medium">or email</span>
-              <div className="flex-1 h-px bg-slate-200" />
-            </div>
-          </>
-        )}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="flex-1 h-px bg-slate-200" />
+          <span className="text-md3-label-md text-slate-400 font-medium">or email</span>
+          <div className="flex-1 h-px bg-slate-200" />
+        </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -377,23 +320,14 @@ export default function SignUp() {
 
           <div>
             <label className="text-md3-body-md font-medium text-slate-700 block mb-1">Email</label>
-            {isOAuthMode ? (
-              <div className="w-full border border-slate-200 bg-slate-50 rounded-xl px-4 py-3 text-md3-body-md text-slate-500 flex items-center gap-2">
-                <GoogleIcon />
-                <span>{oauthEmail}</span>
-              </div>
-            ) : (
-              <>
-                <input
-                  {...register('email')}
-                  type="email"
-                  autoComplete="email"
-                  placeholder="juan@devcon.ph"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
-                />
-                {errors.email && <p className="text-red text-md3-label-md mt-1">{errors.email.message}</p>}
-              </>
-            )}
+            <input
+              {...register('email')}
+              type="email"
+              autoComplete="email"
+              placeholder="juan@devcon.ph"
+              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
+            />
+            {errors.email && <p className="text-red text-md3-label-md mt-1">{errors.email.message}</p>}
           </div>
 
           <div>
@@ -551,23 +485,19 @@ export default function SignUp() {
             disabled={isSubmitting || (captchaRequired && !turnstileToken && !turnstileError)}
             className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm disabled:opacity-60 hover:bg-blue-dark transition-colors"
           >
-            {isSubmitting
-              ? (isOAuthMode ? 'Completing sign-up…' : 'Creating account…')
-              : (isOAuthMode ? 'Complete Sign Up' : 'Create Account')}
+            {isSubmitting ? 'Creating account…' : 'Create Account'}
           </button>
         </form>
 
-        {!isOAuthMode && (
-          <p className="text-center text-md3-body-md text-slate-500 mt-6">
-            Already have an account?{' '}
-            <Link
-              to={isSafeReturnTo(returnTo) ? `/sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/sign-in'}
-              className="text-blue font-semibold"
-            >
-              Sign In
-            </Link>
-          </p>
-        )}
+        <p className="text-center text-md3-body-md text-slate-500 mt-6">
+          Already have an account?{' '}
+          <Link
+            to={isSafeReturnTo(returnTo) ? `/sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/sign-in'}
+            className="text-blue font-semibold"
+          >
+            Sign In
+          </Link>
+        </p>
       </div>
 
       <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />

@@ -16,7 +16,7 @@ import EmailSent from './pages/auth/EmailSent'
 import EmailConfirm from './pages/auth/EmailConfirm'
 import ResetPassword from './pages/auth/ResetPassword'
 import OAuthCallback from './pages/auth/OAuthCallback'
-import OAuthProfileComplete from './pages/auth/OAuthProfileComplete'
+import CompleteProfile from './pages/auth/CompleteProfile'
 import NotFound from './pages/NotFound'
 import TermsAndConditions from './pages/legal/TermsAndConditions'
 import PrivacyPolicy from './pages/legal/PrivacyPolicy'
@@ -82,7 +82,7 @@ export const router = createBrowserRouter([
   { path: '/reset-password',           element: <ResetPassword /> },
   { path: '/email-confirm',            element: <EmailConfirm /> },
   { path: '/oauth-callback',           element: <OAuthCallback /> },
-  { path: '/oauth-profile-complete',   element: <OAuthProfileComplete /> },
+  { path: '/complete-profile',         element: <CompleteProfile /> },
   { path: '/terms-and-conditions',     element: <TermsAndConditions /> },
   { path: '/privacy-policy',           element: <PrivacyPolicy /> },
 

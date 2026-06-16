@@ -76,6 +76,7 @@ interface AuthState {
   updateProfile: (
     patch: Partial<Pick<Profile, 'full_name' | 'username' | 'school_or_company' | 'avatar_url' | 'chapter_id' | 'linkedin_url' | 'github_url' | 'portfolio_url'>>
   ) => Promise<void>
+  completeProfile: (input: { full_name: string; username: string; chapter_id: string }) => Promise<void>
   updateEmail: (newEmail: string, currentPassword: string) => Promise<void>
   updatePassword: (newPassword: string, currentPassword: string) => Promise<void>
   uploadAvatar: (file: File) => Promise<string>
@@ -316,6 +317,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: updated,
       initials: updated.full_name ? getInitials(updated.full_name) : get().initials,
       chapterName,
+    })
+  },
+
+  completeProfile: async (input) => {
+    const current = get().user
+    if (!current) throw new Error('Not authenticated')
+    // One-time OAuth profile completion via the NestJS backend (Firebase token).
+    // The dedicated /complete endpoint is the only place allowed to set chapter_id.
+    const updated = await apiFetch<Profile>('/api/users/me/complete', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    const chapterName = await fetchChapterName(updated.chapter_id)
+    set({
+      user: updated,
+      initials: getInitials(updated.full_name),
+      chapterName,
+      isOrganizerSession: ORGANIZER_ROLES.includes(updated.role as OrganizerRole),
     })
   },
 

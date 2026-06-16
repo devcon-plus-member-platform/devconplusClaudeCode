@@ -54,6 +54,14 @@ export default function MemberLayout() {
     // Catches edge cases where a session exists but email was never verified.
     if (user && !user.is_email_verified) {
       navigate('/email-sent', { replace: true, state: { email: user.email, type: 'signup' } })
+      return
+    }
+    // Incomplete profile (e.g. a fresh Google sign-in has no username yet) must
+    // finish onboarding before using the app. This is the single enforcement point
+    // for OAuth completion — it catches sign-in, sign-up, OAuth callback, refresh,
+    // and direct-URL entry alike.
+    if (user && (!user.username || !user.chapter_id)) {
+      navigate('/complete-profile', { replace: true })
     }
   }, [user, navigate, location.pathname])
 
