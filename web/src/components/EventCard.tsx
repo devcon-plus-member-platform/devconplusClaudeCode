@@ -17,16 +17,19 @@ function getInitials(name: string): string {
     .join('')
 }
 
-function EventCard({ 
-  event, 
+function EventCard({
+  event,
   attendeeCount = 0,
   attendees = [],
-  className = ''
-}: { 
-  event: Event; 
+  className = '',
+  compact = false
+}: {
+  event: Event;
   attendeeCount?: number;
   attendees?: { avatar_url: string | null; full_name: string }[];
   className?: string;
+  /** Trims the card to essentials (title, date, EXP, CTA) — used on the dashboard */
+  compact?: boolean;
 }) {
   const navigate = useNavigate()
   const isExternal = event.is_external === true
@@ -40,7 +43,7 @@ function EventCard({
   return (
     <motion.button
       onClick={() => navigate(`/events/${event.slug}`)}
-      className={`w-full bg-slate-900 rounded-2xl shadow-card text-left relative overflow-hidden group ${className || 'h-[200px]'} ${isArchived ? 'opacity-60 grayscale' : ''}`}
+      className={`w-full bg-slate-900 rounded-2xl shadow-card text-left relative overflow-hidden group ${className || (compact ? 'h-[172px]' : 'h-[200px]')} ${isArchived ? 'opacity-60 grayscale' : ''}`}
       whileTap={{ scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
     >
@@ -61,10 +64,10 @@ function EventCard({
       </div>
 
       {/* Content Overlay */}
-      <div className="relative z-10 h-full flex flex-col justify-between p-5 pt-6">
+      <div className={`relative z-10 h-full flex flex-col justify-between ${compact ? 'p-5' : 'p-5 pt-6'}`}>
         <div className="space-y-3">
           {/* Title and Meta */}
-          <div className="space-y-1">
+          <div className={compact ? 'space-y-2' : 'space-y-1'}>
             <p className="font-proxima font-bold text-white text-md3-title-lg leading-tight line-clamp-2">
               {event.title}
             </p>
@@ -72,27 +75,33 @@ function EventCard({
               <p className="font-proxima text-[#dfdfdf] text-[12px] tracking-[0.48px] uppercase shrink-0">
                 {dateStr}
               </p>
-              <div className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
-              <p className="font-proxima text-[#dfdfdf] text-[12px] tracking-[0.48px] uppercase truncate min-w-0 flex-1">
-                {event.location ?? 'DEVCON Philippines'}
-              </p>
+              {!compact && (
+                <>
+                  <div className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
+                  <p className="font-proxima text-[#dfdfdf] text-[12px] tracking-[0.48px] uppercase truncate min-w-0 flex-1">
+                    {event.location ?? 'DEVCON Philippines'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Badges/Chips */}
-          <div className="flex flex-wrap gap-2">
-            {isExternal && <FeaturedBadge />}
-            <StatusPill status={event.status as any} />
-            {event.is_promoted && <PromotedBadge />}
-            {!isExternal && (
-              <div className="bg-amber-100 flex gap-1 items-center justify-center px-2 py-0.5 rounded-full shrink-0">
-                <StarOutline className="w-[6px] h-[6px]" color="#F8C630" />
-                <span className="font-proxima font-semibold text-amber-700 text-[9px] tracking-[0.9px] uppercase leading-[13.5px]">
-                  {event.points_value} EXP
-                </span>
-              </div>
-            )}
-          </div>
+          {/* Badges/Chips — hidden in compact (dashboard) for a cleaner card */}
+          {!compact && (
+            <div className="flex flex-wrap gap-2">
+              {isExternal && <FeaturedBadge />}
+              <StatusPill status={event.status as any} />
+              {event.is_promoted && <PromotedBadge />}
+              {!isExternal && (
+                <div className="bg-gold flex gap-1 items-center justify-center px-[10px] py-[5px] rounded-full shrink-0 shadow-sm">
+                  <StarOutline className="w-3 h-3" color="#1E2A56" />
+                  <span className="font-proxima font-bold text-navy text-[10px] tracking-[0.9px] uppercase leading-none whitespace-nowrap">
+                    {event.points_value} EXP
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
@@ -112,7 +121,7 @@ function EventCard({
           </div>
 
           {/* Attendee Summary */}
-          {attendeeCount > 0 && (
+          {!compact && attendeeCount > 0 && (
             <div className="flex -space-x-2">
                {attendees.slice(0, 1).map((a, i) => (
                  <div key={i} className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center">

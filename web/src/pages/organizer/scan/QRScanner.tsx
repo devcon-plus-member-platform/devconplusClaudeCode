@@ -451,7 +451,7 @@ export function OrgQRScanner() {
         muted
       />
 
-      {/* Vignette */}
+      {/* Vignette — base dim for all states */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
       {/* ── Starting / error states ─────────────────────────────────────────── */}
@@ -514,6 +514,11 @@ export function OrgQRScanner() {
       {cameraStatus === 'active' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
           <div className="relative w-[min(85vw,360px)] h-[min(85vw,360px)]">
+            {/* Spotlight — floods everything outside the scan window with darkness */}
+            <div
+              className="absolute inset-0 rounded-3xl"
+              style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.6)' }}
+            />
             <CornerBrackets detecting={isDetecting} />
           </div>
           <p
