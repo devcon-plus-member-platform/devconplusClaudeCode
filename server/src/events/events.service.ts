@@ -22,6 +22,13 @@ export class EventsService {
     );
   }
 
+  /** Public raffle-wheel participants (names only — no email/school). */
+  getParticipants(
+    id: string,
+  ): Promise<Array<{ name: string; checked_in: boolean; status: string }>> {
+    return this.repo.findParticipants(id);
+  }
+
   async create(dto: CreateEventDto, user: AuthenticatedUser): Promise<Event> {
     const { role, chapter_id, id: profileId } = user.profile;
 
