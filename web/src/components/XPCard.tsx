@@ -5,7 +5,7 @@ import { usePointsStore } from '../stores/usePointsStore'
 
 export default function XPCard() {
   const navigate = useNavigate()
-  const { spendablePoints, lifetimePoints, tierProgress } = usePointsStore()
+  const { spendablePoints, tierProgress } = usePointsStore()
 
   return (
     <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-200 p-[21px] flex flex-col gap-5">
@@ -29,7 +29,7 @@ export default function XPCard() {
           <div className="flex items-center gap-2">
             <BoltBroken color="#64748B" className="w-4 h-4 shrink-0" />
             <span className="font-proxima text-[14px] text-slate-500">
-              {lifetimePoints.toLocaleString()} lifetime points
+              {spendablePoints.toLocaleString()} spendable points
             </span>
           </div>
 

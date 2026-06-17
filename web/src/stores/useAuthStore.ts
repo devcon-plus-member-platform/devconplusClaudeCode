@@ -76,13 +76,14 @@ interface AuthState {
   updateProfile: (
     patch: Partial<Pick<Profile, 'full_name' | 'username' | 'school_or_company' | 'avatar_url' | 'chapter_id' | 'linkedin_url' | 'github_url' | 'portfolio_url'>>
   ) => Promise<void>
+  completeProfile: (input: { full_name: string; username: string; chapter_id: string }) => Promise<void>
   updateEmail: (newEmail: string, currentPassword: string) => Promise<void>
   updatePassword: (newPassword: string, currentPassword: string) => Promise<void>
   uploadAvatar: (file: File) => Promise<string>
   deleteAccount: () => Promise<void>
   resetPassword: (email: string, captchaToken?: string) => Promise<void>
   requestOrganizerUpgrade: (code: string) => Promise<UpgradeResult>
-  checkUsernameAvailable: (username: string) => Promise<boolean>
+  checkUsernameAvailable: (username: string) => Promise<'available' | 'taken' | 'unknown'>
   signInWithGoogle: () => Promise<void>
   setPassword: (newPassword: string) => Promise<void>
 }
@@ -245,12 +246,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: false, isInitialized: true })
   },
 
-  signUp: async (email, password, full_name, username, chapter_id, school_or_company) => {
+  signUp: async (email, password, full_name, username, chapter_id, school_or_company, captchaToken) => {
     set({ isLoading: true, error: null })
     try {
       await apiFetch('/auth/email/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company }),
+        body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company, captchaToken }),
       })
       set({ isLoading: false })
       return { emailConfirmationPending: true }
@@ -316,6 +317,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: updated,
       initials: updated.full_name ? getInitials(updated.full_name) : get().initials,
       chapterName,
+    })
+  },
+
+  completeProfile: async (input) => {
+    const current = get().user
+    if (!current) throw new Error('Not authenticated')
+    // One-time OAuth profile completion via the NestJS backend (Firebase token).
+    // The dedicated /complete endpoint is the only place allowed to set chapter_id.
+    const updated = await apiFetch<Profile>('/api/users/me/complete', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    })
+    const chapterName = await fetchChapterName(updated.chapter_id)
+    set({
+      user: updated,
+      initials: getInitials(updated.full_name),
+      chapterName,
+      isOrganizerSession: ORGANIZER_ROLES.includes(updated.role as OrganizerRole),
     })
   },
 
@@ -467,14 +486,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   checkUsernameAvailable: async (username) => {
-    // Rate limit: 30 checks per IP per 60s. Blocked → return false (silent degradation —
-    // shows username as "unavailable", no error message shown to the user).
+    // Returns 'unknown' on rate-limit (30/IP/60s) or network error so callers can
+    // treat it as non-blocking — failing closed here would show a valid username as
+    // "taken" and block sign-up. DB UNIQUE constraint + server RPC are the real backstop.
     const limit = await callRateLimit('username_check')
-    if (!limit.allowed) return false
+    if (!limit.allowed) return 'unknown'
 
-    const result = await publicFetch<{ available: boolean }>(
-      `/api/users/check-username?username=${encodeURIComponent(username.toLowerCase())}`
-    ).catch(() => ({ available: false }))
-    return result.available
+    try {
+      const result = await publicFetch<{ available: boolean }>(
+        `/api/users/check-username?username=${encodeURIComponent(username.toLowerCase())}`
+      )
+      return result.available ? 'available' : 'taken'
+    } catch {
+      return 'unknown'
+    }
   },
 }))

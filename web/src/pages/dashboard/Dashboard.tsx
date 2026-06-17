@@ -50,6 +50,12 @@ export default function Dashboard() {
 
   const scrollYMV      = useMotionValue(0)
 
+  // Slider — measure the viewport width so the track can be translated in px
+  // (percentage translate on a flex track is relative to the full track width,
+  // not one slide, so we use measured pixels instead).
+  const sliderViewportRef = useRef<HTMLDivElement>(null)
+  const [slideW, setSlideW] = useState(0)
+
   useEffect(() => {
     void fetchEvents()
     void fetchJobs()
@@ -98,6 +104,18 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [])
 
+  // Track the slider viewport width (and keep it in sync on resize) so the
+  // draggable track can snap to exact pixel offsets per slide.
+  useEffect(() => {
+    const el = sliderViewportRef.current
+    if (!el) return
+    const update = () => setSlideW(el.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
 useEffect(() => {
     const el = document.querySelector('[data-scroll-container]') as HTMLElement
     if (!el) return
@@ -122,7 +140,7 @@ useEffect(() => {
     title: e.title,
     sub:   e.location ?? 'DEVCON Philippines',
     date:  e.event_date ? formatDate.compact(e.event_date) : undefined,
-    cta:   e.is_external ? 'Open Registration' : 'Register Now',
+    cta:   e.is_external ? 'Learn More' : 'Register Now',
     image: e.cover_image_url ?? '/photos/devcon-certificate-ceremony.jpg',
     isExternal: e.is_external === true,
     onClick: () => navigate(`/events/${e.slug}`),
@@ -136,7 +154,6 @@ useEffect(() => {
 
   bannersLengthRef.current = banners.length
   const safeIdx = bannerIdx % Math.max(banners.length, 1)
-  const banner = banners[safeIdx] ?? banners[0]
   const userChapterId = user?.chapter_id ?? null
   const nearbyEvents = events
     .filter((e) => {
@@ -239,76 +256,86 @@ useEffect(() => {
           </motion.section>
         </motion.div>
 
-        {/* Rotating banner */}
+        {/* Draggable banner slider */}
         <div>
           <div
-            className="relative h-[300px] rounded-2xl overflow-hidden cursor-pointer bg-primary"
-            onClick={() => setBannerIdx((i) => (i + 1) % Math.max(banners.length, 1))}
+            ref={sliderViewportRef}
+            className="relative h-[300px] rounded-2xl overflow-hidden bg-primary"
           >
-            <AnimatePresence mode="wait">
-              <motion.img
-                key={`img-${safeIdx}`}
-                src={banners[safeIdx]?.image ?? ''}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.4 }}
-              />
-            </AnimatePresence>
-            <div className="absolute inset-0 bg-black/50" />
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={safeIdx}
-                className="absolute inset-0 flex flex-col p-[20px] pt-[24px] pb-[18px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.35 }}
-              >
-                {/* Featured badge — top-right of the banner (fills the empty right side) */}
-                {'isExternal' in banner && banner.isExternal && (
-                  <div className="absolute top-5 right-5 z-10">
-                    <FeaturedBadge />
-                  </div>
-                )}
+            <motion.div
+              className="flex h-full cursor-grab active:cursor-grabbing"
+              drag="x"
+              dragConstraints={{ left: -(banners.length - 1) * slideW, right: 0 }}
+              dragElastic={0.18}
+              dragMomentum={false}
+              onDragEnd={(_, info) => {
+                if (slideW === 0) return
+                // Snap to the nearest slide, biased by fling velocity.
+                const dragged   = -info.offset.x / slideW
+                const velBoost  = -info.velocity.x / (slideW * 4)
+                const target    = Math.round(safeIdx + dragged + velBoost)
+                setBannerIdx(Math.max(0, Math.min(banners.length - 1, target)))
+              }}
+              animate={{ x: -safeIdx * slideW }}
+              transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+            >
+              {banners.map((b, i) => (
+                <div key={i} className="relative w-full shrink-0 h-full">
+                  <img
+                    src={b.image}
+                    alt=""
+                    draggable={false}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                  />
+                  <div className="absolute inset-0 bg-black/50" />
 
-                <div className="flex flex-col justify-between items-start flex-1 w-full min-w-0">
-                  {/* Text block — limited to the left portion of the card */}
-                  <div className="w-full max-w-[55%] min-w-0">
-                    <p className="font-proxima font-bold text-md3-headline-sm text-white leading-normal line-clamp-2 break-words">
-                      {banner.title}
-                    </p>
-                    <div className="flex items-center gap-1 w-full min-w-0 mt-1">
-                      {'date' in banner && banner.date && (
-                        <>
-                          <span className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase shrink-0">
-                            {banner.date}
+                  {/* Featured badge — top-right of the banner */}
+                  {'isExternal' in b && b.isExternal && (
+                    <div className="absolute top-5 right-5 z-10">
+                      <FeaturedBadge />
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0 flex flex-col p-[20px] pt-[24px] pb-[18px]">
+                    <div className="flex flex-col justify-between items-start flex-1 w-full min-w-0">
+                      {/* Text block — limited to the left portion of the card */}
+                      <div className="w-full max-w-[55%] min-w-0">
+                        <p className="font-proxima font-bold text-md3-headline-sm text-white leading-normal line-clamp-2 break-words">
+                          {b.title}
+                        </p>
+                        <div className="flex items-center gap-1 w-full min-w-0 mt-1">
+                          {'date' in b && b.date && (
+                            <>
+                              <span className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase shrink-0">
+                                {b.date}
+                              </span>
+                              <span className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
+                            </>
+                          )}
+                          <span className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase truncate min-w-0 flex-1">
+                            {b.sub}
                           </span>
-                          <span className="w-1 h-1 bg-[#dfdfdf] rounded-full shrink-0" />
-                        </>
-                      )}
-                      <span className="font-proxima text-[#dfdfdf] text-md3-label-md tracking-[0.48px] uppercase truncate min-w-0 flex-1">
-                        {banner.sub}
-                      </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => { e.stopPropagation(); b.onClick() }}
+                        className="bg-primary text-white text-md3-label-md font-semibold px-[18px] py-[12px] rounded-full flex items-center justify-center shrink-0 leading-none shadow-sm self-start"
+                      >
+                        {b.cta}
+                      </button>
                     </div>
                   </div>
-
-                  <button
-                    onClick={(e) => { e.stopPropagation(); banner?.onClick() }}
-                    className="bg-primary text-white text-md3-label-md font-semibold px-[18px] py-[12px] rounded-full flex items-center justify-center shrink-0 leading-none shadow-sm self-start"
-                  >
-                    {banner.cta}
-                  </button>
                 </div>
-              </motion.div>
-            </AnimatePresence>
+              ))}
+            </motion.div>
           </div>
           <div className="flex justify-center gap-1.5 mt-2.5">
             {banners.map((_, i) => (
-              <motion.div
+              <motion.button
                 key={i}
+                aria-label={`Go to slide ${i + 1}`}
+                onClick={() => setBannerIdx(i)}
                 animate={{
                   width:           i === safeIdx ? 16 : 6,
                   backgroundColor: i === safeIdx ? 'rgb(var(--color-primary-dark))' : '#CBD5E1',
@@ -372,10 +399,11 @@ useEffect(() => {
             >
               {nearbyEvents.map((e) => (
                 <motion.div key={e.id} variants={cardItem}>
-                  <EventCard 
-                    event={e} 
-                    attendeeCount={attendeeCounts[e.id]} 
-                    attendees={attendeeDetails[e.id]} 
+                  <EventCard
+                    event={e}
+                    compact
+                    attendeeCount={attendeeCounts[e.id]}
+                    attendees={attendeeDetails[e.id]}
                   />
                 </motion.div>
               ))}

@@ -15,7 +15,7 @@ export default function VolunteerXpCard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const unreadCount = useNotificationsStore((s) => s.unreadCount)
-  const { spendablePoints, lifetimePoints, currentTier, tierProgress } = usePointsStore()
+  const { spendablePoints, currentTier, tierProgress } = usePointsStore()
   
   const [isScrolled, setIsScrolled] = useState(false)
 
@@ -114,7 +114,7 @@ export default function VolunteerXpCard() {
                   <BoltOutline color="#94A3B8" size={14} />
                 </div>
                 <span className="font-proxima text-[14px] text-slate-500">
-                  {lifetimePoints.toLocaleString()} lifetime points
+                  {spendablePoints.toLocaleString()} spendable points
                 </span>
               </div>
 

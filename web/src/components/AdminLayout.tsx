@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline, ConfettiOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -28,6 +28,8 @@ export default function AdminLayout() {
   useEffect(() => {
     if (!user) {
       navigate('/sign-in', { replace: true })
+    } else if (!user.username || !user.chapter_id) {
+      navigate('/complete-profile', { replace: true })
     } else if (!ADMIN_ROLES.includes(user.role as typeof ADMIN_ROLES[number])) {
       navigate('/home', { replace: true })
     }
@@ -92,6 +94,17 @@ export default function AdminLayout() {
               {label}
             </NavLink>
           ))}
+
+          {/* Public raffle wheel — opens in a new tab (lives outside the admin panel) */}
+          <a
+            href="/wheel"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <ConfettiOutline className="w-4 h-4 shrink-0" />
+            Raffle Wheel
+          </a>
         </nav>
 
         <div className="px-4 py-4 border-t border-white/10">

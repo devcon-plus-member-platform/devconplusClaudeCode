@@ -23,7 +23,14 @@ export default function EmailSent() {
   const [resendError, setResendError] = useState<string | null>(null)
   const [resendSuccess, setResendSuccess] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileError, setTurnstileError] = useState(false)
   const turnstileRef = useRef<TurnstileInstance>(null)
+
+  // Only the password-reset resend forwards the token (to Supabase). The signup
+  // resend posts to our backend, which doesn't verify a captcha — so don't gate
+  // it. Fail open if the widget can't load (missing key, network, ad-blocker).
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
+  const captchaRequired = type === 'reset' && turnstileSiteKey !== ''
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -111,18 +118,27 @@ export default function EmailSent() {
           <p className="text-red text-md3-label-md mb-3">{resendError}</p>
         )}
 
-        <Turnstile
-          ref={turnstileRef}
-          siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''}
-          onSuccess={(token) => setTurnstileToken(token)}
-          onExpire={() => setTurnstileToken(null)}
-          onError={() => setTurnstileToken(null)}
-          options={{ theme: 'light', size: 'normal' }}
-        />
+        {captchaRequired && (
+          <div className="mb-3">
+            <Turnstile
+              ref={turnstileRef}
+              siteKey={turnstileSiteKey}
+              onSuccess={(token) => { setTurnstileToken(token); setTurnstileError(false) }}
+              onExpire={() => setTurnstileToken(null)}
+              onError={() => { setTurnstileToken(null); setTurnstileError(true) }}
+              options={{ theme: 'light', size: 'normal' }}
+            />
+            {turnstileError && (
+              <p className="text-md3-label-md text-slate-500 mt-2">
+                Couldn't load the verification check — you can still resend.
+              </p>
+            )}
+          </div>
+        )}
 
         <button
           onClick={handleResend}
-          disabled={cooldown > 0 || !turnstileToken}
+          disabled={cooldown > 0 || (captchaRequired && !turnstileToken && !turnstileError)}
           className="flex items-center gap-2 text-md3-body-md font-semibold text-blue disabled:text-slate-400 disabled:cursor-not-allowed transition-colors mb-8"
         >
           <RestartOutline className="w-4 h-4" />

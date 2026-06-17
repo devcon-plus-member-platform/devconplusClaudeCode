@@ -17,6 +17,7 @@ import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { WheelAccessDto } from './dto/wheel-access.dto';
 import { EventsService } from './events.service';
 import type { Event } from '../supabase/types';
 
@@ -28,6 +29,20 @@ export class EventsController {
   @Get()
   getAll(): Promise<Event[]> {
     return this.service.getAll();
+  }
+
+  /**
+   * POST /api/events/:id/participants — password-gated raffle-wheel names.
+   * Public route, but the password (event creator's / admin email local-part) is
+   * validated server-side and anonymized names are returned only on success.
+   */
+  @Post(':id/participants')
+  @HttpCode(HttpStatus.OK)
+  getParticipants(
+    @Param() { id }: IdParamDto,
+    @Body() dto: WheelAccessDto,
+  ): Promise<Array<{ name: string; checked_in: boolean; status: string }>> {
+    return this.service.getWheelParticipants(id, dto.password);
   }
 
   /** POST /api/events — create an event (chapter_officer+). */

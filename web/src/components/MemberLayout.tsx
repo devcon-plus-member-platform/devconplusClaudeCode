@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { HomeOutline, GiftOutline, QRCodeOutline, CaseOutline, UserOutline, BoltOutline } from 'solar-icon-set'
+import { HomeOutline, GiftOutline, TicketOutline, CaseOutline, UserOutline, BoltOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
@@ -54,6 +54,14 @@ export default function MemberLayout() {
     // Catches edge cases where a session exists but email was never verified.
     if (user && !user.is_email_verified) {
       navigate('/email-sent', { replace: true, state: { email: user.email, type: 'signup' } })
+      return
+    }
+    // Incomplete profile (e.g. a fresh Google sign-in has no username yet) must
+    // finish onboarding before using the app. This is the single enforcement point
+    // for OAuth completion — it catches sign-in, sign-up, OAuth callback, refresh,
+    // and direct-URL entry alike.
+    if (user && (!user.username || !user.chapter_id)) {
+      navigate('/complete-profile', { replace: true })
     }
   }, [user, navigate, location.pathname])
 
@@ -265,7 +273,7 @@ export default function MemberLayout() {
                   whileTap={{ scale: 0.92 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                 >
-                  <QRCodeOutline className="w-6 h-6" color="white" />
+                  <TicketOutline className="w-6 h-6" color="white" />
                 </motion.div>
               )}
             </NavLink>
@@ -369,7 +377,7 @@ export default function MemberLayout() {
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
                     isActive ? 'bg-white/30' : 'bg-white/15'
                   }`}>
-                    <QRCodeOutline className="w-3.5 h-3.5" color="white" />
+                    <TicketOutline className="w-3.5 h-3.5" color="white" />
                   </div>
                   Events
                 </>

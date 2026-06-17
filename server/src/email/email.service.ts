@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -8,27 +13,48 @@ export class EmailService implements OnModuleInit {
   private transporter!: nodemailer.Transporter;
   private fromAddress!: string;
   private serverUrl!: string;
+  private enabled = false;
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit(): void {
-    const user = this.config.getOrThrow<string>('GMAIL_USER');
-    const pass = this.config.getOrThrow<string>('GMAIL_APP_PASSWORD');
+    const user = this.config.get<string>('GMAIL_USER');
+    const pass = this.config.get<string>('GMAIL_APP_PASSWORD');
     // SERVER_URL: the NestJS server's own public URL. The verification link
     // must hit the backend first so it can verify the JWT and update Firebase +
     // Supabase before redirecting the browser to the frontend with ?status=success.
     this.serverUrl = this.config.getOrThrow<string>('SERVER_URL');
-    this.fromAddress = `DEVCON+ <${user}>`;
 
+    // GMAIL_USER / GMAIL_APP_PASSWORD are optional. When either is unset the
+    // service runs in disabled mode: the app boots normally (Google sign-in
+    // works) and only email sending is unavailable.
+    if (!user || !pass) {
+      this.logger.warn(
+        'Email service disabled — GMAIL_USER / GMAIL_APP_PASSWORD not set. ' +
+          'Verification emails will not be sent; email sign-up is unavailable.',
+      );
+      return;
+    }
+
+    this.fromAddress = `DEVCON+ <${user}>`;
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user, pass },
     });
+    this.enabled = true;
 
     this.logger.log(`Email service initialized (sender: ${user})`);
   }
 
   async sendVerificationEmail(to: string, token: string): Promise<void> {
+    if (!this.enabled) {
+      this.logger.warn(
+        `Email service disabled — cannot send verification email to ${to}`,
+      );
+      throw new ServiceUnavailableException(
+        'Email service is not configured. Please use Google sign-in or contact support.',
+      );
+    }
     // Link goes to the BACKEND (/auth/email/verify), not the frontend.
     // The backend verifies the JWT, marks Firebase + DB as verified, then
     // redirects the browser to APP_URL/email-confirm?status=success.
@@ -36,10 +62,33 @@ export class EmailService implements OnModuleInit {
     await this.transporter.sendMail({
       from: this.fromAddress,
       to,
-      subject: 'Verify your email — DEVCON+ is waiting for you',
+      // Plain, transactional subject — promotional/urgency phrasing
+      // ("…is waiting for you") raises spam scores on a verification email.
+      subject: 'Verify your DEVCON+ email address',
+      // Always send a text/plain alternative alongside the HTML. An HTML-only
+      // message (no multipart/alternative) is a well-known spam-score signal.
+      text: this.verificationText(link),
       html: this.verificationTemplate(link),
     });
     this.logger.log(`Verification email sent to ${to}`);
+  }
+
+  // Plain-text counterpart to verificationTemplate(). Kept intentionally plain
+  // and transactional (no marketing copy) so the multipart/alternative message
+  // reads as a genuine verification email to spam filters.
+  private verificationText(link: string): string {
+    return [
+      'Verify your DEVCON+ email address',
+      '',
+      'Welcome to DEVCON+. Confirm your email address to activate your account.',
+      '',
+      'Open this link to verify (it expires in 24 hours):',
+      link,
+      '',
+      "If you didn't sign up for DEVCON+, you can safely ignore this email.",
+      '',
+      'DEVCON Philippines — Sync. Support. Succeed.',
+    ].join('\n');
   }
 
   private verificationTemplate(link: string): string {
@@ -61,7 +110,7 @@ export class EmailService implements OnModuleInit {
     the email client from pulling in body copy after it.
   -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F1F5F9;visibility:hidden;">
-    Confirm your email to unlock 500 Points+ and join 60,000+ geeks across 11 Philippine chapters.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    Confirm your email address to activate your DEVCON+ account.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
 
   <!-- Outer wrapper -->

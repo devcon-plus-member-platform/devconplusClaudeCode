@@ -55,7 +55,7 @@ export default function OAuthCallback() {
           setError('rate_limited')
           return
         }
-        navigate('/sign-up', { replace: true })
+        navigate('/complete-profile', { replace: true })
         return
       }
 

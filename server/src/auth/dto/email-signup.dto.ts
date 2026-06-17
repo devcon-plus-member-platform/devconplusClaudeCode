@@ -31,4 +31,9 @@ export class EmailSignupDto {
   @IsOptional()
   @IsString()
   school_or_company?: string;
+
+  // Cloudflare Turnstile token — verified server-side when TURNSTILE_SECRET_KEY is set.
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
 }

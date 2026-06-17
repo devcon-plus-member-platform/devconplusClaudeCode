@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { assertSameChapter } from '../common/authz/chapter-scope';
 import { AppCacheService } from '../cache/app-cache.service';
@@ -20,6 +20,25 @@ export class EventsService {
     return this.cache.getOrSet(CacheKeys.EVENTS_LIST, CACHE_TTL.EVENTS, () =>
       this.repo.findAll(),
     );
+  }
+
+  /**
+   * Password-gated raffle-wheel participants. The password must match the part
+   * before "@" of the event creator's email (or any hq_admin/super_admin email
+   * as a fallback/override). Returns anonymized names only — no email/school.
+   */
+  async getWheelParticipants(
+    id: string,
+    password: string,
+  ): Promise<Array<{ name: string; checked_in: boolean; status: string }>> {
+    const acceptable = await this.repo.findWheelAccessLocalParts(id);
+    if (acceptable.length === 0) {
+      throw new NotFoundException("This event isn't available for the wheel.");
+    }
+    if (!acceptable.includes(password.trim().toLowerCase())) {
+      throw new ForbiddenException('Incorrect password');
+    }
+    return this.repo.findParticipants(id);
   }
 
   async create(dto: CreateEventDto, user: AuthenticatedUser): Promise<Event> {

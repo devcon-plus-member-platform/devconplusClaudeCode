@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline } from 'solar-icon-set'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -1428,6 +1428,13 @@ export default function AdminEvents() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => window.open(`/wheel/${event.id}`, '_blank', 'noopener')}
+                          title="Open raffle wheel"
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors"
+                        >
+                          <ConfettiOutline className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => setSlideOver({ mode: 'edit', event })}
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
