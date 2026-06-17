@@ -23,8 +23,22 @@ export class EventsRepository extends BaseRepository {
   }
 
   /**
-   * Public participant list for the raffle wheel: names + status + checked_in
-   * only. Deliberately omits email / school so it is safe to expose without auth.
+   * Anonymize a full name to "first name + last-name initial" (e.g. "Juan Dela
+   * Cruz" → "Juan D.") for the public raffle wheel, so full surnames never leave
+   * the server. Single-token names are returned as-is; blanks fall back to "Unknown".
+   */
+  private privatizeName(full: string | null | undefined): string {
+    const tokens = (full ?? '').trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return 'Unknown';
+    if (tokens.length === 1) return tokens[0];
+    const lastInitial = tokens[tokens.length - 1][0]?.toUpperCase() ?? '';
+    return `${tokens[0]} ${lastInitial}.`;
+  }
+
+  /**
+   * Public participant list for the raffle wheel: anonymized names + status +
+   * checked_in only. Deliberately omits email / school and shows only a
+   * first-name + last-initial display name so it is safe to expose post-gate.
    */
   async findParticipants(
     eventId: string,
@@ -40,11 +54,56 @@ export class EventsRepository extends BaseRepository {
       const p = Array.isArray(row.profiles) ? (row.profiles as unknown[])[0] : row.profiles;
       const pObj = p as { full_name?: string } | null;
       return {
-        name: pObj?.full_name ?? 'Unknown',
+        name: this.privatizeName(pObj?.full_name),
         checked_in: Boolean(row.checked_in),
         status: (row.status ?? 'pending') as string,
       };
     });
+  }
+
+  /**
+   * The set of acceptable lowercased email local-parts (the part before "@") that
+   * unlock an event's raffle wheel: the event creator's email, plus every
+   * hq_admin / super_admin email as a fallback + master override. Emails never
+   * leave the server — only the caller-supplied password is compared against these.
+   */
+  async findWheelAccessLocalParts(eventId: string): Promise<string[]> {
+    const localPart = (email: string | null | undefined): string | null => {
+      const lp = (email ?? '').split('@')[0]?.trim().toLowerCase();
+      return lp ? lp : null;
+    };
+
+    const emails: Array<string | null | undefined> = [];
+
+    // Event creator's email.
+    const eventRes = await this.db
+      .from('events')
+      .select('created_by')
+      .eq('id', eventId)
+      .single();
+    const createdBy = (eventRes.data as { created_by?: string | null } | null)?.created_by;
+    if (createdBy) {
+      const creatorRes = await this.db
+        .from('profiles')
+        .select('email')
+        .eq('id', createdBy)
+        .single();
+      emails.push((creatorRes.data as { email?: string | null } | null)?.email);
+    }
+
+    // hq_admin / super_admin emails — fallback + master override.
+    const adminsRes = await this.db
+      .from('profiles')
+      .select('email')
+      .in('role', ['hq_admin', 'super_admin']);
+    for (const row of (adminsRes.data ?? []) as Array<{ email?: string | null }>) {
+      emails.push(row.email);
+    }
+
+    const parts = emails
+      .map(localPart)
+      .filter((p): p is string => p !== null);
+    return [...new Set(parts)];
   }
 
   async findById(id: string): Promise<Event | null> {

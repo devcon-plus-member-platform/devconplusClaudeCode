@@ -56,7 +56,94 @@ function ConfettiBurst() {
   )
 }
 
-// Shape returned by the public GET /api/events/:id/participants endpoint.
+/** Centered password popup gating an event's wheel. Closes itself on success. */
+function PasswordGate({
+  subtitle,
+  onConfirm,
+  onClose,
+}: {
+  subtitle?: string
+  onConfirm: (password: string) => Promise<void>
+  onClose: () => void
+}) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const submit = async () => {
+    if (!password) {
+      setError('Password is required')
+      return
+    }
+    setError(null)
+    setIsLoading(true)
+    try {
+      await onConfirm(password)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <motion.div
+      variants={backdrop}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      onClick={onClose}
+      className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 p-4"
+    >
+      <motion.div
+        variants={popIn}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-[2rem] bg-white p-7 text-center shadow-2xl"
+      >
+        <h2 className="text-md3-title-lg font-black text-slate-900">Password</h2>
+        {subtitle && <p className="mt-1 text-md3-body-sm text-slate-500">{subtitle}</p>}
+        <input
+          type="password"
+          autoFocus
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void submit()
+          }}
+          className="mt-5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-md3-body-md text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        {error && (
+          <p className="mt-3 rounded-lg border border-red/20 bg-red/5 px-3 py-2 text-md3-label-md text-red">
+            {error}
+          </p>
+        )}
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isLoading}
+            className="flex-1 rounded-2xl border border-slate-200 bg-white py-3 text-md3-title-md font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={isLoading}
+            className="flex-1 rounded-2xl bg-primary py-3 text-md3-title-md font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+          >
+            {isLoading ? 'Unlocking…' : 'Unlock'}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// Shape returned by the public POST /api/events/:id/participants endpoint.
 interface EventParticipant {
   name: string
   checked_in: boolean
@@ -102,8 +189,14 @@ export default function WheelPage() {
 
   const [participants, setParticipants] = useState<EventParticipant[]>([])
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
-  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  // ── Password gate ─────────────────────────────────────────────────────────
+  // The wheel for an event only loads after its password (the organizer's email
+  // local-part, validated server-side) is confirmed. Tracks which event id is
+  // currently unlocked so filter changes don't re-prompt.
+  const [verifiedEventId, setVerifiedEventId] = useState<string | null>(null)
+  const [showPwModal, setShowPwModal] = useState(false)
 
   // ── Wheel / draw state ────────────────────────────────────────────────────
   const [entrants, setEntrants] = useState<string[]>([])
@@ -111,7 +204,7 @@ export default function WheelPage() {
   const [rotation, setRotation] = useState(0)
   const [isSpinning, setIsSpinning] = useState(false)
   const [winner, setWinner] = useState<string | null>(null)
-  const pendingWinnerRef = useRef<string | null>(null)
+  const pendingWinnerRef = useRef<{ name: string; idx: number } | null>(null)
 
   // Keep the selected event in sync with the route param (SPA nav between
   // /wheel and /wheel/:eventId reuses this component instead of remounting).
@@ -127,31 +220,48 @@ export default function WheelPage() {
     setIsLoadingEvents(true)
     publicFetch<Event[]>('/api/events')
       .then((data) => {
-        const sorted = [...data].sort((a, b) =>
-          (b.event_date ?? '').localeCompare(a.event_date ?? ''),
-        )
+        // Externally-registered events have no in-app participant list to raffle.
+        const sorted = data
+          .filter((e) => !e.is_external)
+          .sort((a, b) => (b.event_date ?? '').localeCompare(a.event_date ?? ''))
         setEvents(sorted)
       })
       .catch(() => setEvents([]))
       .finally(() => setIsLoadingEvents(false))
   }, [])
 
-  // Load participants whenever the selected event changes (public endpoint).
+  // Whenever the selected event changes, prompt for its password before loading
+  // participants. An already-unlocked event keeps its loaded names (so switching
+  // the pool filter doesn't re-prompt).
   useEffect(() => {
     if (source !== 'event' || !selectedEventId) {
       setParticipants([])
+      setShowPwModal(false)
       return
     }
-    setIsLoadingParticipants(true)
+    if (selectedEventId === verifiedEventId) return
+    setParticipants([])
     setLoadError(null)
-    publicFetch<EventParticipant[]>(`/api/events/${selectedEventId}/participants`)
-      .then(setParticipants)
-      .catch((err: unknown) => {
-        setParticipants([])
-        setLoadError(err instanceof Error ? err.message : 'Failed to load participants')
-      })
-      .finally(() => setIsLoadingParticipants(false))
-  }, [source, selectedEventId])
+    setShowPwModal(true)
+  }, [source, selectedEventId, verifiedEventId])
+
+  // Validate the password server-side; on success the (anonymized) names load.
+  // Throwing keeps the error visible inside PasswordConfirmModal.
+  const handleVerifyPassword = useCallback(
+    async (password: string) => {
+      const id = selectedEventId
+      const data = await publicFetch<EventParticipant[]>(
+        `/api/events/${id}/participants`,
+        { method: 'POST', body: JSON.stringify({ password }) },
+      )
+      setParticipants(data)
+      setVerifiedEventId(id)
+    },
+    [selectedEventId],
+  )
+
+  const needsUnlock =
+    source === 'event' && Boolean(selectedEventId) && selectedEventId !== verifiedEventId
 
   const selectedEventTitle = events.find((e) => e.id === selectedEventId)?.title ?? ''
 
@@ -180,7 +290,7 @@ export default function WheelPage() {
   const handleSpin = useCallback(() => {
     if (!canSpin) return
     const idx = Math.floor(Math.random() * entrants.length)
-    pendingWinnerRef.current = entrants[idx]
+    pendingWinnerRef.current = { name: entrants[idx], idx }
 
     const sliceAngle = 360 / entrants.length
     const sliceCenter = idx * sliceAngle + sliceAngle / 2
@@ -201,10 +311,11 @@ export default function WheelPage() {
     setIsSpinning(false)
     const won = pendingWinnerRef.current
     if (!won) return
-    setWinner(won)
-    // Winners are removed so repeat spins draw different people.
-    setEntrants((prev) => prev.filter((n) => n !== won))
-    setRemovedWinners((prev) => [won, ...prev])
+    setWinner(won.name)
+    // Remove by index (not by name) so repeat spins draw different people even
+    // when two entrants share the same anonymized display name (e.g. "Juan D.").
+    setEntrants((prev) => prev.filter((_, i) => i !== won.idx))
+    setRemovedWinners((prev) => [won.name, ...prev])
   }, [isSpinning])
 
   const handleReset = useCallback(() => {
@@ -241,7 +352,7 @@ export default function WheelPage() {
             <ConfettiOutline color="rgb(var(--color-primary))" size={22} />
           </div>
           <div>
-            <h1 className="text-md3-headline-sm font-black text-slate-900">Raffle Wheel</h1>
+            <h1 className="text-md3-headline-sm font-black text-slate-900">DEVCON+ Raffle Wheel</h1>
             <p className="text-md3-body-sm text-slate-500">
               {isLocked
                 ? selectedEventTitle || 'Loading event…'
@@ -258,15 +369,26 @@ export default function WheelPage() {
             <div className="flex flex-col items-center gap-3 py-20 text-center">
               <UsersGroupRoundedOutline color="#94A3B8" size={40} />
               <p className="text-md3-body-md font-semibold text-slate-700">
-                {isLoadingParticipants ? 'Loading participants…' : 'No participants yet'}
+                {needsUnlock ? 'Locked' : 'No participants yet'}
               </p>
               <p className="max-w-xs text-md3-body-sm text-slate-500">
                 {source === 'event'
-                  ? isLocked
-                    ? 'No one matches this pool filter yet — try a different filter.'
-                    : 'Pick an event and a filter, or switch to a manual list to add names yourself.'
+                  ? needsUnlock
+                    ? 'Enter the event password to load participants.'
+                    : isLocked
+                      ? 'No one matches this pool filter yet — try a different filter.'
+                      : 'Pick an event and a filter, or switch to a manual list to add names yourself.'
                   : 'Add at least two names (one per line) to build the wheel.'}
               </p>
+              {needsUnlock && !showPwModal && (
+                <button
+                  type="button"
+                  onClick={() => setShowPwModal(true)}
+                  className="mt-1 rounded-xl bg-primary px-5 py-2.5 text-md3-label-lg font-bold text-white transition hover:opacity-90"
+                >
+                  Enter password
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -377,8 +499,14 @@ export default function WheelPage() {
                 ))}
               </div>
 
-              {isLoadingParticipants && (
-                <p className="mt-3 text-md3-body-sm text-slate-500">Loading participants…</p>
+              {needsUnlock && (
+                <button
+                  type="button"
+                  onClick={() => setShowPwModal(true)}
+                  className="mt-3 w-full rounded-xl border border-primary/30 bg-primary/5 py-2.5 text-md3-label-lg font-bold text-primary transition hover:bg-primary/10"
+                >
+                  Enter event password
+                </button>
               )}
               {loadError && <p className="mt-3 text-md3-body-sm text-red">{loadError}</p>}
 
@@ -488,12 +616,23 @@ export default function WheelPage() {
                     disabled={entrants.length < 2}
                     className="flex-1 rounded-2xl bg-primary py-4 text-md3-title-md font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Spin again
+                    Remove &amp; Spin Again
                   </button>
                 </div>
               </motion.div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Per-event password gate ── */}
+      <AnimatePresence>
+        {showPwModal && (
+          <PasswordGate
+            subtitle={selectedEventTitle ? `Unlock “${selectedEventTitle}”` : undefined}
+            onConfirm={handleVerifyPassword}
+            onClose={() => setShowPwModal(false)}
+          />
         )}
       </AnimatePresence>
     </div>
