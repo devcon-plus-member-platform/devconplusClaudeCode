@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import logoVertical from '../../assets/logos/logo-vertical.svg'
 
 const slides = [
@@ -28,47 +29,57 @@ const slides = [
 export default function Onboarding() {
   const navigate = useNavigate()
   const [current, setCurrent] = useState(0)
-  const [dragStart, setDragStart] = useState<number | null>(null)
   const isLast = current === slides.length - 1
 
   const goTo = (i: number) => setCurrent(Math.max(0, Math.min(slides.length - 1, i)))
 
-  const handlePointerDown = (e: React.PointerEvent) => setDragStart(e.clientX)
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (dragStart === null) return
-    const diff = dragStart - e.clientX
-    if (Math.abs(diff) > 50) {
-      if (diff > 0 && current < slides.length - 1) setCurrent((c) => c + 1)
-      if (diff < 0 && current > 0) setCurrent((c) => c - 1)
-    }
-    setDragStart(null)
-  }
+  // Measure the viewport width so the draggable strip can translate/snap in px
+  // (keeps drag and the snap spring in the same unit).
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [slideW, setSlideW] = useState(0)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => setSlideW(el.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   return (
     <div
+      ref={containerRef}
       className="h-screen overflow-hidden relative bg-navy select-none"
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
     >
-      {/* ── Sliding photo strip ──────────────────────────────── */}
-      <div
-        className="flex h-full transition-transform duration-500 ease-in-out"
-        style={{
-          width: `${slides.length * 100}%`,
-          transform: `translateX(-${(current / slides.length) * 100}%)`,
+      {/* ── Draggable photo strip ────────────────────────────── */}
+      <motion.div
+        className="flex h-full cursor-grab active:cursor-grabbing"
+        drag="x"
+        dragConstraints={{ left: -(slides.length - 1) * slideW, right: 0 }}
+        dragElastic={0.18}
+        dragMomentum={false}
+        onDragEnd={(_, info) => {
+          if (slideW === 0) return
+          // Snap to the nearest slide, biased by fling velocity.
+          const dragged  = -info.offset.x / slideW
+          const velBoost = -info.velocity.x / (slideW * 4)
+          const target   = Math.round(current + dragged + velBoost)
+          setCurrent(Math.max(0, Math.min(slides.length - 1, target)))
         }}
+        animate={{ x: -current * slideW }}
+        transition={{ type: 'spring', stiffness: 300, damping: 32 }}
       >
         {slides.map((slide, i) => (
           <div
             key={i}
-            className="relative h-full overflow-hidden"
-            style={{ width: `${100 / slides.length}%` }}
+            className="relative h-full w-full shrink-0 overflow-hidden"
           >
             {/* High-res background photo */}
             <img
               src={slide.image}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
               loading={i === 0 ? 'eager' : 'lazy'}
               draggable={false}
             />
@@ -76,7 +87,7 @@ export default function Onboarding() {
             <div className="absolute inset-0 bg-gradient-to-b from-[#092B6E]/20 via-[#092B6E]/50 to-[#1152D4]/90" />
           </div>
         ))}
-      </div>
+      </motion.div>
 
       {/* ── Centered Logo at the top ─────────────────────────── */}
       <div className="absolute top-[8vh] left-0 right-0 z-20 flex justify-center pointer-events-none">

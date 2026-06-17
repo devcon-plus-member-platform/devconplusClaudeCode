@@ -477,7 +477,14 @@ export default function SignUp() {
             By creating an account you agree to our{' '}
             <button type="button" onClick={() => setLegalModal('terms')} className="text-blue underline">Terms &amp; Conditions</button>
             {' '}and{' '}
-            <button type="button" onClick={() => setLegalModal('privacy')} className="text-blue underline">Privacy Policy</button>.
+            <a
+              href="https://devcon.ph/standard-privacy-and-safespace-consent/"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-blue underline"
+            >
+              Privacy Policy
+            </a>.
           </p>
 
           <button
