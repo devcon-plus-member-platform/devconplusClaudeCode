@@ -70,6 +70,9 @@ export const router = createBrowserRouter([
   { path: '/events/:slug',         element: <EventDetail /> },
   // Shareable officer-resource pages (one per category) — open without an account
   { path: '/officer-resources/:category', element: <OfficerResources /> },
+  // Public raffle wheel — pick an event (/wheel) or open a shared deep link (/wheel/:eventId)
+  { path: '/wheel',                lazy: () => import('./pages/wheel/WheelPage').then((m) => ({ Component: m.default })) },
+  { path: '/wheel/:eventId',       lazy: () => import('./pages/wheel/WheelPage').then((m) => ({ Component: m.default })) },
 
   // Auth routes — no layout
   { path: '/onboarding',           element: <Onboarding /> },

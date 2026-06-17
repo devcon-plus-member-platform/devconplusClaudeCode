@@ -22,6 +22,31 @@ export class EventsRepository extends BaseRepository {
     );
   }
 
+  /**
+   * Public participant list for the raffle wheel: names + status + checked_in
+   * only. Deliberately omits email / school so it is safe to expose without auth.
+   */
+  async findParticipants(
+    eventId: string,
+  ): Promise<Array<{ name: string; checked_in: boolean; status: string }>> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (this.db as any)
+      .from('event_registrations')
+      .select('status, checked_in, profiles(full_name)')
+      .eq('event_id', eventId)
+      .neq('status', 'cancelled');
+    if (error) throw new BadRequestException((error as { message: string }).message);
+    return (data ?? []).map((row: Record<string, unknown>) => {
+      const p = Array.isArray(row.profiles) ? (row.profiles as unknown[])[0] : row.profiles;
+      const pObj = p as { full_name?: string } | null;
+      return {
+        name: pObj?.full_name ?? 'Unknown',
+        checked_in: Boolean(row.checked_in),
+        status: (row.status ?? 'pending') as string,
+      };
+    });
+  }
+
   async findById(id: string): Promise<Event | null> {
     const result = await this.db
       .from('events')

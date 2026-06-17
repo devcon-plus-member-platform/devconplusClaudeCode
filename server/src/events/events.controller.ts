@@ -30,6 +30,14 @@ export class EventsController {
     return this.service.getAll();
   }
 
+  /** GET /api/events/:id/participants — public raffle-wheel names (no email/school). */
+  @Get(':id/participants')
+  getParticipants(
+    @Param() { id }: IdParamDto,
+  ): Promise<Array<{ name: string; checked_in: boolean; status: string }>> {
+    return this.service.getParticipants(id);
+  }
+
   /** POST /api/events — create an event (chapter_officer+). */
   @Post()
   @UseGuards(AuthGuard, RolesGuard)
