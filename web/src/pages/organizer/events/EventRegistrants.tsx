@@ -289,6 +289,7 @@ export function OrgEventRegistrants() {
   const organizerUser = useOrganizerUser()
   const [registrants, setRegistrants] = useState<RegistrantWithResponses[]>([])
   const [isLoading, setIsLoading]     = useState(true)
+  const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
@@ -317,12 +318,17 @@ export function OrgEventRegistrants() {
   useEffect(() => {
     if (!id) return
     setIsLoading(true)
+    setLoadError(null)
     apiFetch<RegistrantWithResponses[]>(`/api/registrations/event/${id}`)
       .then((data) => {
         // Server returns member_name/email/school_or_company directly; add event_title
         setRegistrants(data.map((r) => ({ ...r, event_title: event?.title ?? '' })))
       })
-      .catch(() => { /* error toast handled by caller */ })
+      .catch((err: unknown) => {
+        // Surface the real reason — a chapter-scope rejection (403/404) must not
+        // masquerade as an empty "No registrants found" state.
+        setLoadError(err instanceof Error ? err.message : 'Could not load registrants.')
+      })
       .finally(() => setIsLoading(false))
   }, [id, event?.title])
 
@@ -534,6 +540,19 @@ export function OrgEventRegistrants() {
                     </div>
                   ))}
                 </div>
+              ) : loadError ? (
+                <motion.div
+                  variants={fadeUp}
+                  initial="hidden"
+                  animate="visible"
+                  className="bg-white rounded-2xl border border-red/20 p-12 text-center"
+                >
+                  <div className="w-14 h-14 rounded-full bg-red/10 flex items-center justify-center mx-auto mb-3">
+                    <CloseCircleOutline className="w-7 h-7" color="#EF4444" />
+                  </div>
+                  <p className="text-md3-body-lg font-bold text-slate-700">Couldn't load registrants</p>
+                  <p className="text-md3-body-md text-slate-400 mt-1">{loadError}</p>
+                </motion.div>
               ) : (
                 <AnimatePresence mode="wait">
                   {filtered.length === 0 ? (

@@ -1,6 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
-import { assertSameChapter } from '../common/authz/chapter-scope';
+import { assertEventScope } from '../common/authz/chapter-scope';
 import type { Registration, RegistrantWithProfile } from '../supabase/types';
 import { RegistrationsRepository } from './registrations.repository';
 
@@ -69,13 +69,8 @@ export class RegistrationsService {
     user: AuthenticatedUser,
     eventId: string,
   ): Promise<void> {
-    const chapterId = await this.repo.findEventChapterId(eventId);
-    if (!chapterId) throw new NotFoundException('Event not found');
-    try {
-      assertSameChapter(user, chapterId);
-    } catch {
-      throw new ForbiddenException('Event belongs to a different chapter');
-    }
+    const scope = await this.repo.findEventChapterScope(eventId);
+    assertEventScope(user, scope);
   }
 
   private async assertRegChapterScope(

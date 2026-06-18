@@ -109,14 +109,23 @@ export class RegistrationsRepository extends BaseRepository {
     });
   }
 
-  /** Loads just enough to perform chapter-scope validation. */
-  async findEventChapterId(eventId: string): Promise<string | null> {
+  /**
+   * Loads chapter scope for an event. Distinguishes a missing event from an
+   * existing HQ/program event that has no chapter:
+   *   - returns `null`                 → event does not exist
+   *   - returns `{ chapterId: null }`  → event exists but is HQ-scope (no chapter)
+   *   - returns `{ chapterId: '…' }`   → event exists and belongs to a chapter
+   */
+  async findEventChapterScope(
+    eventId: string,
+  ): Promise<{ chapterId: string | null } | null> {
     const { data } = await this.db
       .from('events')
       .select('chapter_id')
       .eq('id', eventId)
       .maybeSingle();
-    return (data?.chapter_id ?? null) as string | null;
+    if (!data) return null;
+    return { chapterId: (data.chapter_id ?? null) as string | null };
   }
 
   /** Loads registration to get event_id for chapter-scope check. */

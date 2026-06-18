@@ -33,7 +33,16 @@ export class AnnouncementsRepository extends BaseRepository {
     );
   }
 
-  async findEventChapterId(eventId: string): Promise<string | null> {
+  /**
+   * Loads chapter scope for an event. Distinguishes a missing event from an
+   * existing HQ/program event that has no chapter:
+   *   - returns `null`                 → event does not exist
+   *   - returns `{ chapterId: null }`  → event exists but is HQ-scope (no chapter)
+   *   - returns `{ chapterId: '…' }`   → event exists and belongs to a chapter
+   */
+  async findEventChapterScope(
+    eventId: string,
+  ): Promise<{ chapterId: string | null } | null> {
     const result = await this.db
       .from('events')
       .select('chapter_id')
@@ -42,7 +51,8 @@ export class AnnouncementsRepository extends BaseRepository {
     const row = this.unwrapMaybe(
       result as { data: { chapter_id: string | null } | null; error: { message: string } | null },
     );
-    return row?.chapter_id ?? null;
+    if (!row) return null;
+    return { chapterId: row.chapter_id ?? null };
   }
 
   async create(
