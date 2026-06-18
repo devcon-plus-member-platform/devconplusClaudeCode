@@ -98,7 +98,11 @@ export function OrgDashboard() {
 
   if (!user) return null
 
-  const chapterEvents = events.filter((e) => e.chapter_id === chapterId)
+  // hq_admin / super_admin also see HQ events (chapter_id === null) alongside their own chapter's events
+  const isAdmin = profile?.role === 'hq_admin' || profile?.role === 'super_admin'
+  const chapterEvents = events.filter(
+    (e) => e.chapter_id === chapterId || (isAdmin && e.chapter_id === null),
+  )
   const pendingRegistrations = registrations.filter((r) => r.status === 'pending')
   const pendingVolunteers = volunteerApps.filter((a) => a.status === 'pending')
   const totalPending = pendingRegistrations.length + pendingVolunteers.length

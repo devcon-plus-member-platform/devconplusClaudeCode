@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
-import { assertSameChapter } from '../common/authz/chapter-scope';
+import { assertEventScope } from '../common/authz/chapter-scope';
 import type { EventAnnouncement } from '../supabase/types';
 import { AnnouncementsRepository } from './announcements.repository';
 import type { CreateAnnouncementDto } from './dto/create-announcement.dto';
@@ -35,9 +35,8 @@ export class AnnouncementsService {
     dto: CreateAnnouncementDto,
     user: AuthenticatedUser,
   ): Promise<EventAnnouncement> {
-    const chapterId = await this.repo.findEventChapterId(dto.event_id);
-    if (!chapterId) throw new NotFoundException(`Event ${dto.event_id} not found`);
-    assertSameChapter(user, chapterId);
+    const scope = await this.repo.findEventChapterScope(dto.event_id);
+    assertEventScope(user, scope);
     return this.repo.create({
       event_id: dto.event_id,
       organizer_id: user.profileId,

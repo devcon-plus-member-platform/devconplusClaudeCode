@@ -19,10 +19,11 @@ export function OrgEventsList() {
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 
+  // hq_admin / super_admin also see HQ events (chapter_id === null) alongside their own chapter's events
   const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
-  const chapterEvents  = isAdmin
-    ? events
-    : events.filter((e) => e.chapter_id === (user?.chapter_id ?? null))
+  const chapterEvents  = events.filter(
+    (e) => e.chapter_id === (user?.chapter_id ?? null) || (isAdmin && e.chapter_id === null),
+  )
   const upcomingEvents = chapterEvents.filter((e) => !isEventArchived(e))
   const pastEvents     = chapterEvents.filter((e) => isEventArchived(e))
   const displayEvents  = activeTab === 'upcoming' ? upcomingEvents : pastEvents

@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom'
 import { EyeOutline, EyeClosedOutline } from 'solar-icon-set'
-import { useAuthStore } from '../../stores/useAuthStore'
+import { useAuthStore, ORGANIZER_ROLES, type OrganizerRole } from '../../stores/useAuthStore'
 import { useFormDraft } from '../../hooks/useFormDraft'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
@@ -122,7 +122,7 @@ export default function SignIn() {
         navigate(returnTo)
       } else {
         const role = useAuthStore.getState().user?.role
-        navigate(role === 'super_admin' || role === 'hq_admin' ? '/admin' : '/home')
+        navigate(role && ORGANIZER_ROLES.includes(role as OrganizerRole) ? '/organizer' : '/home')
       }
     } catch (err) {
       // Firebase path: user signed up but hasn't clicked the verification link.
@@ -213,7 +213,7 @@ export default function SignIn() {
                 navigate(returnTo)
               } else {
                 const role = useAuthStore.getState().user?.role
-                navigate(role === 'super_admin' || role === 'hq_admin' ? '/admin' : '/home')
+                navigate(role && ORGANIZER_ROLES.includes(role as OrganizerRole) ? '/organizer' : '/home')
               }
             } catch (err) {
               setGoogleLoading(false)

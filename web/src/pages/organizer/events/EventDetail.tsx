@@ -6,7 +6,7 @@ import { useEventsStore } from '../../../stores/useEventsStore'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
 import { MarkdownContent } from '../../../components/MarkdownContent'
-import { supabase } from '../../../lib/supabase'
+import { apiFetch } from '../../../lib/api'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -28,16 +28,24 @@ export function OrgEventDetail() {
 
   useEffect(() => {
     if (!id) return
+    // Read stats from the same chapter-scoped backend endpoint the Registrants
+    // screen uses, so the two screens can never disagree and the same
+    // authorization applies (officers can't see counts they can't manage).
     void (async () => {
-      const { data } = await supabase
-        .from('event_registrations')
-        .select('status, checked_in')
-        .eq('event_id', id)
-        .neq('status', 'cancelled')
-      if (!data) return
-      setStatsTotal(data.length)
-      setStatsPending(data.filter((r) => r.status === 'pending').length)
-      setStatsCheckedIn(data.filter((r) => r.checked_in).length)
+      try {
+        const data = await apiFetch<Array<{ status: string; checked_in: boolean }>>(
+          `/api/registrations/event/${id}`,
+        )
+        setStatsTotal(data.length)
+        setStatsPending(data.filter((r) => r.status === 'pending').length)
+        setStatsCheckedIn(data.filter((r) => r.checked_in).length)
+      } catch {
+        // Not authorized (e.g. officer on an HQ event) or load failure —
+        // leave counts at 0; the Registrants screen surfaces the reason.
+        setStatsTotal(0)
+        setStatsPending(0)
+        setStatsCheckedIn(0)
+      }
     })()
   }, [id])
 
