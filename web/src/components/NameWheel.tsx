@@ -1,14 +1,5 @@
 import { motion } from 'framer-motion'
 
-/**
- * Presentational SVG "wheel of names". The parent owns all spin state — this
- * component only draws the wheel at the given `rotation` (in degrees) and
- * reports when the spin animation settles via `onSpinEnd`.
- *
- * Colors are derived from the design tokens so the wheel follows the active
- * program theme (`--color-primary` / `--color-primary-dark`) and stays on-brand.
- */
-
 interface NameWheelProps {
   entrants: string[]
   rotation: number
@@ -24,11 +15,14 @@ const SIZE = 360 // viewBox units (geometry is computed in these); the SVG fills
 const RADIUS = SIZE / 2
 const CENTER = SIZE / 2
 
-// Monochrome, theme-aware two-tone fills: the primary hue alternating with its
-// darker shade. White dividers + white labels keep slices legible.
 const SEGMENT_FILLS = [
-  'rgb(var(--color-primary))',
-  'rgb(var(--color-primary-dark))',
+  '#E0524B', // red
+  '#E8843C', // orange
+  '#EAC32E', // yellow
+  '#4FA85A', // green
+  '#3B7DD8', // blue
+  '#4A53B5', // indigo
+  '#8E4FC0', // violet
 ]
 
 const SPIN_EASE: [number, number, number, number] = [0.17, 0.67, 0.12, 0.99]
