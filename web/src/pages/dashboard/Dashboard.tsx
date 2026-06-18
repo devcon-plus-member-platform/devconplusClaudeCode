@@ -434,7 +434,11 @@ useEffect(() => {
               initial="hidden"
               animate="visible"
             >
-              {jobs.filter(j => j.is_active).slice(0, 3).map((job) => (
+              {[
+                // All promoted jobs first (priority), then fill with recent non-promoted.
+                ...jobs.filter(j => j.is_active && j.is_promoted),
+                ...jobs.filter(j => j.is_active && !j.is_promoted).slice(0, 3),
+              ].map((job) => (
                 <motion.div key={job.id} variants={cardItem}>
                   <JobCard job={job} />
                 </motion.div>

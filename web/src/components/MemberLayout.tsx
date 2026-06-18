@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { HomeOutline, GiftOutline, TicketOutline, CaseOutline, UserOutline, BoltOutline } from 'solar-icon-set'
+import { HomeOutline, GiftOutline, CalendarOutline, CaseOutline, UserOutline, BoltOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
@@ -273,7 +273,7 @@ export default function MemberLayout() {
                   whileTap={{ scale: 0.92 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                 >
-                  <TicketOutline className="w-6 h-6" color="white" />
+                  <CalendarOutline className="w-6 h-6" color="white" />
                 </motion.div>
               )}
             </NavLink>
@@ -377,7 +377,7 @@ export default function MemberLayout() {
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
                     isActive ? 'bg-white/30' : 'bg-white/15'
                   }`}>
-                    <TicketOutline className="w-3.5 h-3.5" color="white" />
+                    <CalendarOutline className="w-3.5 h-3.5" color="white" />
                   </div>
                   Events
                 </>

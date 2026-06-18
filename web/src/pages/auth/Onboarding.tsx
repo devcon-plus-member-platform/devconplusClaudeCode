@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import logoVertical from '../../assets/logos/logo-vertical.svg'
+import { markOnboardingSeen } from '../../lib/onboarding'
 
 const slides = [
   {
@@ -32,6 +33,13 @@ export default function Onboarding() {
   const isLast = current === slides.length - 1
 
   const goTo = (i: number) => setCurrent(Math.max(0, Math.min(slides.length - 1, i)))
+
+  // Mark onboarding as seen the moment the visitor leaves via any CTA, so the
+  // splash screen won't route them back here on the next launch.
+  const leaveOnboarding = (to: string) => {
+    markOnboardingSeen()
+    navigate(to)
+  }
 
   // Measure the viewport width so the draggable strip can translate/snap in px
   // (keeps drag and the snap spring in the same unit).
@@ -124,19 +132,19 @@ export default function Onboarding() {
           {isLast ? (
             <>
               <button
-                onClick={() => navigate('/sign-up')}
+                onClick={() => leaveOnboarding('/sign-up')}
                 className="w-full h-[54px] bg-white/10 backdrop-blur-xl border border-white/20 text-white font-bold rounded-2xl text-[17px] flex items-center justify-center shadow-lg transition-all active:scale-[0.98] hover:bg-white/20"
               >
                 Get Started
               </button>
               <button
-                onClick={() => navigate('/sign-in')}
+                onClick={() => leaveOnboarding('/sign-in')}
                 className="text-white/80 text-[13px] font-medium transition-opacity hover:opacity-100 py-1"
               >
                 I have an account
               </button>
               <button
-                onClick={() => navigate('/events')}
+                onClick={() => leaveOnboarding('/events')}
                 className="text-white/50 text-[12px] font-medium transition-opacity hover:opacity-100 py-1"
               >
                 Browse Events
@@ -151,7 +159,7 @@ export default function Onboarding() {
                 Next
               </button>
               <button
-                onClick={() => navigate('/sign-up')}
+                onClick={() => leaveOnboarding('/sign-up')}
                 className="text-white/70 text-[13px] font-medium transition-opacity hover:opacity-100 py-1"
               >
                 Skip
