@@ -1,4 +1,6 @@
+import type { ConfigService } from '@nestjs/config';
 import type { AppCacheService } from '../cache/app-cache.service';
+import type { EmailService } from '../email/email.service';
 import { AdminRepository } from './admin.repository';
 import { AdminService } from './admin.service';
 
@@ -14,6 +16,7 @@ function makeRepo() {
     updateUserRole:        jest.fn().mockResolvedValue(undefined),
     getAuthUidById:        jest.fn().mockResolvedValue('fb-user-uuid'),
     getAnalytics:          jest.fn().mockResolvedValue(mockAnalytics),
+    findChapterName:       jest.fn().mockResolvedValue('Manila'),
   } as unknown as jest.Mocked<AdminRepository>;
 }
 
@@ -26,15 +29,31 @@ function makeCache() {
   } as unknown as jest.Mocked<AppCacheService>;
 }
 
+function makeEmail() {
+  return {
+    sendOfficerInviteEmail: jest.fn().mockResolvedValue(undefined),
+  } as unknown as jest.Mocked<EmailService>;
+}
+
+function makeConfig() {
+  return {
+    getOrThrow: jest.fn().mockReturnValue('https://app.example.test'),
+  } as unknown as jest.Mocked<ConfigService>;
+}
+
 describe('AdminService', () => {
   let service: AdminService;
   let repo: jest.Mocked<AdminRepository>;
   let cache: jest.Mocked<AppCacheService>;
+  let email: jest.Mocked<EmailService>;
+  let config: jest.Mocked<ConfigService>;
 
   beforeEach(() => {
     repo = makeRepo();
     cache = makeCache();
-    service = new AdminService(repo, cache);
+    email = makeEmail();
+    config = makeConfig();
+    service = new AdminService(repo, cache, email, config);
   });
 
   it('getUsers — delegates to repo', async () => {
@@ -69,5 +88,17 @@ describe('AdminService', () => {
     const result = await service.getAnalytics();
     expect(result).toEqual(mockAnalytics);
     expect(repo.getAnalytics).toHaveBeenCalled();
+  });
+
+  it('inviteOfficer — emails a normalised, chapter-scoped sign-up invite', async () => {
+    const result = await service.inviteOfficer('NewOfficer@Devcon.PH', 'chapter-uuid', 'Jane Admin');
+    expect(repo.findChapterName).toHaveBeenCalledWith('chapter-uuid');
+    expect(email.sendOfficerInviteEmail).toHaveBeenCalledWith(
+      'newofficer@devcon.ph',
+      'Manila',
+      'Jane Admin',
+      'https://app.example.test/sign-up?email=newofficer%40devcon.ph',
+    );
+    expect(result).toEqual({ sent: true });
   });
 });
