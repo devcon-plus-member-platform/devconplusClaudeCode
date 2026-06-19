@@ -363,7 +363,6 @@ export default function MemberLayout() {
               Rewards
             </NavLink>
 
-            {/* Events — circle accent */}
             <NavLink
               to="/events"
               className={({ isActive }) =>
@@ -372,16 +371,8 @@ export default function MemberLayout() {
                 }`
               }
             >
-              {({ isActive }) => (
-                <>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                    isActive ? 'bg-white/30' : 'bg-white/15'
-                  }`}>
-                    <CalendarOutline className="w-3.5 h-3.5" color="white" />
-                  </div>
-                  Events
-                </>
-              )}
+              <CalendarOutline color="white" size={16} className="shrink-0" />
+              Events
             </NavLink>
 
             <NavLink
