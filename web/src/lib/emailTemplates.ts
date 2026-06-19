@@ -1,22 +1,26 @@
-// Shared email HTML templates for DEVCON+ transactional emails.
-// On-brand: gradient header/footer, hosted logo, rounded 560px card —
-// matches the verification and officer-invite emails sent from the server.
+// Shared HTML email templates for DEVCON+ transactional emails sent from the
+// client via the `send-email` edge function (Resend). On-brand: gradient
+// header/footer, hosted logo, rounded 560px card — matches the verification
+// and officer-invite emails sent from the NestJS server.
 
-export interface RegistrationEmailParams {
+export interface EventEmailParams {
   memberName: string
   eventTitle: string
-  eventDate: string      // pre-formatted date string
+  eventDate: string
   eventLocation?: string
   pointsValue: number
   ticketUrl: string
 }
 
-// Hosted brand assets (header logo + footer thumbnail).
+// Hosted brand assets (header logo + footer thumbnail), served from Supabase
+// public storage so they render without inline attachments.
 const LOGO_URL = 'https://rrztmvoknmyrpuffutvh.supabase.co/storage/v1/object/public/logo/logo.svg'
 const THUMB_URL = 'https://rrztmvoknmyrpuffutvh.supabase.co/storage/v1/object/public/logo/thumbnail.png'
 // Gradient header/footer with a solid fallback first (Outlook ignores gradients).
 const BRAND_BG = 'background:#1152D4;background:linear-gradient(135deg,#1152D4 0%,#2563EB 100%);'
 
+// Escapes HTML-significant characters so member-supplied values (names, event
+// titles) can't break the markup.
 function esc(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -38,6 +42,7 @@ function shell(opts: { title: string; subtitle: string; preheader: string; body:
 </head>
 <body style="margin:0;padding:0;background:#EEF2FF;font-family:Arial,Helvetica,sans-serif;">
 
+  <!-- Preheader — inbox preview line; padded so the client doesn't pull body copy after it. -->
   <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#EEF2FF;visibility:hidden;">
     ${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
@@ -46,9 +51,11 @@ function shell(opts: { title: string; subtitle: string; preheader: string; body:
     <tr>
       <td align="center">
 
+        <!-- MAIN CARD -->
         <table width="560" cellpadding="0" cellspacing="0" role="presentation"
                style="width:100%;max-width:560px;background:#FFFFFF;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(15,23,42,0.08);">
 
+          <!-- HEADER -->
           <tr>
             <td align="center" style="${BRAND_BG}padding:48px 32px 40px 32px;">
               <img src="${LOGO_URL}" width="80" alt="DEVCON+" style="display:block;margin:0 auto 24px auto;" />
@@ -57,12 +64,14 @@ function shell(opts: { title: string; subtitle: string; preheader: string; body:
             </td>
           </tr>
 
+          <!-- BODY -->
           <tr>
             <td style="padding:40px 36px;">
 ${body}
             </td>
           </tr>
 
+          <!-- FOOTER -->
           <tr>
             <td align="center" style="${BRAND_BG}padding:36px 24px;">
               <img src="${THUMB_URL}" width="56" alt="DEVCON+" style="display:block;margin:0 auto 18px auto;" />
@@ -99,7 +108,7 @@ function detailRow(label: string, value: string): string {
                   </tr>`
 }
 
-function detailCard(p: RegistrationEmailParams): string {
+function detailCard(p: EventEmailParams): string {
   const rows = [
     detailRow('Event', esc(p.eventTitle)),
     detailRow('Date', esc(p.eventDate)),
@@ -120,12 +129,12 @@ ${rows}
               </table>`
 }
 
-export function registrationConfirmationEmail(params: RegistrationEmailParams): string {
-  const title = esc(params.eventTitle)
-  const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hi ${esc(params.memberName)} 👋</p>
+export function buildRegistrationConfirmationEmail(p: EventEmailParams): string {
+  const title = esc(p.eventTitle)
+  const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hi ${esc(p.memberName)} 👋</p>
               <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;">Your spot has been confirmed for <strong style="color:#0F172A;">${title}</strong>. We can't wait to see you there!</p>
-              ${detailCard(params)}
-              ${button(params.ticketUrl, 'View My Ticket')}
+              ${detailCard(p)}
+              ${button(p.ticketUrl, 'View My Ticket')}
               <p style="margin:28px 0 0 0;font-size:12px;line-height:1.7;color:#94A3B8;text-align:center;">Show your QR ticket at the venue entrance to check in and earn your points.</p>`
   return shell({
     title: "You're registered!",
@@ -135,12 +144,12 @@ export function registrationConfirmationEmail(params: RegistrationEmailParams): 
   })
 }
 
-export function registrationApprovedEmail(params: RegistrationEmailParams): string {
-  const title = esc(params.eventTitle)
-  const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hi ${esc(params.memberName)} 👋</p>
+export function buildRegistrationApprovedEmail(p: EventEmailParams): string {
+  const title = esc(p.eventTitle)
+  const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hi ${esc(p.memberName)} 👋</p>
               <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;">Great news — your registration for <strong style="color:#0F172A;">${title}</strong> has been approved by the organizer.</p>
-              ${detailCard(params)}
-              ${button(params.ticketUrl, 'View My Ticket')}
+              ${detailCard(p)}
+              ${button(p.ticketUrl, 'View My Ticket')}
               <p style="margin:28px 0 0 0;font-size:12px;line-height:1.7;color:#94A3B8;text-align:center;">Your QR ticket is ready. Show it at the venue entrance to check in.</p>`
   return shell({
     title: "You're approved!",
