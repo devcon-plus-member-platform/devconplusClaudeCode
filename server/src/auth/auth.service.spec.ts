@@ -71,6 +71,7 @@ function makeSupabase(overrides: Partial<SupabaseService> = {}) {
     linkAuthUidToProfile: jest.fn().mockResolvedValue(mockProfile),
     createProfileWithBonus: jest.fn().mockResolvedValue(mockProfile),
     setEmailVerified: jest.fn().mockResolvedValue(undefined),
+    applyOfficerEmailAssignment: jest.fn().mockResolvedValue(undefined),
     raw: { rpc: jest.fn().mockResolvedValue({ error: null }) },
     ...overrides,
   };
@@ -187,6 +188,9 @@ describe('AuthService', () => {
         }),
       );
       expect(session.profile.id).toBe(MOCK_PROFILE_ID);
+      // Google OAuth users are created already-verified and never hit verifyEmail,
+      // so the officer role must be applied here on first sign-in.
+      expect(supabase.applyOfficerEmailAssignment).toHaveBeenCalledWith(MOCK_PROFILE_ID);
     });
 
     it('rejects when profile.is_email_verified=false (DB gate)', async () => {
@@ -412,6 +416,22 @@ describe('AuthService', () => {
       expect(redirectUrl).toContain('status=success');
       expect(firebase.auth.updateUser).toHaveBeenCalledWith(MOCK_FIREBASE_UID, { emailVerified: true });
       expect(supabase.setEmailVerified).toHaveBeenCalledWith(MOCK_PROFILE_ID);
+      // Pre-assigned officer role is applied right after verification.
+      expect(supabase.applyOfficerEmailAssignment).toHaveBeenCalledWith(MOCK_PROFILE_ID);
+    });
+
+    it('still returns success when applyOfficerEmailAssignment fails (non-fatal)', async () => {
+      await build(
+        {},
+        {
+          findProfileByEmail: jest.fn().mockResolvedValue(mockProfile),
+          applyOfficerEmailAssignment: jest.fn().mockRejectedValue(new Error('rpc error')),
+        },
+      );
+      const token = makeValidToken();
+      const redirectUrl = await service.verifyEmail(token);
+      // Officer-application failure must not block verification.
+      expect(redirectUrl).toContain('status=success');
     });
 
     it('returns error redirect for expired/invalid token', async () => {
