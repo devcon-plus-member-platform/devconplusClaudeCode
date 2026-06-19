@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AddCircleOutline, FilterOutline, TrashBinTrashOutline } from 'solar-icon-set'
+import { AddCircleOutline, FilterOutline, LetterOutline, TrashBinTrashOutline } from 'solar-icon-set'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
+import { apiFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 
@@ -39,6 +40,8 @@ export default function AdminChapterOfficers() {
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [invitingId, setInvitingId] = useState<string | null>(null)
+  const [invitedId, setInvitedId] = useState<string | null>(null)
   const [filterChapterId, setFilterChapterId] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<'all' | 'applied' | 'pending'>('all')
 
@@ -101,10 +104,37 @@ export default function AdminChapterOfficers() {
       p_chapter_id: data.chapter_id,
     })
     if (rpcErr) { setError(rpcErr.message); return }
+    // Auto-send the invite email. Non-blocking — the assignment already succeeded,
+    // so a mail failure (e.g. email service unconfigured) only shows a soft warning.
+    try {
+      await apiFetch('/api/admin/officers/invite', {
+        method: 'POST',
+        body: JSON.stringify({ email: data.email, chapter_id: data.chapter_id }),
+      })
+    } catch {
+      setError('Officer assigned, but the invite email could not be sent (email service unavailable).')
+    }
     // Re-fetch so the new/updated row (with joined chapter name + applied status) is accurate.
     await load()
     reset({ email: '', chapter_id: '' })
     setShowForm(false)
+  }
+
+  const handleResend = async (a: Assignment) => {
+    setInvitingId(a.id)
+    setError(null)
+    try {
+      await apiFetch('/api/admin/officers/invite', {
+        method: 'POST',
+        body: JSON.stringify({ email: a.email, chapter_id: a.chapter_id }),
+      })
+      setInvitedId(a.id)
+      setTimeout(() => setInvitedId((id) => (id === a.id ? null : id)), 2500)
+    } catch {
+      setError(`Could not send invite to ${a.email}.`)
+    } finally {
+      setInvitingId(null)
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -178,7 +208,8 @@ export default function AdminChapterOfficers() {
 
           <p className="text-[11px] text-slate-400 leading-snug">
             If an account with this email already exists, it is upgraded immediately. Otherwise the
-            officer role is applied automatically the next time they sign up.
+            officer role is applied automatically the next time they sign up. An invite email is sent
+            automatically — use the mail icon to resend it.
           </p>
 
           <div className="flex gap-2">
@@ -286,13 +317,27 @@ export default function AdminChapterOfficers() {
                             >{deletingId === a.id ? '…' : 'Delete'}</button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => setConfirmDeleteId(a.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                            title="Remove assignment"
-                          >
-                            <TrashBinTrashOutline color="#94A3B8" size={16} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            {invitedId === a.id ? (
+                              <span className="text-[10px] font-bold text-green px-2 py-1">Sent ✓</span>
+                            ) : (
+                              <button
+                                onClick={() => void handleResend(a)}
+                                disabled={invitingId === a.id}
+                                className="p-1 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-50 transition-colors"
+                                title="Resend invite email"
+                              >
+                                <LetterOutline color="#94A3B8" size={16} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConfirmDeleteId(a.id)}
+                              className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
+                              title="Remove assignment"
+                            >
+                              <TrashBinTrashOutline color="#94A3B8" size={16} />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
