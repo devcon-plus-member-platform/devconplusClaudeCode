@@ -13,8 +13,9 @@ export interface EventEmailParams {
 }
 
 // Hosted brand assets (header logo + footer thumbnail), served from Supabase
-// public storage so they render without inline attachments.
-const LOGO_URL = 'https://rrztmvoknmyrpuffutvh.supabase.co/storage/v1/object/public/logo/logo.svg'
+// public storage so they render without inline attachments. MUST be raster
+// (PNG/JPG) — Gmail, Outlook and most clients do not render SVG in email.
+const LOGO_URL = 'https://rrztmvoknmyrpuffutvh.supabase.co/storage/v1/object/public/logo/logo.png'
 const THUMB_URL = 'https://rrztmvoknmyrpuffutvh.supabase.co/storage/v1/object/public/logo/thumbnail.png'
 // Gradient header/footer with a solid fallback first (Outlook ignores gradients).
 const BRAND_BG = 'background:#1152D4;background:linear-gradient(135deg,#1152D4 0%,#2563EB 100%);'
@@ -58,7 +59,7 @@ function shell(opts: { title: string; subtitle: string; preheader: string; body:
           <!-- HEADER -->
           <tr>
             <td align="center" style="${BRAND_BG}padding:48px 32px 40px 32px;">
-              <img src="${LOGO_URL}" width="80" alt="DEVCON+" style="display:block;margin:0 auto 24px auto;" />
+              <img src="${LOGO_URL}" width="160" alt="DEVCON+" style="display:block;width:160px;height:auto;margin:0 auto 24px auto;" />
               <h1 style="margin:0;font-size:32px;line-height:1.2;color:#FFFFFF;font-weight:700;">${title}</h1>
               <p style="margin:16px auto 0 auto;font-size:15px;line-height:1.6;color:rgba(255,255,255,0.88);max-width:400px;">${subtitle}</p>
             </td>

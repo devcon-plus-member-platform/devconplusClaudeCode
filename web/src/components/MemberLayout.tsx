@@ -374,10 +374,10 @@ export default function MemberLayout() {
             >
               {({ isActive }) => (
                 <>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                  <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
                     isActive ? 'bg-white/30' : 'bg-white/15'
                   }`}>
-                    <CalendarOutline className="w-3.5 h-3.5" color="white" />
+                    <CalendarOutline className="w-3 h-3" color="white" />
                   </div>
                   Events
                 </>
