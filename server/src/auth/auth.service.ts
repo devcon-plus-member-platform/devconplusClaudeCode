@@ -275,6 +275,10 @@ export class AuthService {
       const profile = await this.supabase.findProfileByEmail(payload.email);
       if (profile) {
         await this.supabase.setEmailVerified(profile.id);
+        // Apply a pre-assigned officer role now that the inbox is verified. This
+        // replaces the Supabase handle_email_confirmation trigger, which the
+        // Firebase flow never fires. Idempotent + verification-gated server-side.
+        await this.supabase.applyOfficerEmailAssignment(profile.id);
       }
     } catch (err) {
       // Non-fatal — Firebase is updated; profile will sync on next sign-in.
@@ -571,7 +575,17 @@ export class AuthService {
       // Pass emailVerified so linkAuthUidToProfile also sets is_email_verified=true.
       // This backfills NULL values on pre-existing rows (column added after accounts
       // were created via Supabase Auth) so the is_email_verified DB gate passes.
-      return this.supabase.linkAuthUidToProfile(byEmail.id, authUid, emailVerified);
+      const linkedProfile = await this.supabase.linkAuthUidToProfile(
+        byEmail.id,
+        authUid,
+        emailVerified,
+      );
+      // Apply a pre-assigned officer role for a now-verified profile (e.g. Google
+      // OAuth linking to an existing row). Idempotent + verification-gated.
+      if (emailVerified) {
+        await this.applyOfficerAssignmentSafe(linkedProfile.id);
+      }
+      return linkedProfile;
     }
 
     // 3. New user — create profile.
@@ -600,7 +614,7 @@ export class AuthService {
       // Non-fatal — create the profile with available data.
     }
 
-    return this.supabase.createProfileWithBonus({
+    const newProfile = await this.supabase.createProfileWithBonus({
       id: randomUUID(),
       email,
       full_name: claimsName ?? email.split('@')[0],
@@ -610,6 +624,26 @@ export class AuthService {
       school_or_company: schoolOrCompany,
       is_email_verified: emailVerified,
     });
+    // Google OAuth users are created already-verified and never hit verifyEmail —
+    // apply any pre-assigned officer role here. Idempotent + verification-gated.
+    if (emailVerified) {
+      await this.applyOfficerAssignmentSafe(newProfile.id);
+    }
+    return newProfile;
+  }
+
+  /**
+   * Best-effort officer-role application. Officer assignment is a non-critical
+   * enhancement on top of profile creation — a failure here must never block
+   * sign-in, so errors are logged and swallowed (mirrors the verifyEmail call site).
+   */
+  private async applyOfficerAssignmentSafe(profileId: string): Promise<void> {
+    try {
+      await this.supabase.applyOfficerEmailAssignment(profileId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`applyOfficerEmailAssignment failed for ${profileId}: ${msg}`);
+    }
   }
 
   private signVerificationToken(firebaseUid: string, email: string): string {

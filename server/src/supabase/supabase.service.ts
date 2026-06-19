@@ -116,6 +116,25 @@ export class SupabaseService implements OnModuleInit {
     }
   }
 
+  /**
+   * Applies a pre-assigned officer role to a verified profile, if one exists.
+   *
+   * The officer auto-assignment used to live in Supabase auth.users triggers, which
+   * the Firebase signup/verification flow never fires. This RPC re-homes that step
+   * so NestJS can run it on every verification path. The RPC is idempotent and
+   * verification-gated (no-ops unless profiles.is_email_verified is true AND an
+   * active, unconsumed officer_email_assignments row matches the profile's email),
+   * so callers can invoke it freely without pre-checking.
+   */
+  async applyOfficerEmailAssignment(profileId: string): Promise<void> {
+    const { error } = await this.client.rpc('apply_officer_email_assignment', {
+      p_profile_id: profileId,
+    });
+    if (error) {
+      throw new Error(`applyOfficerEmailAssignment failed: ${error.message}`);
+    }
+  }
+
   async createProfileWithBonus(input: {
     id: string;
     email: string;
