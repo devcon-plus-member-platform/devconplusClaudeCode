@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import logoVertical from '../../assets/logos/logo-vertical.svg'
 import { useAuthStore } from '../../stores/useAuthStore'
+import { hasSeenOnboarding } from '../../lib/onboarding'
 import AnimatedDice from '../../components/AnimatedDice'
 
 // Flower-of-life interlocking circles pattern — pure SVG tile, no assets needed.
@@ -41,7 +42,9 @@ export default function SplashScreen() {
 
     const navTimer = setTimeout(() => {
       const { user, isInitialized } = useAuthStore.getState()
-      const dest = isInitialized && user ? '/home' : '/onboarding'
+      let dest = '/onboarding'
+      if (isInitialized && user) dest = '/home'
+      else if (hasSeenOnboarding()) dest = '/sign-in'
       navigate(dest, { replace: true })
     }, 2600)
 

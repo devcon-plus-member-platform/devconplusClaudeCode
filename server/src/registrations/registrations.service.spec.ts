@@ -28,7 +28,7 @@ const mockReg: Registration = {
 
 // ── Mock factory ──────────────────────────────────────────────────────────────
 
-function makeRepo(eventChapterId = CH_1) {
+function makeRepo(eventChapterId: string | null = CH_1) {
   return {
     findByUser:                jest.fn().mockResolvedValue([mockReg]),
     findCancelled:             jest.fn().mockResolvedValue(null),
@@ -36,7 +36,7 @@ function makeRepo(eventChapterId = CH_1) {
     insertRegistration:        jest.fn().mockResolvedValue(mockReg),
     cancelRegistration:        jest.fn().mockResolvedValue(undefined),
     findByEvent:               jest.fn().mockResolvedValue([]),
-    findEventChapterId:        jest.fn().mockResolvedValue(eventChapterId),
+    findEventChapterScope:     jest.fn().mockResolvedValue({ chapterId: eventChapterId }),
     findRegistrationEventId:   jest.fn().mockResolvedValue(EVENT_ID),
     approveRegistration:       jest.fn().mockResolvedValue(undefined),
     rejectRegistration:        jest.fn().mockResolvedValue(undefined),
@@ -133,6 +133,29 @@ describe('RegistrationsService', () => {
 
     it('hq_admin can read any chapter event', async () => {
       repo = makeRepo(CH_2);
+      service = new RegistrationsService(repo);
+      await service.getEventRegistrants(admin, EVENT_ID);
+      expect(repo.findByEvent).toHaveBeenCalledWith(EVENT_ID);
+    });
+
+    it('throws NotFoundException when the event does not exist', async () => {
+      repo = makeRepo();
+      repo.findEventChapterScope.mockResolvedValue(null);
+      service = new RegistrationsService(repo);
+      await expect(service.getEventRegistrants(officer1, EVENT_ID)).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.findByEvent).not.toHaveBeenCalled();
+    });
+
+    // HQ / program event (chapter_id === null) — restricted to HQ admins.
+    it('forbids a chapter officer from reading registrants of an HQ (null-chapter) event', async () => {
+      repo = makeRepo(null);
+      service = new RegistrationsService(repo);
+      await expect(service.getEventRegistrants(officer1, EVENT_ID)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repo.findByEvent).not.toHaveBeenCalled();
+    });
+
+    it('lets an hq_admin read registrants of an HQ (null-chapter) event', async () => {
+      repo = makeRepo(null);
       service = new RegistrationsService(repo);
       await service.getEventRegistrants(admin, EVENT_ID);
       expect(repo.findByEvent).toHaveBeenCalledWith(EVENT_ID);

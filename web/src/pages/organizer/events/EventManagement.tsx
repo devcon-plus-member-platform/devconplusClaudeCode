@@ -21,7 +21,11 @@ export function OrgEventManagement() {
 
   useEffect(() => { void fetchEvents() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const chapterEvents = events.filter((e) => e.chapter_id === (user?.chapter_id ?? null))
+  // hq_admin / super_admin also see HQ events (chapter_id === null) alongside their own chapter's events
+  const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
+  const chapterEvents = events.filter(
+    (e) => e.chapter_id === (user?.chapter_id ?? null) || (isAdmin && e.chapter_id === null),
+  )
   const pastEvents     = chapterEvents.filter((e) => isEventArchived(e))
   const upcomingEvents = chapterEvents.filter((e) => !isEventArchived(e))
   const currentEvent   = upcomingEvents.find((e) => e.is_featured) ?? upcomingEvents[0]
