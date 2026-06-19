@@ -70,6 +70,8 @@ export default function SignUp() {
   const [searchParams] = useSearchParams()
   const refCode = searchParams.get('ref')
   const returnTo = searchParams.get('returnTo')
+  // Officer-invite deep link (and similar) may pre-fill the email field.
+  const invitedEmail = searchParams.get('email')
   const { signUp, checkUsernameAvailable, signInWithGoogle } = useAuthStore()
   const [googleLoading, setGoogleLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -102,7 +104,7 @@ export default function SignUp() {
     defaultValues: {
       full_name:  (draft.full_name  as string) ?? '',
       username:   (draft.username   as string) ?? '',
-      email:      (draft.email      as string) ?? '',
+      email:      invitedEmail ?? (draft.email as string) ?? '',
       // school_or_company: (draft.school_or_company as string) ?? '',
       chapter_id: (draft.chapter_id as string) ?? '',
       // linkedin_url:  (draft.linkedin_url  as string) ?? '',

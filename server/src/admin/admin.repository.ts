@@ -55,6 +55,17 @@ export class AdminRepository extends BaseRepository {
     return (data?.auth_uid as string | null) ?? null;
   }
 
+  /** Look up a chapter's display name by id (for the officer invite email). */
+  async findChapterName(chapterId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from('chapters')
+      .select('name')
+      .eq('id', chapterId)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.name as string | null) ?? null;
+  }
+
   // ── Analytics (all 7 queries run in parallel) ─────────────────────────────
 
   async getAnalytics(): Promise<AdminAnalytics> {
