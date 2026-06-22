@@ -10,7 +10,6 @@ import { useAuthStore } from '../../stores/useAuthStore'
 import { useFormDraft } from '../../hooks/useFormDraft'
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
-import { supabase } from '../../lib/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 
 const USERNAME_RE = /^[a-z0-9_]+$/
@@ -177,26 +176,15 @@ export default function SignUp() {
 
     // Email/password signup — collects a complete profile, so there is no
     // separate completion step (that path is Google-only, via /complete-profile).
+    // The referral code travels with signup and is confirmed server-side after the
+    // profile row is created (the confirm_referral RPC is now service-role only).
+    const REFERRAL_CODE_RE = /^[A-Z0-9]{6,12}$/i
+    const sanitizedRef = refCode && REFERRAL_CODE_RE.test(refCode) ? refCode : undefined
     try {
       const { emailConfirmationPending } = await signUp(
         data.email, data.password, data.full_name, data.username, data.chapter_id,
-        /* data.school_or_company */ undefined, turnstileToken ?? undefined,
-        // { linkedin_url: data.linkedin_url || undefined, github_url: data.github_url || undefined, portfolio_url: data.portfolio_url || undefined },
+        /* data.school_or_company */ undefined, turnstileToken ?? undefined, sanitizedRef,
       )
-
-      const REFERRAL_CODE_RE = /^[A-Z0-9]{6,12}$/i
-      const sanitizedRef = refCode && REFERRAL_CODE_RE.test(refCode) ? refCode : null
-      if (sanitizedRef) {
-        const newUserId = useAuthStore.getState().user?.id
-        if (newUserId) {
-          supabase
-            .rpc('confirm_referral' as any, {
-              p_referred_user_id: newUserId,
-              p_referral_code:    sanitizedRef,
-            })
-            .then(() => {})
-        }
-      }
 
       if (emailConfirmationPending) {
         clearDraft()
