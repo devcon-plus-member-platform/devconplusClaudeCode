@@ -1,6 +1,19 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+
+function robotsTxt(allowIndexing: boolean): Plugin {
+  const body = allowIndexing
+    ? 'User-agent: *\nAllow: /\n'
+    : 'User-agent: *\nDisallow: /\n'
+  return {
+    name: 'devcon-robots-txt',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: body })
+    },
+  }
+}
 
 // Vite silently bakes `undefined` for missing VITE_* vars — the app then
 // white-screens at runtime ("supabaseUrl is required") while the build exits 0.
@@ -31,8 +44,13 @@ export default defineConfig(({ command, mode }) => {
     }
   }
 
+  // Read all env (loadEnv only exposes VITE_-prefixed by default — pass '' too so
+  // this still works if the var is ever set without the prefix in a project).
+  const env = loadEnv(mode, __dirname, '')
+  const allowIndexing = env.VITE_ALLOW_INDEXING === 'true'
+
   return {
-    plugins: [react()],
+    plugins: [react(), robotsTxt(allowIndexing)],
   server: {
     port: 5173,
     // Firebase signInWithPopup requires the popup to postMessage the auth result
