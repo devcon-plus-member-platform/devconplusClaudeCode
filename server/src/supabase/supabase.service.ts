@@ -135,6 +135,26 @@ export class SupabaseService implements OnModuleInit {
     }
   }
 
+  /**
+   * Records a referral for a newly-created profile. Best-effort: a referral is a bonus,
+   * never a signup blocker, so RPC errors are logged and swallowed. Called from emailSignup
+   * after the profile row exists (replaces the former browser-side confirm_referral call).
+   */
+  async confirmReferral(
+    referralCode: string,
+    referredUserId: string,
+  ): Promise<void> {
+    const { error } = await this.client.rpc('confirm_referral' as never, {
+      p_referral_code: referralCode,
+      p_referred_user_id: referredUserId,
+    } as never);
+    if (error) {
+      console.warn(
+        `confirm_referral failed for ${referredUserId}: ${error.message}`,
+      );
+    }
+  }
+
   async createProfileWithBonus(input: {
     id: string;
     email: string;
