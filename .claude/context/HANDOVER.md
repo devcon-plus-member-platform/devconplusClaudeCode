@@ -1,11 +1,20 @@
 # DEVCON+ — Comprehensive Project Transition Documentation
 > Document Type: Developer & Stakeholder Handover  
-> Version: 1.0  
-> Last Updated: May 11, 2026  
-> Prepared by: Outgoing Development Team (DEVCON Jumpstart Internship, Cohort 3)  
-> Receiving Team: Incoming developers starting the week of April 21, 2026  
-> Live App: https://devconplusbeta-v1.vercel.app  
+> Version: 1.1 (June 2026 architecture sync)  
+> Last Updated: June 21, 2026  
+> Prepared by: Outgoing Development Team (DEVCON Jumpstart Internship, Cohort 3); updated by the continuing team  
+> Live App: https://devcon.plus  (beta + `plus-beta.devcon.ph` 301-redirect here)  
+> Backend API: https://api.cloud-engineer.dev  (NestJS gateway — self-hosted EC2 + nginx)  
 > Repository: https://github.com/rocketwolf98/devconplusClaudeCode  
+
+> **⚠️ Read first — what changed since v1.0 (May 11):** DEVCON+ is no longer a pure-Supabase, no-backend app.
+> Authentication migrated to **Firebase Auth** (Google + email/password; Supabase Auth was cut), a **NestJS
+> gateway** (`server/`, on EC2) is now the primary data path (the frontend calls it via `apiFetch`/`publicFetch`),
+> and Realtime is **best-effort / polling-first** (no `resubscribe()`). The custom domain `devcon.plus` is
+> **live** and transactional email works. Direct `supabase-js` survives only via a short-lived **bridge JWT**
+> and is being retired ("Phase 7"). Sections below that still say `apps/member/`, `--legacy-peer-deps`,
+> "two-layer recovery", or "Supabase Auth" reflect the v1.0 state — the corrected facts are flagged inline.
+> The repo layout is now `web/` + `server/` + `supabase/` (any `apps/`/`packages/` dirs are untracked leftovers).
 
 ---
 
@@ -65,10 +74,13 @@ The following are fully delivered and live as of April 15, 2026:
 | PWA manifest (add to home screen, shortcuts) | **Live** |
 | Custom event registration fields | **Live** |
 | Cloudflare Turnstile CAPTCHA on auth forms | **Live** |
-| Vercel deployment | **Live** |
-| Custom domain `plus-beta.devcon.ph` | **Pending** — blocked on DNS admin at DEVCON HQ |
-| Transactional email `no-reply-plus@devcon.ph` via Resend | **Pending** — blocked on domain DNS verification |
-| Google OAuth on production domain | **Pending** — requires GCP Console redirect URI update |
+| Vercel deployment (frontend) | **Live** |
+| **Firebase Auth migration** (Google + email/password; Supabase Auth cut) | **Live** (June 2026) |
+| **NestJS gateway** (`server/`, EC2 + nginx) — primary data path | **Live** (June 2026) |
+| Raffle "Wheel of Names", interest quiz, officer resources + co-organizers, reward claim PIN workflow | **Live** (June 2026) |
+| Custom domain `https://devcon.plus` | **Live** — beta + `plus-beta.devcon.ph` 301-redirect here |
+| Transactional email (NestJS email + `send-email`; June brand redesign) | **Live** |
+| Google OAuth on production domain (Firebase) | **Live** |
 
 ## 1.4 Out of Scope for MVP
 
@@ -194,12 +206,12 @@ Officer: /organizer/scan → camera → scans QR → award-points-on-scan
 | FR-08 | Rewards catalog (all items `is_coming_soon = true` for MVP) | Must Have |
 | FR-09 | Jobs board (manually seeded — no external API) | Must Have |
 | FR-10 | Organizer upgrade request flow (rate-limited, admin review) | Must Have |
-| FR-11 | Realtime registration status updates via Supabase Realtime | Must Have |
+| FR-11 | Registration status updates (5 s poll + best-effort realtime — see Reliability) | Must Have |
 | FR-12 | Volunteer application + officer approval queue | Should Have |
 | FR-13 | Event announcements via SendAnnouncementSheet | Should Have |
 | FR-14 | Custom event registration fields (modular schema) | Should Have |
 | FR-15 | Missions system (basic gamification) | Should Have |
-| FR-16 | In-app notifications (Realtime subscription) | Should Have |
+| FR-16 | In-app notifications (poll via gateway + best-effort announcements channel) | Should Have |
 | FR-17 | Form draft persistence (localStorage/sessionStorage) | Should Have |
 | FR-18 | PWA manifest (add to home screen, shortcuts) | Should Have |
 
@@ -211,7 +223,7 @@ Officer: /organizer/scan → camera → scans QR → award-points-on-scan
 | **TypeScript** | Strict mode (`noImplicitAny`, `strictNullChecks`, `noUnusedLocals`, `noUnusedParameters`). No `any` types. No `@ts-ignore` without explanation. |
 | **Performance** | Vite production build. DB performance indexes applied (`20260324_performance_indexes.sql`). Lazy-loaded routes for QR scanner and all Admin pages. Realtime throttled at 10 events/sec. |
 | **Accessibility** | Mobile-first, 390px primary viewport. Desktop responsive (md+ breakpoint). All tappable targets meet minimum size requirements. |
-| **Reliability** | Two-layer Supabase Realtime recovery: `visibilitychange` + `window.online` + 5-minute polling interval. Atomic check-in prevents data corruption under concurrent scans. |
+| **Reliability** | **Polling-first recovery** (as of 2026-06-14): `recover()` refetches over HTTP on `visibilitychange` + `window.online` + a 60-second interval + auth-change, with +5 s/+15 s follow-ups. Realtime is best-effort only (no `resubscribe()`). Atomic check-in prevents data corruption under concurrent scans. |
 | **Deployment** | Vercel CI/CD: `tsc -b && vite build`. Any TypeScript error is a deployment failure. All env vars must be set in Vercel project settings. |
 
 ## 2.5 Key Performance Indicators (KPIs)
@@ -233,13 +245,15 @@ Officer: /organizer/scan → camera → scans QR → award-points-on-scan
 
 ## 3.1 Frontend
 
-**Framework:** React 19 + Vite 7  
+**Framework:** React 19 + Vite 7 (in `web/`)  
 **Language:** TypeScript (strict mode)  
-**Router:** React Router DOM v7 (flat `createBrowserRouter` in `apps/member/src/router.tsx`)  
+**Router:** React Router DOM v7 (flat `createBrowserRouter` in `web/src/router.tsx`)  
 **Styling:** Tailwind CSS v3 with custom design tokens  
-**Animation:** framer-motion (workspace root dependency)  
+**Animation:** framer-motion (`web/` dependency)  
 **State:** Zustand v5  
 **Forms:** React Hook Form v7 + Zod  
+**Auth:** Firebase Auth (Google popup + email/password)  
+**Data access:** `apiFetch`/`publicFetch` (`web/src/lib/api.ts`) → NestJS gateway. Direct `supabase-js` only on legacy bridge-JWT paths  
 **Font:** Proxima Nova (self-hosted woff2, 6 weights, loaded in `index.css`)  
 **Icons:** `solar-icon-set` outline variant only — no emoji in JSX  
 **QR Display:** `qrcode.react`  
@@ -247,9 +261,9 @@ Officer: /organizer/scan → camera → scans QR → award-points-on-scan
 
 > **This is a web app, not React Native.** There is no Expo, no NativeWind, no RN StyleSheet. All styling is Tailwind CSS.
 
-### Three Route Trees, One Codebase
+### Three Route Trees, One Frontend Codebase
 
-The app contains three distinct user experiences sharing one React application under `apps/member/`:
+The frontend (`web/`) contains three distinct user experiences sharing one React application, backed by the NestJS gateway (`server/`):
 
 | Layout | Route Prefix | Guard | Navigation |
 |--------|-------------|-------|------------|
@@ -269,7 +283,7 @@ The app contains three distinct user experiences sharing one React application u
 
 ### Animation System
 
-All framer-motion variants are exported from `apps/member/src/lib/animation.ts`. Never redefine variants inline.
+All framer-motion variants are exported from `web/src/lib/animation.ts`. Never redefine variants inline.
 
 | Variant | Use Case |
 |---------|----------|
@@ -284,36 +298,37 @@ All framer-motion variants are exported from `apps/member/src/lib/animation.ts`.
 
 ## 3.2 Backend
 
-**Platform:** Supabase (Postgres + Auth + Realtime + Edge Functions)  
-**Auth methods:** Email/password + Google OAuth  
-**Custom auth behavior:** `navigator.locks` lock with no timeout (prevents concurrent auth operations) + Realtime throttle at 10 events/sec  
+**Auth provider:** **Firebase Auth** (Google OAuth via popup + email/password). Supabase Auth was cut (`20260531_phase4_cut_supabase_auth.sql`).  
+**Primary backend:** **NestJS gateway** (`server/`) on EC2 behind nginx → `https://api.cloud-engineer.dev`. Global prefix `/api` (auth at `/auth/*`), port 8000.  
+**Gateway authz:** `AuthGuard` verifies the Firebase ID token + `email_verified`, resolves the profile by `auth_uid` (Upstash Redis cache); `RolesGuard` + `@Roles()` enforce `member < chapter_officer < hq_admin < super_admin`; identity-keyed rate limits + global `ThrottlerGuard` (300/min/IP).  
+**Supabase role:** Postgres + RLS + Edge Functions. The gateway uses the service-role key (bypasses RLS) and mints a short-lived **bridge JWT** (`supabase-jwt.service.ts`) so the browser can still hit PostgREST directly (legacy — "Phase 7" retires this).  
 **Edge Function runtime:** Deno  
 
 ### Edge Functions
 
-All deployed to the live Supabase project:
+Deployed to the live Supabase project (QR generate/scan are also exposed at `/api/qr/*` on the gateway):
 
 | Function | Purpose | Rate Limit |
 |----------|---------|------------|
 | `generate-qr-token` | Creates short-lived JWT QR token for a registration (kind `r`) | 10 req/user/60s (fail closed) |
+| `generate-user-qr` / `generate-pending-qr` | User-identity (`u`) / pending door-approval (`p`) QR tokens | — |
 | `award-points-on-scan` | Validates QR scan, atomically checks in member, awards points | 60 scans/organizer/60s |
 | `approve-at-door` | Officer approves or rejects a pending member at the venue | — |
 | `check-rate-limit` | IP/user-keyed rate limit buckets for all sensitive flows | — |
-| `generate-user-qr` | Creates user identity QR token (kind `u`) for `/qr` MyQR page | — |
+| `send-email` | Transactional/branded HTML email via Resend (templates in `_shared/emailTemplates.ts`) | 30/min |
+| `delete-user` | Cascade-deletes a profile's data on account deletion | — |
 
 **QR Token kinds (discriminated by `k` claim):**
 - `k='r'` — registration token (`sub` = registration_id): standard check-in
 - `k='u'` — user identity token (`sub` = user_id): finds most imminent approved event in chapter
 - `k='p'` — pending door-approval token (`sub` = registration_id): returns pending state for Approve/Reject UI
 
-**CORS allowlist** (in `supabase/functions/_shared/cors.ts`):
-```
-http://localhost:5173
-https://devconplusbeta-v1.vercel.app
-```
-> When `plus-beta.devcon.ph` is live, add it to the allowlist and redeploy all functions.
+**CORS allowlists** are origin-exact: production `https://devcon.plus`, staging `https://staging.devcon.plus`, the
+gateway origin, and `http://localhost:5173`. The gateway's own `CORS_ORIGIN` is an env var. Prune any stale
+entries and redeploy all functions after a change.
 
 **Shared utilities** in `supabase/functions/_shared/`:
+- `auth.ts` — JWT verification helpers. `emailTemplates.ts` — branded HTML email shells.
 - `logger.ts` — structured JSON logger. Format: `{ level, event, ts, ...data }` → stdout → Supabase Dashboard Logs.
 
 ### Rate Limit Reference
@@ -331,9 +346,10 @@ https://devconplusbeta-v1.vercel.app
 ## 3.3 Database
 
 **Engine:** PostgreSQL (managed by Supabase)  
-**Schema:** 13 tables with Row Level Security enabled on all sensitive tables  
-**Types:** Generated from live DB → `packages/supabase/src/database.types.ts`  
+**Schema:** Row Level Security enabled on all sensitive tables (plus missions, interests, officer-resources, rewards-engine tables added since v1.0)  
+**Types:** Generated from live DB → `web/src/types/database.types.ts`  
 **Migrations:** `supabase/migrations/` — applied via `supabase db push` or SQL editor  
+**Note:** `profiles` gained `auth_uid` (Firebase link) and its `id` FK to `auth.users` was dropped (`20260615`).  
 
 ### Table Overview
 
@@ -369,33 +385,37 @@ https://devconplusbeta-v1.vercel.app
 
 ## 3.4 Infrastructure
 
-### Vercel
-- **Project:** `devconplusbeta-v1`
-- **Build command:** `tsc -b && vite build` (runs from `apps/member/`)
-- **Root directory:** `apps/member`
-- **Environment variables:** Set in Vercel project Settings → Environment Variables (must match `.env.local` keys)
+### Vercel (frontend)
+- **Build command:** `tsc -b && vite build`
+- **Root directory:** `web`
+- **Environment variables:** Set in Vercel project Settings → Environment Variables (must match `web/.env.example` keys). Production sets `VITE_ALLOW_INDEXING=true`; staging leaves it unset (robots.txt `Disallow: /`).
 - **CI/CD:** Every push to `master` triggers a production deploy. TypeScript errors abort the deploy.
 
-### Cloudflare (DNS)
-- DNS provider for `devcon.ph`
-- Required records for `plus-beta.devcon.ph`: CNAME → `cname.vercel-dns.com` with proxy **OFF** (DNS only, grey cloud)
-- Required records for Resend email: SPF (TXT), DKIM (CNAMEs), DMARC (TXT)
+### EC2 + nginx (backend gateway)
+- The NestJS gateway (`server/`) is **self-hosted on EC2 behind nginx** → `https://api.cloud-engineer.dev`.
+- Deploy/restart the Node process there; set `server/.env` in that environment. nginx terminates TLS and sets edge security headers (the API has no `helmet`).
 
-### Resend (Transactional Email)
-- Transactional emails (confirm signup, reset password) sent from `no-reply-plus@devcon.ph`
-- Configured in Supabase Dashboard → Authentication → SMTP Settings
-- Status: **Pending** — blocked on DNS domain verification
+### Cloudflare (DNS)
+- DNS provider for `devcon.ph` / `devcon.plus`. Production is live at `https://devcon.plus`.
+- Vercel CNAME and email DKIM records must be proxy **OFF** (DNS only, grey cloud) for SSL/DKIM to work.
+
+### Transactional Email
+- Sent via the NestJS email module (nodemailer/Gmail SMTP) + the `send-email` edge function (Resend).
+- Unified branded DEVCON+ email shell (June 2026 redesign). Status: **Live**.
 
 ## 3.5 Third-Party APIs & Services
 
 | Service | Purpose | Status |
 |---------|---------|--------|
-| Supabase | Database, Auth, Realtime, Edge Functions | Live |
-| Vercel | Hosting, CI/CD, custom domain | Live |
-| Google OAuth (GCP) | Social sign-in | Live (on `devconplusbeta-v1.vercel.app`). Needs redirect URI update for custom domain. |
+| Firebase Auth | Authentication (Google + email/password) | Live |
+| Supabase | Database (Postgres + RLS), Edge Functions | Live |
+| NestJS gateway (EC2 + nginx) | Primary backend / data path (`api.cloud-engineer.dev`) | Live |
+| Upstash Redis | Gateway profile cache + rate-limit buckets | Live |
+| Vercel | Frontend hosting, CI/CD, custom domain (`devcon.plus`) | Live |
+| Google OAuth (GCP) | Social sign-in (via Firebase) on `devcon.plus` | Live |
 | Cloudflare Turnstile | Bot protection on auth forms | Live |
-| Resend | Transactional email | Pending DNS verification |
-| Cloudflare DNS | Domain management for `devcon.ph` | Managed by DEVCON HQ IT |
+| Resend / Gmail SMTP | Transactional email | Live |
+| Cloudflare DNS | Domain management for `devcon.ph` / `devcon.plus` | Managed by DEVCON HQ IT |
 
 ---
 
@@ -427,6 +447,19 @@ Post-graduation (May) work has focused on resilience, legal compliance, and anal
 | Event detail public access | `/events/:id` now accessible without authentication. |
 | Admin CSV export | Date range inputs, attendance status filter, improved filename format. |
 
+### June 2026 Changes (architecture migration — post-v1.0)
+
+| Change | Notes |
+|--------|-------|
+| **Firebase Auth migration** | Google OAuth + email/password now via Firebase; Supabase Auth cut (`20260528`/`20260531`). New `/oauth-callback` + `/complete-profile` flows; `profiles.auth_uid` added, `profiles.id` FK dropped. |
+| **NestJS gateway is the primary backend** | `server/` on EC2 + nginx (`api.cloud-engineer.dev`). Stores moved to `apiFetch`/`publicFetch`; gateway does Firebase verify + `email_verified` + role/chapter/owner scoping + Upstash cache/rate-limits. |
+| **Bridge-JWT era** | Gateway mints a short-lived Supabase JWT so residual direct PostgREST calls still work; "Phase 7" retires `supabase-js`. |
+| **Realtime inverted to polling-first** (Jun 14) | `subscribeToChanges` no-ops on events/points/rewards/missions; only a best-effort announcements channel remains; `recover()` polls every 60 s. |
+| **Custom domain live** | Production `https://devcon.plus`; beta + `plus-beta.devcon.ph` 301-redirect; staging `staging.devcon.plus` (noindex). |
+| **Transactional email working** | NestJS email (nodemailer/Gmail) + `send-email`; unified branded email shell; officer-invite email on assignment. |
+| **New features** | Raffle "Wheel of Names" (`/wheel`), interest quiz (`/interests`), officer resources + co-organizers, reward claim PIN workflow, missions schema. |
+| **Security audit (Jun 19–20)** | White-box source audit; gateway authz strong; open items are RLS/RPC hardening on the direct-PostgREST path (see §4.2 + `SECURITY_AUDIT_*.md`, gitignored). |
+
 ### Development Loom Videos (oldest to recent)
 
 These recordings are feature walkthroughs of DEVCON+ from early development to present. Watch in order to understand how the product evolved — each video shows the app at a real checkpoint.
@@ -440,22 +473,23 @@ These recordings are feature walkthroughs of DEVCON+ from early development to p
 | Mar 24 | https://www.loom.com/share/42bd477c7301465ebc0db4803272d168 | Sprint checkpoint — Supabase live, stores migrated from mocks |
 | Apr 06 | https://www.loom.com/share/ea88bcd374db42d79fd0c3d2d1bffb65 | QR system live, PWA deployed, edge functions verified |
 
-## 4.2 Checklist (as of May 11, 2026)
+## 4.2 Checklist (as of June 21, 2026)
 
 ### L1 — Still Blocking (Not Yet Resolved)
 
 | Item | Blocker | Action Required |
 |------|---------|----------------|
-| Custom domain `plus-beta.devcon.ph` | DEVCON HQ DNS admin must add CNAME record in Cloudflare | See `.claude/docs/DOMAIN_AND_EMAIL_SETUP.md` Part 1 |
-| Google OAuth on production domain | GCP Console needs new redirect URI | Add `https://plus-beta.devcon.ph/auth/v1/callback` to OAuth 2.0 client |
-| Transactional email `no-reply-plus@devcon.ph` | Resend domain DNS verification pending | See `.claude/docs/DOMAIN_AND_EMAIL_SETUP.md` Part 2 |
-| Edge Function CORS update | After domain goes live | Add `https://plus-beta.devcon.ph` to `ALLOWED_ORIGINS` in `_shared/cors.ts`, redeploy all 5 functions |
-| Supabase redirect URL | After domain goes live | Add `https://plus-beta.devcon.ph/**` in Supabase Auth → URL Configuration |
-| Remove test accounts | Test accounts may appear in officer/admin views | Manual cleanup: Supabase Dashboard → Authentication → Users |
-| Remove Easter egg code | `<KonamiCodeWrapper />` + `<KonamiModal />` must be deleted from production | Remove components from codebase. Currently guarded by `hq_admin/super_admin` but must be fully deleted. |
-| OWASP Top 10 security pass | Required before public launch | Work through OWASP Top 10 checklist. Fix critical + high severity findings. |
+| **Security audit remediation** | Bridge JWT makes RLS/RPC grants the real authz boundary; June audit found privesc (C1) + BOLA RPCs (H1) | Add `WITH CHECK` to `profiles` UPDATE; auth-guard/revoke `redeem_reward` + `manual_checkin`; chapter-scope `events` UPDATE (M2); restrict `rewards` writes to `hq_admin` (M3). **Verify against live DB first.** See `SECURITY_AUDIT_*.md` (gitignored) |
+| **Retire direct `supabase-js` (Phase 7)** | Direct PostgREST access via the bridge JWT is the audit's amplifier | Migrate remaining reads/writes to `apiFetch`; then scope/retire the bridge JWT |
+| Re-enable OrganizerCodeGate routing | Route commented out in `router.tsx` — new organizers can't self-onboard via code | Investigate the post-sign-up flow, then re-enable |
+| Remove test accounts | Test accounts may appear in officer/admin views | Manual cleanup: Supabase Dashboard / Firebase Auth |
+| Remove Easter egg code | `<KonamiCodeWrapper />` + `<KonamiModal />` must be deleted from production | Remove from codebase (currently guarded by `hq_admin/super_admin`) |
 | PROMOTED badge data audit | 2nd job (Sui Foundation) + 2nd Tech news post must be `is_promoted = true` in live DB | Verify in Supabase Dashboard → Table Editor |
 | Final QA (all flows) | Required before public preview | Test member, organizer, and admin flows on a real mobile device |
+
+> **Resolved since v1.0:** custom domain (`devcon.plus`) live with beta/`plus-beta` redirects; Firebase OAuth on
+> production; edge-function CORS updated for prod; transactional email working (June redesign). OWASP-style
+> review was performed June 19–20 (remediation tracked above).
 
 ### L2 — Should Complete (Bandwidth Permitting)
 
@@ -469,16 +503,16 @@ These recordings are feature walkthroughs of DEVCON+ from early development to p
 
 ## 4.3 Known Technical Limitations
 
-### Supabase WebSocket Resilience (Mobile Safari)
-**Severity:** Low-Medium (mitigated)  
-**Description:** Aggressive background tab killing on mobile Safari can cause Supabase Realtime channels to silently enter a `CLOSED` state. The two-layer recovery pattern (`visibilitychange` + `window.online` + 5-minute polling interval) handles the common cases. Under extreme conditions (long idle + Safari), stale data may appear until user interactions trigger a refetch.  
-**Mitigation in place:** `MemberLayout.tsx` and `OrganizerLayout.tsx` implement both `recover()` (HTTP refetch) and `resubscribe()` (channel teardown + recreation) on all three trigger points.  
-**Full fix:** Deferred to Phase 2. See `.claude/rules/db-connection-resilience.md`.
+### Realtime is Best-Effort (Polling-First) — by design
+**Severity:** Resolved by inversion (2026-06-14)  
+**Description:** Supabase Free tier caps Realtime at 200 concurrent connections (fails hard past it) and WAL→JSON replication dominated DB execution time, so always-on subscriptions were removed. App correctness now relies on **polling**: `recover()` (HTTP refetch) on `visibilitychange` + `window.online` + a 60-second interval + auth-change, with +5 s/+15 s follow-ups.  
+**Current state:** `subscribeToChanges` is a no-op on events/points/rewards/missions; only a best-effort announcements channel remains (gives up on `CHANNEL_ERROR`/`TIMED_OUT`). There is **no `resubscribe()`**.  
+**To re-enable always-on realtime** (e.g. after a Supabase Pro upgrade): restore handlers from git history and re-add tables to the `supabase_realtime` publication. See `.claude/rules/db-connection-resilience.md`.
 
-### Email SMTP Not End-to-End Tested
-**Severity:** Medium (pre-launch blocker)  
-**Description:** The edge function and Resend SMTP configuration are deployed, but end-to-end email delivery (confirm signup, reset password) has not been verified because the `devcon.ph` domain DNS verification is pending.  
-**Action:** Test immediately after domain DNS records are applied.
+### Security: Direct-PostgREST (Bridge-JWT) Hardening
+**Severity:** High (open — remediation in progress)  
+**Description:** Because the browser holds a bridge JWT and can reach PostgREST/RPCs directly, RLS policies and RPC grants — not the gateway — are the authz boundary for those paths. The June 19–20 audit found a `profiles` privilege-escalation gap (C1) and actor-id-trusting `SECURITY DEFINER` RPCs (H1).  
+**Action:** Harden RLS/RPCs (see §4.2) and accelerate Phase 7 (retire `supabase-js`). See `SECURITY_AUDIT_*.md` (kept local / gitignored).
 
 ### Jobs Board is Manually Seeded
 **Severity:** Low (by design for MVP)  
@@ -521,7 +555,7 @@ These recordings are feature walkthroughs of DEVCON+ from early development to p
 ## 4.4 Constraints
 
 ### Technical
-- `npm install` **must** use `--legacy-peer-deps` due to a peer dependency conflict introduced by React 19. This is a known issue with the React 19 ecosystem and is expected to resolve as packages update.
+- Install per app (`cd web && npm install`, `cd server && npm install`) — there is no root workspace. React 19 is pinned via `web/package.json` `overrides`, so `--legacy-peer-deps` is **not** needed (older docs that require it are out of date).
 - `tsc -b` is stricter than the Vite dev server. The flags `noUnusedLocals` and `noUnusedParameters` are enforced. Any unused import or variable will fail the Vercel build. Always run `npm run typecheck` before committing.
 - Vercel `.ph` TLDs are not sold through Vercel's domain marketplace. The domain is already registered — only a DNS CNAME record is needed.
 - Cloudflare's orange-cloud proxy must be **disabled** (DNS only, grey cloud) for the Vercel CNAME and all Resend DKIM records. Proxying blocks SSL certificate provisioning and DKIM lookups.
@@ -561,98 +595,105 @@ Git access to: https://github.com/rocketwolf98/devconplusClaudeCode
 git clone https://github.com/rocketwolf98/devconplusClaudeCode
 cd devconplusClaudeCode
 
-# 2. Install dependencies
-# --legacy-peer-deps is REQUIRED — React 19 peer conflict
-npm install --legacy-peer-deps
+# 2. Install dependencies (each app installs on its own — no root workspace)
+cd web && npm install        # React 19 pinned via `overrides` — no --legacy-peer-deps
+cd ../server && npm install  # NestJS gateway
 
-# 3. Create environment file
-# Get actual values from the outgoing team lead
-cp apps/member/.env.local.example apps/member/.env.local
-# Fill in: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_GOOGLE_CLIENT_ID, VITE_APP_ENV
+# 3. Create env files (get values from the team lead)
+cp web/.env.example web/.env.local          # frontend
+cp server/.env.example server/.env          # gateway
 
-# 4. Start the dev server
-npm run dev:member
-# → http://localhost:5173
+# 4. Start the apps (separate terminals)
+cd web && npm run dev        # → http://localhost:5173
+cd server && npm run dev     # → http://localhost:8000
 ```
 
 ### Environment Variables
 
-**`apps/member/.env.local`** (gitignored — do not commit)
+**`web/.env.local`** (frontend — gitignored; see `web/.env.example`)
 ```env
 VITE_SUPABASE_URL=           # Supabase project URL
 VITE_SUPABASE_ANON_KEY=      # Supabase anon (public) key
-VITE_GOOGLE_CLIENT_ID=       # Google OAuth client ID (from GCP Console)
+VITE_GOOGLE_CLIENT_ID=       # Google OAuth client ID
+VITE_TURNSTILE_SITE_KEY=     # Cloudflare Turnstile site key
+VITE_FIREBASE_API_KEY=       # Firebase web config (4 keys)
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_APP_ID=
 VITE_APP_ENV=development
+VITE_ALLOW_INDEXING=         # "true" only on production
+VITE_API_URL=http://localhost:8000   # NestJS gateway base URL
 ```
 
-**`supabase/.env`** (gitignored — do not commit)
-```env
-SUPABASE_SERVICE_ROLE_KEY=   # Supabase service role key — keep secret, never expose to browser
-```
+**`server/.env`** (gateway — gitignored; see `server/.env.example`) holds the secrets: `SUPABASE_SERVICE_ROLE_KEY`,
+`SUPABASE_JWT_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `QR_JWT_SECRET`, `EMAIL_VERIFICATION_SECRET`, Gmail SMTP
+creds, `CORS_ORIGIN`, `APP_URL`/`SERVER_URL`, and optional Upstash Redis keys. **Never** put these in the frontend.
 
-> Always use `import.meta.env.VITE_*` in the app. Never use `process.env.*` — Vite does not expose it to the browser bundle.
+> Always use `import.meta.env.VITE_*` in the frontend. Never use `process.env.*` — Vite does not expose it to the browser bundle.
 
 ### Required Knowledge
 Before making any changes, read these files in order:
 1. `.claude/CLAUDE.md` — master technical reference (DB schema, routes, components, design system, stores)
-2. `.claude/rules/vercel-build-safety.md` — TypeScript flags that cause Vercel build failures
-3. `.claude/rules/db-connection-resilience.md` — Realtime recovery pattern requirements
-4. `PRD.md` — product context and developer handover summary
+2. `.claude/rules/db-connection-resilience.md` — polling-first realtime rule
+3. `.claude/rules/vercel-build-safety.md` — TypeScript flags that cause Vercel build failures
+4. `docs/auth/` — Firebase auth + bridge-JWT architecture
+5. `PRD.md` — product context and developer handover summary
 
 ## 5.2 Technical Documentation
 
 ### Repository Structure
 ```
 devcon-plus/
-├── apps/
-│   ├── member/                     React + Vite web app
-│   │   ├── src/
-│   │   │   ├── router.tsx          All routes (flat createBrowserRouter — the app map)
-│   │   │   ├── components/
-│   │   │   │   ├── MemberLayout.tsx        Member shell + auth guard + realtime recovery
-│   │   │   │   ├── OrganizerLayout.tsx     Organizer shell + role guard + realtime recovery
-│   │   │   │   └── AdminLayout.tsx         Admin shell + hq_admin/super_admin guard
-│   │   │   ├── pages/              All page components (member/, organizer/, admin/)
-│   │   │   ├── stores/             Zustand stores (one per domain)
-│   │   │   ├── lib/
-│   │   │   │   ├── animation.ts    framer-motion variants — import from here only
-│   │   │   │   ├── supabase.ts     Supabase client instance
-│   │   │   │   ├── eventTheme.ts   Per-event theme override utilities
-│   │   │   │   ├── constants.ts    App-wide constants (no magic strings)
-│   │   │   │   ├── dates.ts        Date formatting utilities
-│   │   │   │   └── validation.ts   Zod schemas and reusable validators
-│   │   │   └── hooks/
-│   │   │       ├── useFormDraft.ts         Form state persistence (localStorage/sessionStorage)
-│   │   │       └── useRecoverOnFocus.ts    Realtime recovery hook
-│   │   └── tailwind.config.js      Design tokens, MD3 type scale, color palette
-│   └── landing/                    Static landing page (index.html only)
-├── packages/
-│   └── supabase/
-│       └── src/
-│           └── database.types.ts   Generated DB types — regenerate after schema changes
+├── web/                            React + Vite frontend (@devcon-plus/web)
+│   ├── src/
+│   │   ├── router.tsx              All routes (flat createBrowserRouter — the app map)
+│   │   ├── components/
+│   │   │   ├── MemberLayout.tsx        Member shell + auth guard + polling recovery
+│   │   │   ├── OrganizerLayout.tsx     Organizer shell + role guard + polling recovery
+│   │   │   └── AdminLayout.tsx         Admin shell + hq_admin/super_admin guard
+│   │   ├── pages/                  All page components (member/, organizer/, admin/, auth/)
+│   │   ├── stores/                 Zustand stores (one per domain — fetch via lib/api.ts)
+│   │   ├── lib/
+│   │   │   ├── api.ts              apiFetch() / publicFetch() — the primary data path
+│   │   │   ├── firebase.ts         Firebase web init (sign-in)
+│   │   │   ├── authBridge.ts       exchange Firebase token → Supabase bridge JWT
+│   │   │   ├── supabase.ts         Supabase client (bridge-JWT path only)
+│   │   │   ├── animation.ts        framer-motion variants — import from here only
+│   │   │   ├── eventTheme.ts       Per-event theme override utilities
+│   │   │   ├── constants.ts        App-wide constants (no magic strings)
+│   │   │   ├── dates.ts            Date formatting utilities
+│   │   │   └── validation.ts       Zod schemas and reusable validators
+│   │   ├── hooks/
+│   │   │   ├── useFormDraft.ts             Form state persistence (localStorage/sessionStorage)
+│   │   │   └── useRecoverOnFocus.ts        Polling recovery hook (no resubscribe)
+│   │   └── types/                  types.ts + generated database.types.ts (@devcon-plus/supabase alias)
+│   ├── tailwind.config.js          Design tokens, MD3 type scale, color palette
+│   ├── vite.config.ts              Build + robots.txt generator (VITE_ALLOW_INDEXING)
+│   └── vercel.json                 Deploy config + security headers
+├── server/                         NestJS gateway (@devcon-plus/server) → EC2 + nginx
+│   └── src/                        auth, users, events, points, registrations, rewards, missions,
+│                                   volunteers, qr, upgrades, admin, news, jobs, chapters, interests, ...
 ├── supabase/
-│   ├── functions/                  Edge Functions (Deno)
-│   │   ├── generate-qr-token/
-│   │   ├── award-points-on-scan/
-│   │   ├── approve-at-door/
-│   │   ├── check-rate-limit/
-│   │   ├── generate-user-qr/
-│   │   └── _shared/               Shared CORS config + logger
+│   ├── functions/                  Edge Functions (Deno): generate-qr-token, generate-user-qr,
+│   │                               generate-pending-qr, award-points-on-scan, approve-at-door,
+│   │                               check-rate-limit, send-email, delete-user, + _shared/
 │   └── migrations/                 SQL migration files (applied in order)
-├── package.json                    Workspace root — framer-motion dependency lives here
-└── turbo.json
+└── docs/                           auth/* (Firebase + bridge JWT), migration-plans/*
 ```
+> `apps/` and `packages/` may exist locally but are untracked leftovers from the old Turbo layout — ignore them.
 
 ### Zustand Stores Reference
 
 | Store | Domain | Key Methods |
 |-------|--------|-------------|
-| `useAuthStore` | User session, profile, auth | `initialize()`, `signIn()`, `signUp()`, `signOut()`, `updateProfile()`, `requestOrganizerUpgrade()` |
-| `useEventsStore` | Events + registrations | `fetchEvents()`, `register()`, `subscribeToChanges()`, `subscribeToEventChanges()` |
+| `useAuthStore` | User session, profile, auth (Firebase + gateway) | `initialize()`, `signIn()`, `signUp()`, `signInWithGoogle()`, `signOut()`, `updateProfile()`, `requestOrganizerUpgrade()` |
+| `useEventsStore` | Events + registrations | `fetchEvents()`, `register()`, `subscribeToChanges()` (no-op), `subscribeToRegistration()` (best-effort) |
 | `useJobsStore` | Jobs board | `fetchJobs()`, `getById()` |
-| `usePointsStore` | Points ledger | `loadTotalPoints()`, `loadTransactions()` |
-| `useRewardsStore` | Rewards catalog | `fetchRewards()`, `subscribeToChanges()` |
-| `useNotificationsStore` | In-app notifications | `fetchRecent()`, `subscribe()`, `markRead()` |
+| `usePointsStore` | Points ledger | `loadTransactions()`, `loadTotalPoints()`; `subscribeToChanges()` no-op |
+| `useRewardsStore` | Rewards catalog + redemptions | `fetchRewards()`, `redeem()`; `subscribeToChanges()` no-op |
+| `useMissionsStore` | Missions | `fetchMissions()`, `startMission()`, `submitMission()`; `subscribeToChanges()` no-op |
+| `useChaptersStore` | Chapters list (public) | `fetchChapters()` |
+| `useNotificationsStore` | In-app notifications | `fetchRecent()`, `subscribe()` (best-effort), `markRead()` |
 | `useVolunteerStore` | Member volunteer apps | `loadApplications()`, `applyToVolunteer()` |
 | `useOrgVolunteerStore` | Organizer approval queue | `loadApplications()`, `approveApplication()`, `rejectApplication()` |
 | `useThemeStore` | Active program theme | `setTheme()`, `activeTheme()` — persisted to `localStorage` key `devcon-theme` |
@@ -670,33 +711,39 @@ devcon-plus/
 | Icons | `solar-icon-set` outline variant only. No emoji in JSX. |
 | Constants | All constants in `lib/constants.ts`. No magic strings or numbers inline. |
 | Primary color | Always `text-primary` / `bg-primary`. Never hardcode hex for primary. |
-| Realtime | Every new layout/store with Realtime must implement the two-layer recovery pattern. |
+| Data access | Through the NestJS gateway (`apiFetch`/`publicFetch`). No new direct `supabase.from(...)` in components/stores. |
+| Realtime | Polling-first: `recover()` on visibility/online/60 s/auth-change. No `resubscribe()`; realtime is best-effort only. |
 
 ### After Any Database Schema Change
 ```bash
 # Regenerate TypeScript types from the live DB
 supabase gen types typescript --project-id <supabase-project-ref-id> \
-  > packages/supabase/src/database.types.ts
+  > web/src/types/database.types.ts
 
 # Verify the build still passes
-npm run typecheck
-npm run build
+cd web && npm run typecheck && npm run build
 ```
 
 ## 5.3 Deployment Guide
 
 ### Standard Deploy (Automatic)
-Every push to `master` on GitHub triggers an automatic Vercel production deploy.
+Every push to `master` on GitHub triggers an automatic Vercel production deploy of the **frontend** (`web/`).
+The **backend** (`server/`) is deployed separately on EC2 (see below) — it does not deploy from `master`.
 
-### Manual Deploy
+### Manual Deploy (frontend)
 ```bash
 # Verify locally first — this mirrors Vercel's exact build command
-npm run typecheck    # Must pass with zero errors
-npm run build        # Must complete successfully
+cd web && npm run typecheck    # Must pass with zero errors
+cd web && npm run build        # Must complete successfully
 
 # Push triggers Vercel deploy automatically
 git push origin master
 ```
+
+### Backend Deploy (NestJS gateway)
+The gateway runs on **EC2 behind nginx** (`https://api.cloud-engineer.dev`). Build and restart the Node
+process on the host (`cd server && npm run build && npm run start`, typically under a process manager) and
+keep `server/.env` set in that environment. It is not part of the Vercel pipeline.
 
 ### Vercel Build Failure Triage
 
@@ -712,41 +759,43 @@ See `.claude/rules/vercel-build-safety.md` for the complete checklist.
 ```bash
 # After any change to supabase/functions/
 supabase functions deploy generate-qr-token
+supabase functions deploy generate-user-qr
+supabase functions deploy generate-pending-qr
 supabase functions deploy award-points-on-scan
 supabase functions deploy approve-at-door
 supabase functions deploy check-rate-limit
-supabase functions deploy generate-user-qr
+supabase functions deploy send-email
+supabase functions deploy delete-user
 
-# If CORS allowlist was updated (e.g. after custom domain goes live),
-# ALL functions must be redeployed.
+# If a CORS allowlist was updated, ALL functions must be redeployed.
 ```
 
 ## 5.4 Environment Parity
 
-| Setting | Local Dev | Vercel Production |
-|---------|-----------|-------------------|
-| `VITE_SUPABASE_URL` | `.env.local` | Vercel environment variables |
-| `VITE_SUPABASE_ANON_KEY` | `.env.local` | Vercel environment variables |
-| `VITE_GOOGLE_CLIENT_ID` | `.env.local` | Vercel environment variables |
+| Setting | Local Dev | Production |
+|---------|-----------|-----------|
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `web/.env.local` | Vercel env vars |
+| `VITE_GOOGLE_CLIENT_ID` + `VITE_FIREBASE_*` | `web/.env.local` | Vercel env vars |
+| `VITE_API_URL` | `http://localhost:8000` (or staging API) | `https://api.cloud-engineer.dev` |
+| `VITE_ALLOW_INDEXING` | unset | `true` on prod, unset on staging |
 | `VITE_APP_ENV` | `development` | `production` |
-| `VITE_SITE_URL` | `http://localhost:5173` | `https://plus-beta.devcon.ph` (after domain live) |
-| Supabase DB | Live production project (shared) | Same live production project |
-| Edge Functions | Live production (shared) | Same live production |
+| Gateway secrets (`SUPABASE_SERVICE_ROLE_KEY`, `*_JWT_SECRET`, Firebase admin, ...) | `server/.env` | EC2 host env |
+| Supabase DB / Edge Functions | Live production project (shared) | Same live production project |
 
-> **Note:** Local development hits the same live Supabase production project as Vercel. There is no separate staging database. Exercise caution when testing with real member data. Consider creating a test account for development use.
+> **Note:** Local development hits the same live Supabase production project. There is no separate staging database — exercise caution with real member data; use a test account. For frontend-only work, point `VITE_API_URL` at the staging API and skip running `server/` locally.
 
 ## 5.5 User Manuals
 
 ### For Members
-- Visit https://devconplusbeta-v1.vercel.app (or `plus-beta.devcon.ph` when live)
-- Sign up with Google or email/password
+- Visit https://devcon.plus
+- Sign up with Google or email/password (Firebase)
 - Browse upcoming events → Register → Show QR ticket at venue
 - Earn points automatically when an officer scans your QR code
 - View points balance and transaction history under Points
 - Browse jobs, apply to volunteer, redeem rewards (catalog only — fulfillment coming in Phase 2)
 
 ### For Chapter Officers
-- Sign in with an organizer code at sign-up, or request an upgrade via Profile
+- Request an upgrade via Profile → Request Organizer Access (the sign-up code gate is temporarily disabled), or have an admin set your role
 - Access the Organizer flow at `/organizer`
 - Create events, set approval requirements, manage registrants
 - At the venue: open `/organizer/scan` on your phone → camera scans member QR → points awarded automatically
@@ -770,10 +819,12 @@ The following credentials and accesses must be transferred from the outgoing tea
 
 | Credential / Access | Location | Transfer Method |
 |---------------------|----------|-----------------|
-| Supabase URL + anon key | `.env.local` | Secure credential share |
-| Supabase service role key | `supabase/.env` | Secure credential share |
+| Supabase URL + anon key | `web/.env.local` | Secure credential share |
+| Supabase service-role key + JWT secret | `server/.env` | Secure credential share |
+| Firebase web config + service account | `web/.env.local` / `server/.env` (`FIREBASE_SERVICE_ACCOUNT_JSON`) | Secure credential share + Firebase Console access |
 | Supabase dashboard access | supabase.com | Invite receiving team member as project collaborator |
-| Google OAuth client ID | `.env.local` / GCP Console | Secure credential share + GCP Console access |
+| Google OAuth client ID | `web/.env.local` / GCP Console | Secure credential share + GCP Console access |
+| EC2 / backend host access | gateway deploy + `server/.env` | Secure host access transfer |
 | Vercel project access | vercel.com | Invite receiving team member to the Vercel team/project |
 | GitHub repository access | https://github.com/rocketwolf98/devconplusClaudeCode | Add receiving team as collaborators |
 | Cloudflare DNS panel | Via DEVCON HQ IT officer | Coordinate through DEVCON HQ |
@@ -841,16 +892,16 @@ The outgoing team is available for questions and pair sessions during this windo
 
 - **Do read `.claude/CLAUDE.md` before touching any code.** It is the authoritative reference for every design decision, DB field name, route, component, and store in the codebase.
 - **Do run `npm run typecheck` before every commit.** Vercel's build fails on TypeScript errors. The dev server does not catch these.
-- **Do use `npm install --legacy-peer-deps`.** Plain `npm install` will fail with peer dependency conflicts from React 19.
+- **Do run `npm install` per app** (`web/` and `server/`). React 19 is pinned via `overrides` — `--legacy-peer-deps` is no longer needed.
 - **Do use `text-primary` / `bg-primary` for the primary color.** Never hardcode hex values for primary. The color is driven by a CSS custom property and changes with the user's selected theme.
 - **Do use the `solar-icon-set` outline variant** for all icons. No emoji in JSX. No other icon libraries.
 - **Do import animation variants from `lib/animation.ts`.** Never redefine `fadeUp`, `staggerContainer`, etc. inline.
-- **Do use the real Supabase client** for all data operations. The `MOCK_*` exports in `packages/supabase/` are reference data only — never import them into production components.
-- **Do implement the two-layer recovery pattern** (`recover()` + `resubscribe()` on all three trigger points) in any new layout or store that uses Supabase Realtime. See `.claude/rules/db-connection-resilience.md`.
+- **Do fetch through the NestJS gateway** (`apiFetch`/`publicFetch` in `web/src/lib/api.ts`) for all data operations. Don't add new direct `supabase.from(...)`/`supabase.rpc(...)` calls — direct `supabase-js` is legacy bridge-JWT, being retired. The `MOCK_*` exports in `web/src/types/mock/` are reference data only — never import them.
+- **Do follow the polling-first recovery pattern** (`recover()` on `visibilitychange`/`online`/60 s/auth-change, +5 s/+15 s follow-ups) in any new layout or store. There is **no `resubscribe()`**; realtime is best-effort only. See `.claude/rules/db-connection-resilience.md`.
 - **Do use `spendable_points`** (not `total_points`) for the user's redeemable balance. `total_points` does not exist in the live DB.
 - **Do use `<ComingSoonModal />`** for any incomplete feature rather than leaving a dead-end route or placeholder text.
-- **Do regenerate `database.types.ts`** after any schema change: `supabase gen types typescript --project-id <ref>`.
-- **Do add `https://plus-beta.devcon.ph` to the Edge Function CORS allowlist** and redeploy all 5 functions when the custom domain goes live.
+- **Do regenerate `database.types.ts`** after any schema change: `supabase gen types typescript --project-id <ref> > web/src/types/database.types.ts`.
+- **Do keep CORS allowlists origin-exact** (`devcon.plus`, `staging.devcon.plus`, the gateway origin, localhost) and redeploy all edge functions after any change.
 - **Do verify data in the Supabase Dashboard** after any seeding or migration. The PROMOTED badge relies on `is_promoted = true` in live data.
 - **Do test on a real mobile device** (iPhone Safari + Android Chrome) before marking any UI change complete.
 
@@ -868,11 +919,11 @@ The outgoing team is available for questions and pair sessions during this windo
 - **Don't hardcode hex values for the primary color.** The theme system sets these via CSS custom properties.
 - **Don't use `total_points` in Supabase queries.** The field is `spendable_points`. Using the old name will cause a TypeScript build error.
 - **Don't use `--no-verify` to skip git hooks** unless you understand exactly what you are bypassing.
-- **Don't build Phase 2 features** (KMP, Group Chat, Swipe Feed, Push Notifications, Reward fulfillment) before April 30. These are explicitly out of scope for MVP.
+- **Don't build Phase 2 features** (KMP, Group Chat, Swipe Feed, Push Notifications, Reward fulfillment) — these remain explicitly out of scope. Prioritize the open security-remediation and Phase 7 (retire `supabase-js`) work first.
 - **Don't redefine framer-motion variants inline.** Always import from `lib/animation.ts`. Inline redefinitions cause stagger animate key mismatches (`"visible"` vs `"show"`).
 - **Don't rely on the Vite dev server for TypeScript correctness.** Vite is permissive. `tsc -b` is the source of truth.
 - **Don't enable Cloudflare's orange-cloud proxy** on the Vercel CNAME record or Resend DKIM CNAMEs. Proxying breaks SSL certificate provisioning and DKIM email authentication.
-- **Don't remove the `useRecoverOnFocus` pattern** from any layout that uses Supabase Realtime. Removing it causes stale data after device sleep or network switches.
+- **Don't remove the polling recovery (`useRecoverOnFocus` / `recover()`) from any session-owning layout.** It is now the *primary* freshness mechanism (realtime is best-effort) — removing it causes stale data after device sleep or network switches.
 
 ---
 
@@ -893,23 +944,27 @@ The outgoing team is available for questions and pair sessions during this windo
 | **PROMOTED badge** | Orange `#F97316` badge applied to the 2nd job listing (Sui Foundation) and 2nd Tech news post. Data-driven via `is_promoted = true` in DB. |
 | **devcon_category** | Event field that triggers per-event theme overrides. Values: `'devcon'`, `'she'`, `'kids'`, `'campus'`. Processed by `getEventThemeStyle()` in `lib/eventTheme.ts`. |
 | **ComingSoonModal** | Reusable modal component for features not yet implemented. Every incomplete feature must route to this — never leave a dead-end. |
-| **Two-layer recovery** | The Realtime resilience pattern: Layer 1 = HTTP data refetch (`recover()`), Layer 2 = WebSocket channel re-subscription (`resubscribe()`). Both layers must be called on `visibilitychange`, `online`, and 5-min interval. |
+| **Polling-first recovery** | The freshness model (since 2026-06-14). `recover()` refetches over HTTP on `visibilitychange`, `online`, a 60-second interval, and auth-change (+5 s/+15 s follow-ups). There is **no `resubscribe()`** — realtime is best-effort only. (Supersedes the old "two-layer recovery".) |
+| **NestJS gateway** | The backend in `server/` (EC2 + nginx, `api.cloud-engineer.dev`). The primary data path: the frontend calls it via `apiFetch`/`publicFetch`. Verifies Firebase ID tokens + roles. |
+| **bridge JWT** | A short-lived Supabase JWT (`role: authenticated`, `sub = profiles.id`) the gateway mints so the browser can still hit PostgREST directly. Legacy — retired in "Phase 7". |
+| **apiFetch / publicFetch** | Helpers in `web/src/lib/api.ts`. `apiFetch` injects the Firebase ID token (auto-refresh on 401); `publicFetch` is for public reads. |
+| **Firebase Auth** | The authentication provider (Google popup + email/password). Replaced Supabase Auth in May–June 2026. |
 | **organizer_codes** | Codes stored in Supabase that, when submitted during sign-up or upgrade, assign a chapter officer or HQ admin role to a user. |
 | **edge function** | Serverless Deno functions deployed to Supabase. Used for QR token generation, points awarding, rate limiting, and door approval. |
 | **RLS** | Row Level Security. Postgres policies that restrict data access at the database level, enforced for every Supabase query. |
 | **MD3 type scale** | Material Design 3 typography tokens (`text-md3-*`) added to `tailwind.config.js`. Preferred for new components. Coexists with the legacy Tailwind scale. |
 | **Proxima Nova** | The app's primary typeface. Self-hosted woff2, 6 weights. Loaded in `index.css`. Referenced as `font-proxima` or `font-sans` in Tailwind. |
 | **program themes** | 5 user-selectable color themes (devcon, she, kids, campus, purple) that change the `--color-primary` CSS custom property. Persisted via `useThemeStore`. |
-| **Turbo** | Build system orchestrating the monorepo. `npm run dev:member` uses the Turbo filter `@devcon-plus/member`. |
+| **`web/` + `server/`** | The two co-located apps: the React frontend (`web/`, `@devcon-plus/web`) and the NestJS gateway (`server/`, `@devcon-plus/server`). No root workspace/Turbo — each installs and builds independently. (The old `apps/member` Turbo monorepo is gone; any leftover `apps/`/`packages/` dirs are untracked.) |
 
 ## 8.2 Asset Library
 
 | Asset | Location | Notes |
 |-------|----------|-------|
-| Onboarding photos (real chapter group photos) | `apps/member/public/photos/` | 4 photos: `devcon-summit-group.jpg`, `devcon-15-anniversary.jpg`, `devcon-certificate-ceremony.jpg`, `devcon-jumpstart-internships.jpg` |
-| Proxima Nova font files | `apps/member/public/fonts/` | 6 weights in woff2 format |
-| PWA icons | `apps/member/public/` | `icon-192.png`, `icon-512.png`, `icon-maskable.png`, `apple-touch-icon.png` |
-| DEVCON+ logo assets | `apps/member/public/` or `src/assets/` | Check both locations |
+| Onboarding photos (real chapter group photos) | `web/public/photos/` | `devcon-summit-group.jpg`, `devcon-luzon-chapters.png`, `devcon-certificate-ceremony.jpg`, `devcon-jumpstart-internships.jpg` |
+| Proxima Nova font files | `web/public/fonts/` | 6 weights in woff2 format |
+| PWA icons | `web/public/` | `icon-192.png`, `icon-512.png`, `icon-maskable.png`, `apple-touch-icon.png` |
+| DEVCON+ logo assets | `web/public/` or `web/src/assets/` | Check both locations |
 | Figma design file | https://www.figma.com/design/sYDNlHmsHK5dZRHvNabfcn/ | v0.1 concept prototype — use as UX reference |
 | Lovable prototype | https://devconplusrndprototype.lovable.app/ | UX reference only — not the production codebase |
 
@@ -917,7 +972,7 @@ The outgoing team is available for questions and pair sessions during this windo
 
 | Resource | Link | Purpose |
 |----------|------|---------|
-| Live app | https://devconplusbeta-v1.vercel.app | Current production deployment |
+| Live app | https://devcon.plus | Current production deployment (beta URL 301-redirects here) |
 | GitHub repository | https://github.com/rocketwolf98/devconplusClaudeCode | Codebase |
 | Original PRD (Google Doc) | https://docs.google.com/document/d/1VUGu4t6M4QUHlljm1c6JmpINZxkN4gQUVJFceh71c8k/ | Extended product requirements |
 | Figma prototype | https://www.figma.com/design/sYDNlHmsHK5dZRHvNabfcn/ | Design reference |
@@ -1017,6 +1072,6 @@ These features are deferred and must not be built before April 30, 2026.
 
 ---
 
-*End of DEVCON+ Transition Documentation — Version 1.0*  
-*Prepared by the DEVCON Jumpstart Internship Cohort 3 Development Team*  
-*April 16, 2026*
+*End of DEVCON+ Transition Documentation — Version 1.1 (June 2026 architecture sync)*  
+*Originally prepared by the DEVCON Jumpstart Internship Cohort 3 Development Team (April 2026)*  
+*Architecture sync: June 21, 2026 — Firebase auth, NestJS gateway, polling-first realtime, `devcon.plus` live*
