@@ -39,6 +39,16 @@ export class AdminController {
     return this.service.getAnalytics();
   }
 
+  /** POST /api/admin/officers/assign — hq_admin+: assign officer email + send invite */
+  @Post('officers/assign')
+  @HttpCode(HttpStatus.OK)
+  assignOfficer(
+    @Body() dto: InviteOfficerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.assignOfficer(dto.email, dto.chapter_id, user.profile.full_name);
+  }
+
   /** POST /api/admin/officers/invite — hq_admin+: email an officer-assignment invite */
   @Post('officers/invite')
   @HttpCode(HttpStatus.OK)

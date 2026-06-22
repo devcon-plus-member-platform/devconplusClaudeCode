@@ -11,16 +11,18 @@ import {
   AUTHENTICATED_USER_KEY,
   type AuthenticatedUser,
 } from '../../auth/auth.guard';
-import { RATE_LIMIT_BUCKET_KEY } from './rate-limit.decorator';
+import { RATE_LIMIT_META, type RateLimitMeta } from './rate-limit.decorator';
 import { RateLimitRepository } from './rate-limit.repository';
 
 /**
  * Identity-keyed rate limit guard backed by the check_rate_limit Supabase RPC.
- * Must be used AFTER AuthGuard so req[AUTHENTICATED_USER_KEY] is populated.
+ * Must be used AFTER AuthGuard (for identity keying) so req[AUTHENTICATED_USER_KEY]
+ * is populated; unauthenticated routes fall back to IP or body-derived keys.
  *
- * Builds identifier as:
- *   - `user:<profileId>`   when an authenticated user is present
- *   - `ip:<x-forwarded-for or req.ip>` for unauthenticated routes
+ * Identifier:
+ *   - keyFrom 'body.email' → `email:<lowercased email>` (falls back to IP if the body has none)
+ *   - authenticated user   → `user:<profileId>`
+ *   - otherwise            → `ip:<x-forwarded-for first hop or req.ip>`
  *
  * Fails closed (429) on any RPC error — consistent with edge function behavior.
  */
@@ -32,22 +34,16 @@ export class RateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const bucket = this.reflector.get<string | undefined>(
-      RATE_LIMIT_BUCKET_KEY,
+    const meta = this.reflector.get<RateLimitMeta | undefined>(
+      RATE_LIMIT_META,
       context.getHandler(),
     );
-    if (!bucket) return true;
+    if (!meta) return true;
 
     const req = context.switchToHttp().getRequest<Request>();
-    const user = (req as unknown as Record<string, unknown>)[
-      AUTHENTICATED_USER_KEY
-    ] as AuthenticatedUser | undefined;
+    const identifier = this.buildIdentifier(req, meta);
 
-    const identifier = user
-      ? `user:${user.profileId}`
-      : `ip:${(req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? req.ip ?? 'unknown'}`;
-
-    const allowed = await this.rateLimitRepo.check(identifier, bucket);
+    const allowed = await this.rateLimitRepo.check(identifier, meta.bucket);
     if (!allowed) {
       throw new HttpException(
         { message: 'Rate limit exceeded. Please try again later.' },
@@ -55,5 +51,30 @@ export class RateLimitGuard implements CanActivate {
       );
     }
     return true;
+  }
+
+  private buildIdentifier(req: Request, meta: RateLimitMeta): string {
+    // Per-account keying for login: a shared venue/CGNAT IP must not exhaust one
+    // bucket for everyone. Each email gets its own budget; brute-force on a single
+    // account is still capped by the bucket's per-identifier limit.
+    if (meta.keyFrom === 'body.email') {
+      const body = req.body as { email?: unknown } | undefined;
+      const email =
+        typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      // No email in body → fall back to IP so malformed requests are still limited.
+      return email ? `email:${email}` : `ip:${this.clientIp(req)}`;
+    }
+
+    const user = (req as unknown as Record<string, unknown>)[
+      AUTHENTICATED_USER_KEY
+    ] as AuthenticatedUser | undefined;
+    if (user) return `user:${user.profileId}`;
+    return `ip:${this.clientIp(req)}`;
+  }
+
+  private clientIp(req: Request): string {
+    const fwd = req.headers['x-forwarded-for'];
+    const first = typeof fwd === 'string' ? fwd.split(',')[0]?.trim() : undefined;
+    return first ?? req.ip ?? 'unknown';
   }
 }
