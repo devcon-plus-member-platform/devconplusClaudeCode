@@ -61,8 +61,16 @@ export class MissionsService {
     );
   }
 
+  getAllSubmissionsAdmin(): Promise<MissionSubmissionWithDetails[]> {
+    return this.repo.findAllSubmissionsAdmin();
+  }
+
   getPendingQueue(): Promise<MissionSubmissionWithDetails[]> {
     return this.repo.findPendingQueue();
+  }
+
+  rejectSubmission(subId: string, adminRemarks: string): Promise<void> {
+    return this.repo.rejectSubmission(subId, adminRemarks);
   }
 
   async createMission(dto: CreateMissionDto): Promise<Mission> {

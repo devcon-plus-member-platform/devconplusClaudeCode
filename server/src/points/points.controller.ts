@@ -50,6 +50,14 @@ export class PointsController {
     return this.service.getPointSummary(user);
   }
 
+  /** GET /api/points/admin/user/:id — hq_admin: recent transactions for any member */
+  @Get('admin/user/:id')
+  @UseGuards(RolesGuard)
+  @Roles('hq_admin')
+  getAdminUserTransactions(@Param() { id }: IdParamDto) {
+    return this.service.getAdminUserTransactions(id);
+  }
+
   // ── XP Tiers ─────────────────────────────────────────────────────────────
 
   /** GET /api/points/tiers — list all XP tier definitions */

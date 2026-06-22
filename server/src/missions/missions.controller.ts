@@ -16,6 +16,7 @@ import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { CreateMissionDto } from './dto/create-mission.dto';
+import { RejectSubmissionDto } from './dto/reject-submission.dto';
 import { SubmitMissionDto } from './dto/submit-mission.dto';
 import { UpdateMissionDto } from './dto/update-mission.dto';
 import { MissionsService } from './missions.service';
@@ -43,6 +44,14 @@ export class MissionsController {
     return this.service.getPendingQueue();
   }
 
+  /** GET /api/missions/submissions — hq_admin: all submissions across all statuses */
+  @Get('submissions')
+  @UseGuards(RolesGuard)
+  @Roles('hq_admin')
+  getAllSubmissions() {
+    return this.service.getAllSubmissionsAdmin();
+  }
+
   /** POST /api/missions/submissions/:id/approve — hq_admin: approve_mission_winner RPC */
   @Post('submissions/:id/approve')
   @HttpCode(HttpStatus.OK)
@@ -50,6 +59,15 @@ export class MissionsController {
   @Roles('hq_admin')
   approveMissionWinner(@Param() { id }: IdParamDto) {
     return this.service.approveMissionWinner(id);
+  }
+
+  /** POST /api/missions/submissions/:id/reject — hq_admin: reject with admin remarks */
+  @Post('submissions/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles('hq_admin')
+  rejectSubmission(@Param() { id }: IdParamDto, @Body() { adminRemarks }: RejectSubmissionDto) {
+    return this.service.rejectSubmission(id, adminRemarks);
   }
 
   // ── Member: consolidated data ─────────────────────────────────────────────
