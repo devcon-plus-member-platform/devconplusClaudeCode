@@ -31,6 +31,9 @@ test-results/
 server/dist/
 server/node_modules/
 
+# Security audit reports — sensitive, never commit (document unpatched findings)
+SECURITY_AUDIT_*.md
+
 # Terraform local state
 infra/.terraform/
 infra/terraform.tfvars
