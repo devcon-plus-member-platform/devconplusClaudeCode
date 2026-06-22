@@ -44,6 +44,15 @@ export class AdminRepository extends BaseRepository {
     if (error) throw new BadRequestException(error.message);
   }
 
+  /** Records a chapter-officer assignment for an email (applied on the user's sign-up). */
+  async assignOfficerEmail(email: string, chapterId: string): Promise<void> {
+    const { error } = await this.db.rpc('assign_officer_email' as never, {
+      p_email:      email,
+      p_chapter_id: chapterId,
+    } as never);
+    if (error) throw new BadRequestException(error.message);
+  }
+
   /** Look up a profile's Firebase auth_uid by profile id (for cache invalidation). */
   async getAuthUidById(profileId: string): Promise<string | null> {
     const { data, error } = await this.db

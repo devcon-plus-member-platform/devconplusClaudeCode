@@ -68,6 +68,7 @@ interface AuthState {
     chapter_id: string,
     school_or_company?: string,
     captchaToken?: string,
+    referral_code?: string,
     socialLinks?: { linkedin_url?: string; github_url?: string; portfolio_url?: string },
   ) => Promise<{ emailConfirmationPending: boolean }>
   signIn: (email: string, password: string, captchaToken?: string) => Promise<void>
@@ -246,12 +247,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: false, isInitialized: true })
   },
 
-  signUp: async (email, password, full_name, username, chapter_id, school_or_company, captchaToken) => {
+  signUp: async (email, password, full_name, username, chapter_id, school_or_company, captchaToken, referral_code) => {
     set({ isLoading: true, error: null })
     try {
       await apiFetch('/auth/email/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company, captchaToken }),
+        body: JSON.stringify({ email, password, full_name, username, chapter_id, school_or_company, captchaToken, referral_code }),
       })
       set({ isLoading: false })
       return { emailConfirmationPending: true }

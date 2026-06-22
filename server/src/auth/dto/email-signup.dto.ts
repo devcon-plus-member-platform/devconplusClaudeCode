@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MinLength,
 } from 'class-validator';
 
@@ -36,4 +37,11 @@ export class EmailSignupDto {
   @IsOptional()
   @IsString()
   captchaToken?: string;
+
+  // Optional referrer code. Confirmed server-side after the profile row is created
+  // (replaces the former direct supabase.rpc('confirm_referral') browser call).
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z0-9]{6,12}$/i, { message: 'Invalid referral code' })
+  referral_code?: string;
 }

@@ -37,6 +37,29 @@ export class AdminService {
   }
 
   /**
+   * Records a chapter-officer assignment (via the assign_officer_email RPC, service role)
+   * and then best-effort sends the invite email. Replaces the former direct
+   * `supabase.rpc('assign_officer_email')` browser call so the RPC can be locked down to
+   * service_role. The assignment is authoritative; a mail failure only flips `invited`.
+   */
+  async assignOfficer(
+    email: string,
+    chapterId: string,
+    inviterName: string,
+  ): Promise<{ assigned: boolean; invited: boolean }> {
+    const normalised = email.toLowerCase();
+    await this.repo.assignOfficerEmail(normalised, chapterId);
+    let invited = false;
+    try {
+      await this.inviteOfficer(normalised, chapterId, inviterName);
+      invited = true;
+    } catch {
+      invited = false;
+    }
+    return { assigned: true, invited };
+  }
+
+  /**
    * Emails a chapter-officer invite. The role itself is already granted by the
    * `assign_officer_email` RPC / DB triggers — this is purely a sign-up nudge.
    * Throws ServiceUnavailableException (from EmailService) if email is unconfigured.

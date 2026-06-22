@@ -99,20 +99,22 @@ export default function AdminChapterOfficers() {
 
   const onSubmit = async (data: FormData) => {
     setError(null)
-    const { error: rpcErr } = await supabase.rpc('assign_officer_email', {
-      p_email: data.email,
-      p_chapter_id: data.chapter_id,
-    })
-    if (rpcErr) { setError(rpcErr.message); return }
-    // Auto-send the invite email. Non-blocking — the assignment already succeeded,
-    // so a mail failure (e.g. email service unconfigured) only shows a soft warning.
+    // Assignment + invite happen server-side (assign_officer_email RPC is service-role only).
+    // The assignment is authoritative; `invited:false` only means the nudge email didn't send.
     try {
-      await apiFetch('/api/admin/officers/invite', {
-        method: 'POST',
-        body: JSON.stringify({ email: data.email, chapter_id: data.chapter_id }),
-      })
-    } catch {
-      setError('Officer assigned, but the invite email could not be sent (email service unavailable).')
+      const res = await apiFetch<{ assigned: boolean; invited: boolean }>(
+        '/api/admin/officers/assign',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email: data.email, chapter_id: data.chapter_id }),
+        },
+      )
+      if (!res.invited) {
+        setError('Officer assigned, but the invite email could not be sent (email service unavailable).')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to assign officer.')
+      return
     }
     // Re-fetch so the new/updated row (with joined chapter name + applied status) is accurate.
     await load()

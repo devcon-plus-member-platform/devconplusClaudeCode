@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { UserAwareThrottlerGuard } from './common/throttler/user-aware-throttler.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -35,13 +36,18 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
       validate: validateEnv,
       envFilePath: ['.env.local', '.env'],
     }),
-    // Coarse per-IP flood guard (in-memory, single-instance EC2).
-    // Identity-keyed security buckets (qr_scan, org_upgrade, etc.) use the
+    // Coarse flood guard (in-memory, single-instance EC2). Keyed by authenticated
+    // user when a Bearer token is present, else by IP — see UserAwareThrottlerGuard.
+    // Identity-keyed security buckets (login, qr_scan, org_upgrade, etc.) use the
     // custom RateLimitGuard + check_rate_limit RPC instead.
     ThrottlerModule.forRoot([
       {
         ttl: 60_000, // 1 minute window
-        limit: 300,  // 300 requests per IP per minute before flood-blocking
+        // Raised from 300: authenticated traffic is now keyed per-user, so this
+        // mainly bounds anonymous/guest requests. It must clear a shared venue/CGNAT
+        // IP — a few hundred simultaneous sign-ins + guest browsing on launch — without
+        // flood-blocking. Tune via redeploy if a launch event is larger.
+        limit: 1200,
       },
     ]),
     FirebaseModule,
@@ -73,8 +79,9 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
     // Log every request centrally so all routes include their final status code.
     { provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor },
     // Apply the coarse throttler globally so every endpoint gets flood protection
-    // without needing to add @UseGuards(ThrottlerGuard) on every controller.
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // without needing to add @UseGuards() on every controller. UserAwareThrottlerGuard
+    // keys by authenticated user (Bearer sub) when possible, else by IP.
+    { provide: APP_GUARD, useClass: UserAwareThrottlerGuard },
   ],
 })
 export class AppModule {}
