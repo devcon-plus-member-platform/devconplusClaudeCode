@@ -802,6 +802,39 @@ Page gutters:   px-4
 Safe bottom:    pb-24 in scroll containers (clears floating nav)
 ```
 
+### Chips & Tab Toggles (white-outlined style — updated June 2026)
+
+Pill-shaped filter chips and segmented tab toggles use a **white, outlined** treatment —
+NOT a filled light-blue (`bg-primary/10`) inactive state. Every chip/tab carries a 1px `border`
+on ALL states so widths never shift when selection changes. Two variants:
+
+**Segmented tab toggle** — full-width `flex-1` buttons that switch between views (e.g. Discover /
+My Tickets, Updates / Featured, Ways to Earn / Share & Earn, Redeem / Missions). Active = solid fill:
+```
+base:     ...rounded-full ... border          (add `border` to the base class)
+active:   bg-primary text-white font-semibold border-primary shadow-sm
+inactive: bg-white text-slate-700 font-medium border-slate-200
+```
+
+**Filter chip** — horizontal-scroll pills that narrow a list (e.g. All Events / Near You / DEVCON,
+points-history filters, mission/reward category chips). Active = white with a colored border:
+```
+base:     ...rounded-full ... border          (add `border` to the base class)
+active:   bg-white text-primary font-semibold border-primary
+inactive: bg-white text-slate-500 font-medium border-slate-200
+```
+
+Notes:
+- On the **organizer** surface (non-themed), swap `primary` → `blue`: active tab toggle is
+  `bg-blue text-white border-blue shadow-sm`, inactive `bg-white text-slate-700 border-slate-200`.
+- Both variants assume a **light backdrop** (`bg-slate-50` glassmorphism header or page body).
+  Do not place white-outlined chips on the blue header ellipse.
+- This is distinct from `<ChipBar />` (a slate-100-track segmented control with a white active pill)
+  and from the AdminCMS folder-tab bar (`rounded-t-lg` underline tabs) — leave those as-is.
+- Files using this pattern: `EventsList`, `Dashboard` (Updates/Featured), `Points`,
+  `PointsHistory`, `Rewards` (main tab + mission/category chips), `organizer/RewardsManagement`.
+  `solar-icon-set` count/badge spans inside a chip keep their own styling.
+
 ### Animation (framer-motion)
 ```js
 // web/src/lib/animation.ts — always import from here, never redefine inline

@@ -107,8 +107,16 @@ export default function EmailSent() {
         <p className="text-md3-body-md text-slate-500 leading-relaxed max-w-xs mb-2">{body}</p>
 
         {email && (
-          <p className="text-md3-body-md font-semibold text-slate-700 mb-6 break-all">{email}</p>
+          <p className="text-md3-body-md font-semibold text-slate-700 mb-4 break-all">{email}</p>
         )}
+
+        {/* Spam-folder reminder */}
+        <div className="rounded-xl bg-blue/5 px-4 py-3 max-w-xs mb-6">
+          <p className="text-md3-body-sm text-slate-500 leading-relaxed">
+            Didn't get the email? Check your{' '}
+            <span className="font-semibold text-slate-700">spam or junk</span> folder, then resend below.
+          </p>
+        </div>
 
         {/* Resend */}
         {resendSuccess && (
