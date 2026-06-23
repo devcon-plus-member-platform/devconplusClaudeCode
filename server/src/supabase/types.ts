@@ -78,6 +78,12 @@ export interface MissionSubmissionWithDetails extends MissionSubmission {
   mission_title: string;
   member_name: string;
   member_email: string;
+  // Extended fields returned by the admin full-submissions endpoint
+  xp_reward?: number;
+  spendable_points?: number;
+  lifetime_points?: number;
+  admin_remarks?: string | null;
+  reviewed_at?: string | null;
 }
 
 export interface XpTier {

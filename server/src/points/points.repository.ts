@@ -41,6 +41,18 @@ export class PointsRepository extends BaseRepository {
     };
   }
 
+  async findTransactionsByUserId(userId: string, limit = 10): Promise<PointTransaction[]> {
+    const result = await this.db
+      .from('point_transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    return this.unwrap(
+      result as { data: PointTransaction[] | null; error: { message: string } | null },
+    );
+  }
+
   // ── XP Tiers (admin) ──────────────────────────────────────────────────────
 
   async findAllTiers(): Promise<XpTier[]> {
