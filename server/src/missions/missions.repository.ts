@@ -120,6 +120,40 @@ export class MissionsRepository extends BaseRepository {
     );
   }
 
+  async findAllSubmissionsAdmin(): Promise<MissionSubmissionWithDetails[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (this.db as any)
+      .from('mission_submissions')
+      .select('*, missions:mission_id(title, xp_reward), profiles:user_id(full_name, email, spendable_points, lifetime_points)')
+      .order('submitted_at', { ascending: false })
+      .limit(500);
+
+    if (error) throw new BadRequestException((error as { message: string }).message);
+
+    return (data ?? []).map((row: Record<string, unknown>) => {
+      const m = Array.isArray(row.missions) ? (row.missions as unknown[])[0] : row.missions;
+      const p = Array.isArray(row.profiles) ? (row.profiles as unknown[])[0] : row.profiles;
+      const mObj = m as { title?: string; xp_reward?: number } | null;
+      const pObj = p as { full_name?: string; email?: string; spendable_points?: number; lifetime_points?: number } | null;
+      return {
+        id:               (row.id ?? '') as string,
+        mission_id:       (row.mission_id ?? '') as string,
+        user_id:          (row.user_id ?? '') as string,
+        pr_link:          (row.pr_link ?? null) as string | null,
+        status:           (row.status ?? 'pending') as MissionSubmissionWithDetails['status'],
+        submitted_at:     (row.submitted_at ?? null) as string | null,
+        admin_remarks:    (row.admin_remarks ?? null) as string | null,
+        reviewed_at:      (row.reviewed_at ?? null) as string | null,
+        mission_title:    mObj?.title ?? 'Unknown Mission',
+        xp_reward:        mObj?.xp_reward ?? 0,
+        member_name:      pObj?.full_name ?? 'Unknown',
+        member_email:     pObj?.email ?? '',
+        spendable_points: pObj?.spendable_points ?? 0,
+        lifetime_points:  pObj?.lifetime_points ?? 0,
+      } satisfies MissionSubmissionWithDetails;
+    });
+  }
+
   async findPendingQueue(): Promise<MissionSubmissionWithDetails[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (this.db as any)
@@ -185,6 +219,14 @@ export class MissionsRepository extends BaseRepository {
   async approveMissionWinner(subId: string): Promise<void> {
     const { error } = await this.db.rpc('approve_mission_winner' as never, {
       sub_id: subId,
+    } as never);
+    if (error) throw new BadRequestException(error.message);
+  }
+
+  async rejectSubmission(subId: string, adminRemarks: string): Promise<void> {
+    const { error } = await this.db.rpc('reject_mission_submission' as never, {
+      p_submission_id: subId,
+      p_admin_remarks: adminRemarks,
     } as never);
     if (error) throw new BadRequestException(error.message);
   }

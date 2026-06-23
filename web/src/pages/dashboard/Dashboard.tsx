@@ -556,8 +556,8 @@ useEffect(() => {
           <div className="inline-flex self-start items-center gap-2">
             <button
               onClick={() => setActiveTab('updates')}
-              className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
-                activeTab === 'updates' ? 'bg-primary text-white font-semibold shadow-sm' : 'bg-primary/10 text-primary font-medium'
+              className={`flex items-center justify-center px-5 py-1.5 rounded-full border transition-all duration-300 ${
+                activeTab === 'updates' ? 'bg-primary text-white font-semibold border-primary shadow-sm' : 'bg-white text-slate-700 font-medium border-slate-200'
               }`}
             >
               <span className="font-proxima text-[16px]">
@@ -566,8 +566,8 @@ useEffect(() => {
             </button>
             <button
               onClick={() => setActiveTab('featured')}
-              className={`flex items-center justify-center px-5 py-1.5 rounded-full transition-all duration-300 ${
-                activeTab === 'featured' ? 'bg-primary text-white font-semibold shadow-sm' : 'bg-primary/10 text-primary font-medium'
+              className={`flex items-center justify-center px-5 py-1.5 rounded-full border transition-all duration-300 ${
+                activeTab === 'featured' ? 'bg-primary text-white font-semibold border-primary shadow-sm' : 'bg-white text-slate-700 font-medium border-slate-200'
               }`}
             >
               <span className="font-proxima text-[16px]">

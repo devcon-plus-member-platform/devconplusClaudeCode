@@ -250,10 +250,10 @@ export default function EventsList() {
               <button
                 key={t}
                 onClick={() => { setTab(t); setSearchQuery('') }}
-                className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all shrink-0 ${
+                className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all shrink-0 border ${
                   tab === t
-                    ? 'bg-primary text-white font-semibold shadow-sm'
-                    : 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-primary text-white font-semibold border-primary shadow-sm'
+                    : 'bg-white text-slate-700 font-medium border-slate-200'
                 }`}
               >
                 <span className="flex items-center gap-1.5">
@@ -279,10 +279,10 @@ export default function EventsList() {
                 <motion.button
                   key={id}
                   onClick={() => setEventFilter(id)}
-                  className={`flex-shrink-0 h-[30px] px-4 rounded-full text-[12px] font-proxima transition-colors ${
+                  className={`flex-shrink-0 h-[30px] px-4 rounded-full text-[12px] font-proxima transition-colors border ${
                     eventFilter === id
-                      ? 'bg-primary text-white font-semibold'
-                      : 'bg-primary/10 text-primary font-medium'
+                      ? 'bg-white text-primary font-semibold border-primary'
+                      : 'bg-white text-slate-500 font-medium border-slate-200'
                   }`}
                   whileTap={{ scale: 0.95 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 25 }}

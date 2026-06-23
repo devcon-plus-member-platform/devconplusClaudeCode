@@ -33,6 +33,10 @@ export class PointsService {
     return this.repo.findPointSummary(user.profileId);
   }
 
+  getAdminUserTransactions(userId: string): Promise<PointTransaction[]> {
+    return this.repo.findTransactionsByUserId(userId, 10);
+  }
+
   // xp_tiers is global reference data (milestone definitions) — shared key.
   getAllTiers(): Promise<XpTier[]> {
     return this.cache.getOrSet(CacheKeys.XP_TIERS, CACHE_TTL.TIERS, () =>
