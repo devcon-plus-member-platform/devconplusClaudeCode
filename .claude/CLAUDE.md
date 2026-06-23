@@ -1,10 +1,19 @@
 # DEVCON+ — Claude Code Master Context File
-> Last Updated: May 24, 2026
-> Version: MVP 1.7
-> Team: 3 interns + Claude Code
-> Hard Deadline: April 30, 2026 (Cohort 3 Graduation)
-> Live App: https://devconplusbeta-v1.vercel.app
+> Last Updated: June 21, 2026
+> Version: MVP 1.8 (post-launch hardening — Firebase auth + NestJS gateway migration)
+> Team: DEVCON Jumpstart interns + Claude Code
+> Status: MVP shipped & live; in post-launch hardening (auth migration, security audit, resilience)
+> Live App (production): https://devcon.plus
+>   ↳ `devconplusbeta-v1.vercel.app` and `plus-beta.devcon.ph` 301-redirect here. Staging: https://staging.devcon.plus (noindex)
+> Backend API: https://api.cloud-engineer.dev  (NestJS gateway, self-hosted EC2 + nginx)
 > Lovable Prototype (UX Reference ONLY): https://devconplusrndprototype.lovable.app/onboarding
+
+> **⚠️ Architecture has shifted since MVP 1.7.** DEVCON+ is no longer a pure-Supabase, no-backend app.
+> Authentication is now **Firebase Auth** (Google OAuth + email/password), the frontend talks to a
+> **NestJS gateway** (`server/`) over HTTP (`apiFetch`/`publicFetch`), and Realtime is **best-effort
+> only** (polling-first recovery). Direct `supabase-js` access survives only via a short-lived
+> **bridge JWT** and is being retired (migration "Phase 7"). Read Sections 3, 10–12, and 15 before
+> assuming the old model. See `.claude/rules/db-connection-resilience.md` for the realtime rule.
 
 ---
 
@@ -12,13 +21,13 @@
 
 These rules are non-negotiable. Read before generating anything.
 
-1. **Never generate Apple Sign-In code.** Auth is Google OAuth + Email/Password only via Supabase.
+1. **Never generate Apple Sign-In code.** Auth is Google OAuth + Email/Password only, via **Firebase Auth** (the NestJS gateway verifies Firebase ID tokens + `email_verified`). Supabase Auth was cut in migration `20260531_phase4_cut_supabase_auth.sql`.
 2. **Never mix emoji and images in the same section.** Pick one per screen/section and be consistent.
 3. **Never leave placeholder text.** No `"________"`, `"Lorem ipsum"`, or empty strings — use a `<ComingSoonModal />` component for incomplete features instead.
 4. **Never create dead-end navigation.** Every tap must resolve to content or a `ComingSoonModal`.
 5. **Always pre-fill registration forms** from the authenticated Supabase user's profile data.
 6. **Always use TypeScript strict mode.** No `any` types.
-7. **The Member App and Organizer flow share ONE codebase** (`web/`) but use separate layouts and route trees. Member routes are under `MemberLayout`. Organizer routes are under `OrganizerLayout` at `/organizer/*`. Do not mix their components.
+7. **The Member App and Organizer flow share ONE frontend codebase** (`web/`) but use separate layouts and route trees. Member routes are under `MemberLayout`. Organizer routes are under `OrganizerLayout` at `/organizer/*`. Admin routes are under `AdminLayout` at `/admin/*`. Do not mix their components. The frontend is backed by a separate **NestJS gateway** in `server/` — components fetch data through it via `apiFetch`/`publicFetch`, not directly from Supabase.
 8. **Jobs Board is manually seeded in Supabase for MVP.** No external API integration needed.
 9. **Photos in onboarding are real chapter group photos** served from `public/photos/`. If assets are missing, use named gradient placeholders — never stock illustration components.
 10. **The 2nd job listing and 2nd news post always get an orange `PROMOTED` badge.** This is a design mandate, not optional.
@@ -26,7 +35,7 @@ These rules are non-negotiable. Read before generating anything.
 12. **Primary color is CSS-custom-property driven** (`rgb(var(--color-primary))`). Always use `text-primary`, `bg-primary`, etc. — not hardcoded hex. Only use `text-blue` / `bg-blue` when you explicitly need the non-themed DEVCON blue alias.
 16. **Never use `lucide-react`.** The icon library is `solar-icon-set` (outline variant only). `solar-icon-set` icons do NOT respond to Tailwind `text-*` color classes — use the `color` prop instead: `<HomeOutline color="rgb(var(--color-primary))" />`.
 17. **Never use Tailwind `slate-600` or `slate-800`.** These steps don't exist in the configured scale. Use `slate-500` or `slate-700`.
-13. **Supabase is now live.** All stores use the real Supabase client (`web/src/lib/supabase.ts`). The `MOCK_*` exports in `web/src/types/mock/` are kept for reference but are no longer used by the app. Always use the Supabase client for new data calls.
+13. **Data goes through the NestJS gateway, not directly to Supabase.** Stores call the backend via `apiFetch()` (authenticated — injects the Firebase ID token) or `publicFetch()` (public reads), both in `web/src/lib/api.ts`. Direct `supabase-js` access (`web/src/lib/supabase.ts`) survives only for a few legacy paths via the **bridge JWT** and is being retired (migration "Phase 7") — **do not add new direct `supabase.from(...)` / `supabase.rpc(...)` calls in components or stores.** The `MOCK_*` exports in `web/src/types/mock/` are reference-only and unused. (See `.claude/rules/db-connection-resilience.md`.)
 14. **Figma MCP: Claude Code supports it (native claude.ai integration — no setup needed) but captures elements poorly per developer observation. Gemini CLI is preferred when available.** Both tools can connect to Figma MCP. Claude Code has a built-in Figma integration via claude.ai (tools: `get_design_context`, `get_screenshot`, `get_metadata`, etc. — available in any claude.ai/code session without `.mcp.json` config). However, per developer observation, Claude Code does not read Figma elements accurately — layouts and tokens are often misread. Gemini CLI produces better design-to-code results. Use Gemini CLI for Figma work if access is provisioned; otherwise use Claude Code + Figma MCP with manual verification, or fall back to the human Figma Inspect panel method. **Figma MCP is free; Figma Dev Mode (recommended for accurate specs) requires a paid Figma plan.**
 15. **MCPs are recommended for automated workflows.** Supabase MCP is already configured in `.mcp.json`. Figma MCP (local server) and Vercel MCP should be added when the corresponding tokens are available. Note: Figma MCP is also available natively in claude.ai sessions without any `.mcp.json` setup. See `README.md` Section 15 for setup instructions.
 
@@ -64,28 +73,31 @@ These rules are non-negotiable. Read before generating anything.
 
 ## 2. REPOSITORY STRUCTURE
 
-Co-located independent apps (no npm workspace manager at root).
+Co-located independent apps (no npm workspace manager / Turbo at root — each app installs and builds on its own).
 
 ```
 devcon-plus/
-├── web/                     # React + Vite — mobile-first web app (self-contained)
-│   │                        # Contains BOTH member UI and organizer UI
-│   │                        # (organizer is a separate route tree at /organizer/*)
-│   ├── src/
+├── web/                     # React + Vite — mobile-first web app (self-contained, @devcon-plus/web)
+│   │                        # Contains member UI, organizer UI, AND admin UI
+│   │                        # (separate route trees: MemberLayout / OrganizerLayout / AdminLayout)
+│   ├── src/                 # types live in web/src/types/ (alias @devcon-plus/supabase)
 │   ├── public/
-│   │   └── app-screenshots/ # App screenshots for documentation
-│   ├── package.json         # Frontend deps (framer-motion lives here)
-│   ├── vercel.json          # Vercel deployment config
+│   ├── package.json         # Frontend deps (framer-motion lives here; React 19 pinned via `overrides`)
+│   ├── vercel.json          # Vercel deployment config + security headers (CSP/HSTS/...)
 │   ├── .env.example
 │   └── ...
-├── server/                  # NestJS backend (self-contained)
-│   ├── src/
+├── server/                  # NestJS gateway (self-contained, @devcon-plus/server)
+│   ├── src/                 # modules: auth, users, events, points, registrations, rewards,
+│   │                        #          missions, volunteers, qr, upgrades, admin, news, jobs,
+│   │                        #          chapters, interests, announcements, referrals, email
 │   ├── package.json
-│   ├── .env.example
-│   └── ...
+│   ├── .env.example / .env.production.example
+│   └── ...                  # Deployed to EC2 behind nginx → https://api.cloud-engineer.dev
 ├── supabase/                # Supabase CLI — migrations, Edge Functions, seed
-└── docs/
+└── docs/                    # auth/* docs, migration-plans/*
 ```
+
+> **Heads-up:** `apps/` and `packages/` directories may exist locally but are **untracked build leftovers** from the old `apps/member` Turbo monorepo layout. They are NOT the live app — ignore them. The live, git-tracked code is `web/` + `server/` + `supabase/`.
 
 ---
 
@@ -101,15 +113,40 @@ devcon-plus/
 | Animation | **framer-motion** (`web/` dependency) |
 | State | **Zustand v5** |
 | Forms | **React Hook Form v7** + **Zod** |
-| Backend client | `@supabase/supabase-js` (live — wired to production project) |
+| Data access | **`apiFetch` / `publicFetch`** (`web/src/lib/api.ts`) → NestJS gateway over HTTP. `@supabase/supabase-js` is used only for legacy bridge-JWT paths (being retired) |
 | QR Display | `qrcode.react` |
-| QR Scanning | `@zxing/browser` + `@zxing/library` |
+| QR Scanning | `@zxing/browser` + `@zxing/library` (lazy-loaded) |
 | Icons | `solar-icon-set` outline variant (only — no emoji icons in JSX) |
-| Auth | Supabase Auth (Google OAuth + email/password) |
+| Auth | **Firebase Auth** (Google OAuth via popup + email/password). `firebase` web SDK on the client; Firebase Admin verifies ID tokens on the gateway |
 | Language | TypeScript (strict) |
 | Font | **Proxima Nova** (self-hosted woff2, 6 weights — loaded in `index.css`). Tailwind: `font-proxima` / `font-sans` |
 
 > This is a **web app**, not React Native. There is no Expo, no NativeWind, no RN StyleSheet. All styling is plain Tailwind CSS classes.
+
+### Backend Gateway (`server/`)
+| Concern | Choice |
+|---------|--------|
+| Framework | **NestJS 10** (Express platform) |
+| Runtime | Node 20, deployed on **EC2 behind nginx** → `https://api.cloud-engineer.dev` |
+| Global prefix | `/api` (auth routes are at `/auth/*`, outside the prefix). Port `8000` |
+| Auth | `AuthGuard` verifies the **Firebase ID token** (firebase-admin) + `email_verified` gate, then resolves the profile by `auth_uid`. `RolesGuard` + `@Roles()` enforce the role hierarchy `member < chapter_officer < hq_admin < super_admin` |
+| Supabase access | `SupabaseService` uses the **service-role key** (bypasses RLS). `supabase-jwt.service.ts` mints the short-lived **bridge JWT** the browser uses for direct PostgREST |
+| Caching / rate limit | **Upstash Redis** (REST) for profile cache + identity-keyed rate-limit buckets; global `ThrottlerGuard` (300 req/min/IP) |
+| Email | `nodemailer` via Gmail SMTP (`GMAIL_USER`/`GMAIL_APP_PASSWORD`) — degrades gracefully if unset |
+| Validation | global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`) |
+
+### Auth & Data Flow (current)
+```
+Firebase Auth (Google popup / email+password)
+  → Firebase ID token
+  → NestJS /auth/firebase/exchange (or /auth/refresh)
+      → verifies token, resolves/links profile (auth_uid)
+      → mints a Supabase "bridge JWT" (HS256, sub=profiles.id, role='authenticated', TTL 3600s)
+  → web/src/lib/api.ts:
+      • apiFetch()    → backend /api/* with `Authorization: Bearer <Firebase ID token>` (auto-refresh on 401)
+      • publicFetch() → backend public GETs, no auth
+  → web/src/lib/supabase.ts injects the bridge JWT on the few remaining direct PostgREST/Storage calls
+```
 
 > **Responsive layout:** `MemberLayout` and `OrganizerLayout` are fully responsive. On mobile (< md): floating pill bottom nav + full-screen scroll container. On desktop (md+): fixed sidebar (bg-primary / bg-blue) + main content card. `<DesktopGuard />` is now a pass-through component — it renders its children directly. All UI still targets 390px-wide as the primary viewport.
 
@@ -413,6 +450,10 @@ Sign Up → "DO YOU HAVE AN ORGANIZER CODE?"
   → NO:  default to member role
          → route to /home (MemberLayout)
 ```
+> **Current state:** the `/organizer-code-gate` route is **temporarily disabled** in `router.tsx` (commented
+> out). After sign-up, users route to `/complete-profile` (set full_name / username / chapter — required for
+> OAuth and new accounts, gated by `MemberLayout`) then to `/home`. Organizers self-onboard via the in-app
+> upgrade flow below until the gate is re-enabled.
 
 ### In-App Organizer Upgrade (post sign-up)
 ```
@@ -447,39 +488,60 @@ CREATE POLICY "Users view own points" ON point_transactions
   FOR SELECT USING (auth.uid() = user_id);
 ```
 
+> **Security note (bridge-JWT era):** because the browser holds a bridge JWT and can hit PostgREST/RPCs
+> directly, **RLS policies and RPC grants — not the NestJS gateway — are the real authorization boundary**
+> for those paths. The June 2026 security audit (`SECURITY_AUDIT_2026-06-19.md`, kept local / gitignored)
+> found several policies weaker than the gateway they sit behind (e.g. `profiles` UPDATE lacking a
+> `WITH CHECK`, actor-id-trusting `SECURITY DEFINER` RPCs). Treat every policy/RPC as internet-exposed to
+> all authenticated users until "Phase 7" retires direct `supabase-js`. Harden RLS before relying on the
+> gateway alone.
+
 ---
 
 ## 6. APPLICATION SCREENS & ROUTES
 
 ### React Router (flat `createBrowserRouter` in `web/src/router.tsx`)
 
+> **Note:** event routes are keyed by human-readable **slug** (`/events/:slug`), not UUID
+> (migration `20260331_event_slugs`). Some routes are lazy-loaded (QR scanner, wheel, all admin pages).
+
 ```
+— Public (no layout, no auth) —
 /                        → SplashScreen
+/events/:slug            → EventDetail (publicly viewable without sign-in)
+/officer-resources/:category → OfficerResources (public)
+/wheel                   → WheelPage (lazy — public raffle "wheel of names")
+/wheel/:eventId          → WheelPage (lazy — per-event raffle, password-gated)
+
+— Auth flow (no layout) —
 /onboarding              → Onboarding (4-step swipeable, real chapter photos)
 /sign-in                 → SignIn
 /sign-up                 → SignUp
-/organizer-code-gate     → OrganizerCodeGate
+/interests               → InterestQuiz (interest selection)
+/oauth-callback          → OAuthCallback (Firebase Google redirect handler)
+/complete-profile        → CompleteProfile (set full_name / username / chapter — required for OAuth & new accounts)
 /forgot-password         → ForgotPassword
 /email-sent              → EmailSent (Turnstile captcha on resend)
 /reset-password          → ResetPassword
 /email-confirm           → EmailConfirm
-/terms-and-conditions    → TermsAndConditions (public, no auth)
-/privacy-policy          → PrivacyPolicy (public, no auth)
+/terms-and-conditions    → TermsAndConditions (public)
+/privacy-policy          → PrivacyPolicy (public)
+# /organizer-code-gate   → OrganizerCodeGate  (TEMPORARILY DISABLED — commented out in router.tsx)
 
 — MemberLayout (floating pill bottom nav on mobile, sidebar on desktop) —
 /home                    → Dashboard
-/events                  → EventsList
-/events/:id              → EventDetail
-/events/:id/register     → EventRegister
-/events/:id/pending      → EventPending
-/events/:id/ticket       → EventTicket
-/events/:id/volunteer    → EventVolunteer
+/events                  → EventsList (guest-browsable — see GUEST_PATHS)
+/events/:slug/register   → EventRegister
+/events/:slug/pending    → EventPending
+/events/:slug/ticket     → EventTicket
+/events/:slug/volunteer  → EventVolunteer
 /jobs                    → JobsList
 /jobs/:id                → JobDetail
 /points                  → Points
 /points/history          → PointsHistory
 /news/:id                → NewsDetail
 /rewards                 → Rewards
+/qr                      → MyQR (user-identity QR page)
 /profile                 → Profile
 /profile/edit            → ProfileEdit
 /notifications           → NotificationsInbox
@@ -500,6 +562,7 @@ CREATE POLICY "Users view own points" ON point_transactions
 /organizer/rewards/:id/edit          → RewardEdit
 /organizer/profile                   → OrgProfile
 /organizer/profile/edit              → OrgProfileEdit
+/organizer/profile/co-organizers     → OrgCoOrganizers
 /organizer/notifications             → NotificationsInbox (isOrganizer)
 /organizer/profile/notifications     → Notifications (shared)
 /organizer/profile/privacy           → Privacy (shared)
@@ -508,9 +571,11 @@ CREATE POLICY "Users view own points" ON point_transactions
 /admin                               → AdminDashboard (stats overview)
 /admin/users                         → AdminUsers (search, role assignment)
 /admin/org-codes                     → AdminOrgCodes (code generation + management)
+/admin/chapter-officers              → AdminChapterOfficers (officer email assignments)
 /admin/events                        → AdminEvents (all events across chapters)
 /admin/chapters                      → AdminChapters (chapter management)
-/admin/upgrades                      → AdminCMS (upgrade request review — labeled "CMS" in sidebar)
+/admin/upgrades                      → AdminCMS (upgrade review + missions — labeled "CMS" in sidebar)
+/admin/officer-resources             → AdminOfficerResources (officer resource library)
 /admin/kiosk                         → AdminKiosk (on-site check-in kiosk — super_admin only)
 
 — Catch-all —
@@ -785,7 +850,7 @@ Nav item:             whileTap={{ scale: 0.88 }}, type: 'spring', stiffness: 400
 <LegalModal />               inline bottom sheet for Terms & Conditions / Privacy Policy (used in SignUp, EventRegister)
 <Skeleton />                 loading skeleton placeholder
 <RouteErrorBoundary />       React error boundary wrapping all route trees — catches unhandled errors, renders a branded fallback with navigation options
-<KonamiCodeWrapper />        Easter egg wrapper (to be removed before production — see DEVCON_PLUS.md L1)
+<KonamiCodeWrapper />        Easter egg wrapper (to be removed before production — see Section 17 "Remaining")
 <KonamiModal />              Easter egg modal dialog
 ```
 
@@ -822,19 +887,35 @@ useVolunteerStore.ts      — member volunteer applications, loadApplications(),
                             applyToVolunteer()
 useOrgVolunteerStore.ts   — organizer volunteer queue, loadApplications(),
                             approveApplication(), rejectApplication()
+useMissionsStore.ts       — missions[], fetchMissions(), startMission(),
+                            submitMission(); subscribeToChanges() is a no-op
+useChaptersStore.ts       — chapters[], fetchChapters() (publicFetch)
 useReferralsStore.ts      — referrals[], referralCode, loadReferralData()
 useOrgAuthStore.ts        — organizer session state
 useThemeStore.ts          — themeId, setTheme(), activeTheme()
                             persisted to localStorage as 'devcon-theme'
 ```
 
-All stores use real Supabase queries via `web/src/lib/supabase.ts`.
+Stores fetch through the **NestJS gateway** via `apiFetch()` (authenticated, injects the Firebase ID
+token, auto-refresh on 401) or `publicFetch()` (public reads), both from `web/src/lib/api.ts`. Examples:
+`usePointsStore` → `/api/points/transactions` + `/api/points/summary`; `useEventsStore` → `/api/events`
+(read) + `/api/registrations` (write); `useRewardsStore` → `/api/rewards` + `/api/rewards/.../redeem`;
+`useMissionsStore` → `/api/missions`; `useChaptersStore` → `/api/chapters`. Direct `supabase-js` is used
+only for a few residual paths (password reset, the best-effort announcements realtime channel, two admin
+pages) and is being retired. `subscribeToChanges()` on events/points/rewards/missions is a **no-op**
+(polling-first — see Section 15 and the resilience rule).
 
 ---
 
 ## 11. LIB UTILITIES (`web/src/lib/`)
 
 ```
+api.ts               — apiFetch() (authenticated — injects Firebase ID token, auto-refresh
+                       on 401) and publicFetch() (public reads). The primary data path: all
+                       stores call the NestJS gateway through here. Base URL = VITE_API_URL.
+firebase.ts          — Firebase web app init (auth). Source of truth for sign-in.
+authBridge.ts        — exchanges the Firebase ID token at the gateway for the Supabase
+                       bridge JWT; setBridgeToken()/setupSupabaseSession() inject it
 animation.ts         — framer-motion variants: fadeUp, fade, slideUp, backdrop,
                        staggerContainer, cardItem, NAV_SPRING
 constants.ts         — VOLUNTEER_APPROVAL_POINTS (35), ROLE_DISPLAY_NAMES,
@@ -843,18 +924,17 @@ dates.ts             — formatDate.compact(), formatDate.full(), formatDate.tim
 eventTheme.ts        — getEventThemeStyle(devcon_category): inline CSS vars for
                        per-event theme overrides (scoped, does not mutate global state)
                        resolveEventTheme(devcon_category, fallbackTheme): hex values
-supabase.ts          — Supabase client with custom navigator.locks auth lock
-                       (no timeout) + realtime throttle at 10 events/sec
-                       + fetchWithTimeout (retry logic, 'reload' cache, abort support)
+supabase.ts          — Supabase client (legacy/bridge-JWT path only). Injects the bridge
+                       JWT as Bearer on direct PostgREST/Storage calls via fetchWithTimeout
+                       (retry logic, 'reload' cache, abort support)
 validation.ts        — form validation helpers (Zod schemas, reusable validators)
-useRecoverOnFocus.ts — recovery hook: refetches + resubscribes on visibilitychange,
-                       online event, and 90-second polling interval
 ```
 
 ### Hooks (`web/src/hooks/`)
 ```
-useRecoverOnFocus.ts — recovery hook: refetches + resubscribes on visibilitychange,
-                       online event, and 90-second polling interval
+useRecoverOnFocus.ts — recovery hook (polling-first): refetches data on visibilitychange
+                       (visible), window.online, and a 60-second interval. NO resubscribe —
+                       there are no always-on realtime channels to keep alive.
 useFormDraft.ts      — saves form state to localStorage (cross-tab, default) or
                        sessionStorage (within-tab, pass storage: 'session').
                        Used in: sign-in email, sign-up form, event create/edit,
@@ -866,6 +946,13 @@ useKonamiCode.ts     — Konami code easter egg detector (restricted to hq_admin
 ---
 
 ## 12. EDGE FUNCTIONS (`supabase/functions/`)
+
+> **Note:** the **NestJS gateway is now the primary backend.** QR generation/scan and rate limiting are
+> also exposed as `/api/qr/*` and the gateway's `RateLimitGuard`; several edge functions below are the
+> older path and/or are invoked server-side. Current functions in `supabase/functions/`:
+> `generate-qr-token`, `generate-user-qr`, `generate-pending-qr`, `award-points-on-scan`,
+> `approve-at-door`, `check-rate-limit`, `send-email`, `delete-user`.
+> Shared: `_shared/auth.ts`, `_shared/emailTemplates.ts`, `_shared/logger.ts`.
 
 ### `generate-qr-token`
 - Input: `{ registration_id: string }`
@@ -898,12 +985,26 @@ useKonamiCode.ts     — Konami code easter egg detector (restricted to hq_admin
 - Rate limit windows: login=300s, signup=3600s, username_check=60s, org_upgrade=90000s (25h), qr_generate=60s, qr_scan=60s
 - Fails open on RPC error (GoTrue + RLS are final backstops)
 
+### `send-email`
+- Sends transactional/branded HTML email via Resend (verification, reset, officer invite, event mail)
+- Templates in `_shared/emailTemplates.ts`. Also reachable from `EventRegister` / `EventRegistrants`
+- ⚠️ Security: gated only by caller-JWT identity + a 30/min rate limit (see audit M1 — server-render planned)
+
+### `delete-user`
+- Cascade-deletes a profile's data on account deletion
+
+### `generate-user-qr` / `generate-pending-qr`
+- `generate-user-qr` — user-identity token (kind `u`) for the `/qr` MyQR page
+- `generate-pending-qr` — pending door-approval token (kind `p`)
+
 ### `_shared/logger.ts`
 - Structured JSON logger used by all edge functions
 - Format: `{ level, event, ts, ...data }` → stdout → Supabase Dashboard Logs
 - Levels: `info`, `warn`, `error`
 
-> All functions share CORS origin allowlist: `localhost:5173`, `devconplus.vercel.app`, `devconplusbeta-v1.vercel.app`
+> CORS allowlists are origin-exact: production `https://devcon.plus`, staging `https://staging.devcon.plus`,
+> the NestJS origin, and `http://localhost:5173` for local dev. (Audit I2 notes a stale
+> `staging.cloud-engineer.dev` entry to prune.) The gateway's own `CORS_ORIGIN` is set via env.
 
 ---
 
@@ -948,17 +1049,48 @@ INSERT INTO rewards (name, points_cost, type, claim_method, is_coming_soon) VALU
 
 ## 14. ENVIRONMENT VARIABLES
 
-### `web/.env.local`
+### `web/.env.local` (frontend — see `web/.env.example`)
 ```env
+# Supabase (bridge-JWT path; anon key is public-by-design)
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
+# Auth
 VITE_GOOGLE_CLIENT_ID=
+# Cloudflare Turnstile (CAPTCHA on auth forms)
+VITE_TURNSTILE_SITE_KEY=
+# Firebase Auth (web app config — public identifiers, not secrets)
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_APP_ID=
+# App + SEO
 VITE_APP_ENV=development
+VITE_ALLOW_INDEXING=          # "true" only on production (devcon.plus); unset on staging → robots.txt Disallow
+# Backend gateway
+VITE_API_URL=http://localhost:8000
 ```
+> All `VITE_*` values are public-by-design (baked into the bundle). No secret-class value carries a `VITE_` prefix.
 
-### `supabase/.env`
+### `server/.env` (NestJS gateway — see `server/.env.example` / `.env.production.example`)
 ```env
-SUPABASE_SERVICE_ROLE_KEY=
+PORT=8000
+NODE_ENV=development
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=            # server-only — bypasses RLS, NEVER in the frontend bundle
+SUPABASE_JWT_SECRET=                  # signs the bridge JWT (HS256)
+FIREBASE_WEB_API_KEY=                 # Firebase REST sign-in
+FIREBASE_SERVICE_ACCOUNT_JSON=        # Firebase Admin SDK (minified JSON)
+GMAIL_USER=                           # nodemailer SMTP (optional — degrades gracefully)
+GMAIL_APP_PASSWORD=
+EMAIL_VERIFICATION_SECRET=            # HS256 secret for stateless email-verify links
+APP_URL=                             # frontend base URL (post-verify redirects)
+SERVER_URL=                          # backend base URL (verification links)
+QR_JWT_SECRET=                        # HMAC-SHA256 for QR JWTs (must match the edge function secret)
+TURNSTILE_SECRET_KEY=                 # server-side Turnstile verification (optional)
+CORS_ORIGIN=                          # comma-separated allowed origins (no trailing slash)
+UPSTASH_REDIS_REST_URL=               # cache + rate-limit buckets (optional)
+UPSTASH_REDIS_REST_TOKEN=
+CACHE_PREFIX=                         # isolates staging/prod on a shared Redis
 ```
 
 ---
@@ -975,7 +1107,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 - No dead navigation — every route renders something
 - `framer-motion` `whileTap={{ scale: 0.95 }}` on all tappable cards and buttons
 - Use `motion.div` + `variants={staggerContainer}` + `variants={cardItem}` for list sections
-- **Realtime recovery pattern:** data fetches + realtime resubscriptions must be triggered on `visibilitychange` (visible), `window.online`, and a **90-second polling interval**. The layout also fires debounced follow-up attempts at +5 s and +15 s after each trigger to handle stale connections. Use `useRecoverOnFocus` or mirror the pattern from `MemberLayout`/`OrganizerLayout`.
+- **Data through the gateway:** no direct `supabase.from(...)` / `supabase.rpc(...)` in components or stores — go through `apiFetch`/`publicFetch` (NestJS). Direct `supabase-js` is bridge-JWT legacy, being retired.
+- **Polling-first recovery (realtime is best-effort):** app correctness must NOT depend on a realtime channel. `recover()` (HTTP refetch) must run on `visibilitychange` (visible), `window.online`, a **60-second interval**, and auth-change, with debounced follow-ups at +5 s and +15 s. There is **no `resubscribe()`** — `subscribeToChanges` on events/points/rewards/missions is a no-op; only announcements use a best-effort channel that gives up on `CHANNEL_ERROR`/`TIMED_OUT`. Mirror `MemberLayout`/`OrganizerLayout`. See `.claude/rules/db-connection-resilience.md`.
 
 ---
 
@@ -998,9 +1131,33 @@ cd server && npm run build   # compile NestJS to dist/
 
 ---
 
-## 17. CURRENT BUILD STATUS (as of May 11, 2026)
+## 17. CURRENT BUILD STATUS (as of June 21, 2026)
 
-### Completed
+> **June 2026 — major changes since MVP 1.7 (most recent first):**
+> - [x] **Auth migrated to Firebase** (Google OAuth + email/password). Supabase Auth cut
+>       (`20260528_firebase_auth_foundation.sql`, `20260531_phase4_cut_supabase_auth.sql`). Profiles gain
+>       `auth_uid`; `profiles.id` FK dropped (`20260615`). `/oauth-callback` + `/complete-profile` flows added.
+> - [x] **NestJS gateway (`server/`) is the primary backend** — deployed to EC2 + nginx at
+>       `https://api.cloud-engineer.dev`. Frontend stores moved off direct Supabase to `apiFetch`/`publicFetch`.
+>       Auth = Firebase ID-token verify + `email_verified` + role/chapter/owner scoping; Upstash Redis cache + rate limits.
+> - [x] **Bridge-JWT era** — gateway mints a short-lived Supabase JWT so residual direct PostgREST calls keep
+>       working; "Phase 7" will retire `supabase-js` entirely.
+> - [x] **Realtime inverted to polling-first** (2026-06-14) — `subscribeToChanges` no-ops on events/points/
+>       rewards/missions; only a best-effort announcements channel remains; `recover()` polls every 60 s.
+>       (Free-tier 200-connection cap + WAL load.) See `db-connection-resilience.md`.
+> - [x] **Custom domain live** — production is `https://devcon.plus`; `devconplusbeta-v1.vercel.app` and
+>       `plus-beta.devcon.ph` 301-redirect to it. Staging `staging.devcon.plus` (noindex via `VITE_ALLOW_INDEXING`).
+> - [x] **Transactional email working** — NestJS email module (nodemailer/Gmail) + `send-email` edge fn +
+>       redesigned unified DEVCON+ brand email shell; officer-invite email on assignment; deliverability fixes.
+> - [x] **Public raffle "Wheel of Names"** — `/wheel` + `/wheel/:eventId` (password-gated, branded).
+> - [x] **Interest quiz** (`/interests`, `20260419_interest_quiz.sql`); **officer resources** library +
+>       **co-organizers**; **reward claim PIN workflow** (`20260414_reward_claim_*`); **missions** moved to
+>       its own schema (`20260406_missions.sql`).
+> - [x] **Security audit performed (June 19–20)** — see `SECURITY_AUDIT_2026-06-19.md` /
+>       `SECURITY_AUDIT_REMEDIATION_2026-06-20.md` (kept local, gitignored). Gateway authz is strong; open
+>       items are RLS/RPC hardening on the direct-PostgREST path (see Section 5 note + Remaining below).
+
+### Completed (MVP 1.x foundation — carried forward)
 - [x] Monorepo scaffold (web, server) — types in web/src/types/
 - [x] Tailwind + Geist font + design tokens + CSS custom property theming
 - [x] Program theme system (4 themes, CSS vars, persisted via Zustand)
@@ -1090,13 +1247,18 @@ cd server && npm run build   # compile NestJS to dist/
 - [x] OrganizerCodeGate navigation temporarily disabled (post-sign-up routing goes directly to member home)
 - [x] Organizer events list — chapter-scoped filtering so officers only see their chapter's events
 
-### Remaining / Ongoing
-- [ ] Remove test accounts + Easter eggs (KonamiCodeWrapper / KonamiModal) per L1 checklist
+### Remaining / Ongoing (as of June 21, 2026)
+- [ ] **Security audit remediation** (highest priority) — `profiles` UPDATE RLS needs `WITH CHECK` (C1, privilege-escalation), `redeem_reward`/`manual_checkin` RPCs trust an actor-id param (H1, BOLA), `events` UPDATE not chapter-scoped (M2), `rewards` writes admit officers (M3). Rotate prod `EMAIL_VERIFICATION_SECRET`; deploy `web/vercel.json` CSP `frame-ancestors`; bump `multer`/NestJS. **Verify C1/H1/M2/M3 against the live DB first** (migration drift). See `SECURITY_AUDIT_*.md`.
+- [ ] **Retire direct `supabase-js` ("Phase 7")** — route remaining reads/writes through the NestJS gateway, then scope/retire the bridge JWT. Collapses the audit's C1/H1/M2/M3 reachability.
+- [ ] Re-enable `OrganizerCodeGate` routing once the post-sign-up flow is confirmed stable
+- [ ] Remove test accounts + Easter eggs (KonamiCodeWrapper / KonamiModal)
 - [ ] PROMOTED badge audit (verify 2nd job + 2nd Tech news post are `is_promoted = true` in live data)
-- [ ] Google OAuth callback URL + Edge Function CORS update for production domain (`plus-beta.devcon.ph`)
-- [ ] Transactional email end-to-end test after DNS verification
-- [ ] Final QA on all flows on real mobile device (iPhone Safari + Android Chrome)
-- [ ] Re-enable OrganizerCodeGate routing once the gate flow is confirmed stable post sign-up refactor
+- [ ] Final QA on all flows on a real mobile device (iPhone Safari + Android Chrome)
+
+### Resolved since May (no longer blocking)
+- [x] Custom domain live (`devcon.plus`); beta + `plus-beta.devcon.ph` redirect to it
+- [x] Google OAuth on production domain (now Firebase OAuth) + Edge Function/gateway CORS for prod
+- [x] Transactional email working end-to-end (NestJS email + `send-email`; June email redesign)
 
 ---
 
@@ -1111,7 +1273,6 @@ Show `<ComingSoonModal />` if user reaches any of these:
 - External Jobs API integration
 - DEVCON TV / video content
 - Developer Spotlight CMS
-- Super Admin panel
 - Multi-language support
 
 
@@ -1155,22 +1316,30 @@ These features are **not in scope for MVP**. Do not build them before April 30. 
 
 **Why deferred:** High-complexity UX requiring gesture tuning, feed ranking logic, and new data structures. Post-KMP migration it would be built natively with Compose.
 
-### 19.4 App Persistence Debugging (Supabase WebSocket Resilience)
-**Goal:** Fully resolve the Supabase WebSocket connection drop that occurs when the app is backgrounded, the device sleeps, or the network switches.
+### 19.4 Realtime / Connection Model (RESOLVED by inversion — 2026-06-14)
+**What changed:** Rather than chase always-on Supabase Realtime resilience, the model was **inverted to
+polling-first** (June 14). Supabase Free tier caps Realtime at 200 concurrent connections (fails hard past
+it) and WAL→JSON replication was ~76% of DB execution time, so always-on subscriptions were removed.
 
-- Current state: Two-layer recovery pattern implemented (visibilitychange + online + 5-min poll) — hardening commits `2295df8`, `dd85baa`. Issue persists under some conditions.
-- Phase 2 work: audit channel lifecycle on mobile Safari (aggressive background tab kill), add exponential backoff on reconnect, add a visible "Reconnecting..." banner when channels are CLOSED, write automated tests for reconnect scenarios
-- Key files: `MemberLayout.tsx`, `OrganizerLayout.tsx`, `useEventsStore.ts`, `useRewardsStore.ts`, `useNotificationsStore.ts`
-- See also: `.claude/rules/db-connection-resilience.md` for the full resilience spec
-
-**Why deferred:** The current recovery pattern handles the common cases. Full native-level resilience is a Phase 2 / KMP migration concern.
+- Current state: `recover()` (HTTP refetch) on `visibilitychange` / `online` / 60 s / auth-change, with
+  +5 s/+15 s follow-ups. `subscribeToChanges` on events/points/rewards/missions are no-ops; only a
+  **best-effort** announcements channel remains (gives up on `CHANNEL_ERROR`/`TIMED_OUT`).
+- The `supabase_realtime` publication is pruned to `event_registrations` + `event_announcements` only.
+- To re-enable always-on realtime (e.g. after a Supabase Pro upgrade lifts the 200-connection cap), restore
+  the handlers from git history and re-add tables to the publication.
+- Key files: `MemberLayout.tsx`, `OrganizerLayout.tsx`, `useEventsStore.ts`, `useNotificationsStore.ts`.
+- See `.claude/rules/db-connection-resilience.md` for the full (inverted) spec.
 
 ---
 
-## 📁 Project-Specific Instructions
+## 📁 Related Documents
 
-This repository includes a separate instruction file for the **Devcon Plus Beta V3** project.
+- [`README.md`](../README.md) — developer setup guide (install, run, build, deploy, env)
+- [`PRD.md`](../PRD.md) — product requirements + developer handover
+- [`.claude/context/HANDOVER.md`](./context/HANDOVER.md) — full project transition documentation
+- [`.claude/rules/db-connection-resilience.md`](./rules/db-connection-resilience.md) — polling-first realtime rule (non-negotiable)
+- [`.claude/rules/vercel-build-safety.md`](./rules/vercel-build-safety.md) — TypeScript flags that fail the Vercel build
+- [`docs/auth/`](../docs/auth/) — Firebase auth + bridge-JWT architecture, flows, edge-function auth, troubleshooting
 
-> 📄 See [`DEVCON_PLUS.md`](./DEVCON_PLUS.md) for the full project context including team setup, weekly roadmap, feature checklist, security guidelines, and conventions.
-
-Read it at the start of any session involving this project.
+> **Note:** earlier versions referenced a `DEVCON_PLUS.md` companion file; it does not exist in this repo. The
+> content it described (team setup, roadmap, feature checklist) now lives in `PRD.md` and `HANDOVER.md`.

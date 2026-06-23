@@ -1,12 +1,17 @@
 # DEVCON+ — Developer Setup Guide
 
-> **Last Updated:** April 21, 2026 · **Version:** MVP 1.6
+> **Last Updated:** June 21, 2026 · **Version:** MVP 1.8
 > **Tagline:** Sync. Support. Succeed.
 > Platform for DEVCON Philippines — 11 chapters, 60,000+ members.
 >
-> **Live app:** https://devconplusbeta-v1.vercel.app
+> **Live app (production):** https://devcon.plus  (beta + `plus-beta.devcon.ph` 301-redirect here; staging: `staging.devcon.plus`)
+> **Backend API:** https://api.cloud-engineer.dev  (NestJS gateway — self-hosted EC2 + nginx)
 > **Repo:** https://github.com/rocketwolf98/devconplusClaudeCode
-> **Deadline:** April 30, 2026 — Cohort 3 Graduation
+
+> **⚠️ Architecture note (June 2026):** This is now a **two-app** repo — a React frontend in `web/` **and** a
+> NestJS gateway in `server/`. Auth is **Firebase** (Google + email/password), the frontend talks to the
+> gateway over HTTP (`apiFetch`/`publicFetch`), and Realtime is best-effort (polling-first). Older docs
+> describing an `apps/member/` Turbo monorepo, `--legacy-peer-deps`, or pure-Supabase auth are out of date.
 
 ---
 
@@ -26,6 +31,11 @@ If you are a new AI instance picking up this codebase, read these files **in ord
 | 5 | [`PRD.md`](PRD.md) | Product context, user stories, KPIs. Read before touching UI. |
 
 **Facts every AI session must have:**
+- The repo is **two apps**: `web/` (React + Vite frontend) and `server/` (NestJS gateway). No root workspace/Turbo.
+- **Auth is Firebase** (Google OAuth + email/password). Supabase Auth was cut. No Apple Sign-In.
+- Data goes through the **NestJS gateway** via `apiFetch`/`publicFetch` (`web/src/lib/api.ts`). Don't add direct `supabase.from(...)` calls — direct `supabase-js` survives only on a legacy bridge-JWT path being retired.
+- **Realtime is best-effort / polling-first.** `recover()` refetches on visibility/online/60 s; `subscribeToChanges` is a no-op for most stores. See `.claude/rules/db-connection-resilience.md`.
+- Install with **plain `npm install`** per app — React 19 is pinned via `overrides`. `--legacy-peer-deps` is no longer needed.
 - Font is **Proxima Nova** (self-hosted woff2). Tailwind: `font-proxima` / `font-sans`. Not Geist, not Inter.
 - Icons are **`solar-icon-set` outline variant only**. Never `lucide-react`, never emoji in JSX.
 - Color system is CSS-custom-property driven. Always `text-primary`/`bg-primary`. Never hardcode hex for primary.
@@ -50,56 +60,71 @@ If you are a new AI instance picking up this codebase, read these files **in ord
 
 ## 1. Clone and Install
 
+Each app installs independently — there is no root `package.json`/workspace.
+
 ```bash
 git clone https://github.com/rocketwolf98/devconplusClaudeCode
 cd devconplusClaudeCode
 
-npm install --legacy-peer-deps
+cd web && npm install        # frontend (React 19 pinned via `overrides` — no flags needed)
+cd ../server && npm install  # backend gateway (NestJS)
 ```
 
-> `--legacy-peer-deps` is **required** — React 19 peer dependency conflict. Plain `npm install` will fail.
+> Plain `npm install` works — `web/package.json` uses `overrides` to resolve the React 19 peer graph.
+> `--legacy-peer-deps` is **no longer needed**.
 
 ---
 
 ## 2. Environment Setup
 
-The app connects to a live Supabase project. You need the `.env.local` file — **ask the outgoing team lead** (Kenshin) to share it.
+You need two env files (both gitignored — never commit). Ask the team lead for the values.
 
-**`apps/member/.env.local`** (gitignored — never commit):
+**`web/.env.local`** (frontend — see [`web/.env.example`](web/.env.example)):
 
 ```env
+# Supabase (bridge-JWT path; anon key is public-by-design)
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
+# Auth
 VITE_GOOGLE_CLIENT_ID=<gcp-oauth-client-id>
+VITE_TURNSTILE_SITE_KEY=<turnstile-site-key>
+# Firebase Auth (web config — public identifiers, not secrets)
+VITE_FIREBASE_API_KEY=<firebase-web-api-key>
+VITE_FIREBASE_AUTH_DOMAIN=<project>.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=<firebase-project-id>
+VITE_FIREBASE_APP_ID=<firebase-app-id>
+# App + backend
 VITE_APP_ENV=development
-VITE_SITE_URL=http://localhost:5173
+VITE_ALLOW_INDEXING=          # "true" only on production; unset on staging → robots.txt Disallow
+VITE_API_URL=http://localhost:8000
 ```
 
-**`supabase/.env`** (gitignored — for edge function deploys):
+**`server/.env`** (NestJS gateway — see [`server/.env.example`](server/.env.example)): includes
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `FIREBASE_WEB_API_KEY`,
+`FIREBASE_SERVICE_ACCOUNT_JSON`, `GMAIL_USER`/`GMAIL_APP_PASSWORD`, `EMAIL_VERIFICATION_SECRET`,
+`QR_JWT_SECRET`, `CORS_ORIGIN`, `APP_URL`/`SERVER_URL`, and optional Upstash Redis keys.
 
-```env
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-```
-
-> Without `.env.local`, every Supabase call (auth, data, realtime) will fail with a network error.
+> Without `web/.env.local`, the app can't reach the backend or Firebase and you'll get a blank screen / auth errors.
 
 ---
 
 ## 3. Running the App
 
+Run the two apps in separate terminals:
+
 ```bash
-npm run dev:member
+# Terminal 1 — frontend (Vite, port 5173)
+cd web && npm run dev
+
+# Terminal 2 — backend gateway (NestJS, port 8000)
+cd server && npm run dev
 ```
 
-Opens at [http://localhost:5173](http://localhost:5173).
+Frontend opens at [http://localhost:5173](http://localhost:5173); the API runs at `http://localhost:8000`
+(set `VITE_API_URL` to match). For frontend-only work you can point `VITE_API_URL` at the deployed staging
+API (`https://api.cloud-engineer.dev`) and skip running `server/` locally.
 
 Open Chrome DevTools → Toggle Device Toolbar (`Ctrl+Shift+M`) → set width to **390px**. The app is designed for 390px mobile. Desktop gets a sidebar layout automatically at `md` breakpoint.
-
-### Run all apps via Turbo
-
-```bash
-npm run dev
-```
 
 ---
 
@@ -113,7 +138,7 @@ Sign up at `/sign-up` with any email + password. Creates a real Supabase account
 
 ### Organizer flow
 
-From sign-up, enter an organizer code when prompted. Ask the team lead for a valid code from the `organizer_codes` table. Routes you to `/organizer`.
+The sign-up organizer-code gate is **temporarily disabled**. To become an organizer, request an upgrade in-app (Profile → Request Organizer Access) with a valid code from the `organizer_codes` table, or have an admin set your `role`. Officers/admins are routed to `/organizer`.
 
 ### Admin flow (`/admin`)
 
@@ -125,11 +150,11 @@ Requires `hq_admin` or `super_admin` role. Either use an existing admin account 
 
 ## 5. App Structure
 
-This monorepo contains three distinct user experiences in **one React app** (`apps/member/`):
+The frontend (`web/`) contains three distinct user experiences in **one React app**, backed by the NestJS gateway (`server/`):
 
 | Layout | Route Prefix | Guard | Nav Style |
 |--------|-------------|-------|-----------|
-| `MemberLayout` | `/home`, `/events/*`, `/jobs/*`, `/points/*`, `/rewards`, `/profile/*` | Auth | Floating pill nav (mobile) + primary sidebar (desktop) |
+| `MemberLayout` | `/home`, `/events/*`, `/jobs/*`, `/points/*`, `/rewards`, `/qr`, `/profile/*` | Auth | Floating pill nav (mobile) + primary sidebar (desktop) |
 | `OrganizerLayout` | `/organizer/*` | Role: officer/admin | Floating pill nav (mobile) + blue sidebar (desktop) |
 | `AdminLayout` | `/admin/*` | Role: hq_admin/super_admin | Desktop-only sidebar |
 
@@ -139,25 +164,30 @@ This monorepo contains three distinct user experiences in **one React app** (`ap
 
 ```
 devcon-plus/
-├── apps/
-│   ├── member/
-│   │   ├── src/
-│   │   │   ├── router.tsx          All routes — the map of the app
-│   │   │   ├── components/         MemberLayout, OrganizerLayout, AdminLayout, shared UI
-│   │   │   ├── pages/              member/, organizer/, admin/, auth/
-│   │   │   ├── stores/             Zustand stores (one per domain)
-│   │   │   ├── lib/                animation.ts, supabase.ts, eventTheme.ts, constants.ts
-│   │   │   └── hooks/              useFormDraft.ts, useRecoverOnFocus.ts
-│   │   └── tailwind.config.js      Design tokens + MD3 type scale
-│   └── landing/                    Static landing page
-├── packages/
-│   └── supabase/
-│       └── src/database.types.ts   Generated DB types — regenerate after schema changes
+├── web/                            React + Vite frontend (@devcon-plus/web)
+│   ├── src/
+│   │   ├── router.tsx              All routes — the map of the app
+│   │   ├── components/             MemberLayout, OrganizerLayout, AdminLayout, shared UI
+│   │   ├── pages/                  member/, organizer/, admin/, auth/
+│   │   ├── stores/                 Zustand stores (one per domain) — fetch via lib/api.ts
+│   │   ├── lib/                    api.ts (apiFetch/publicFetch), firebase.ts, authBridge.ts,
+│   │   │                           supabase.ts (bridge-JWT only), animation.ts, eventTheme.ts
+│   │   ├── hooks/                  useFormDraft.ts, useRecoverOnFocus.ts (polling recovery)
+│   │   └── types/                  types.ts + generated database.types.ts (@devcon-plus/supabase alias)
+│   ├── tailwind.config.js          Design tokens + MD3 type scale
+│   ├── vite.config.ts              Build + robots.txt generator (VITE_ALLOW_INDEXING)
+│   └── vercel.json                 Deploy config + security headers (CSP/HSTS/...)
+├── server/                         NestJS gateway (@devcon-plus/server) → EC2 + nginx
+│   └── src/                        modules: auth, users, events, points, registrations, rewards,
+│                                   missions, volunteers, qr, upgrades, admin, news, jobs,
+│                                   chapters, interests, announcements, referrals, email
 ├── supabase/
 │   ├── functions/                  Edge Functions (Deno)
 │   └── migrations/                 SQL migrations (apply in order)
-└── package.json                    Workspace root — framer-motion lives here
+└── docs/                           auth/* (Firebase + bridge JWT), migration-plans/*
 ```
+
+> `apps/` and `packages/` may exist locally but are **untracked leftovers** from the old Turbo layout — ignore them.
 
 ---
 
@@ -201,7 +231,7 @@ Two-tier type system — both are valid, MD3 preferred for new work:
 
 ### Animation
 
-All framer-motion variants live in [`apps/member/src/lib/animation.ts`](apps/member/src/lib/animation.ts). **Never redefine inline.**
+All framer-motion variants live in [`web/src/lib/animation.ts`](web/src/lib/animation.ts). **Never redefine inline.**
 
 ```ts
 import { fadeUp, staggerContainer, cardItem } from '@/lib/animation'
@@ -245,8 +275,8 @@ These rules are enforced by CLAUDE.md Section 0. Violating them breaks the produ
 6. **Forms** use React Hook Form + Zod — no uncontrolled inputs
 7. **Primary color** — always `text-primary` / `bg-primary`, never hardcode hex for primary
 8. **Icons** — `solar-icon-set` outline variant only, no emoji in JSX
-9. **Real Supabase client only** — `MOCK_*` exports in `packages/supabase/` are reference data, never import in production components
-10. **Two-layer Realtime recovery** — any new layout/store with Supabase Realtime must implement `recover()` + `resubscribe()` on `visibilitychange`, `online`, and 5-min interval
+9. **Data through the NestJS gateway** — use `apiFetch`/`publicFetch` (`web/src/lib/api.ts`); no new direct `supabase.from(...)`/`supabase.rpc(...)` in components or stores (direct `supabase-js` is legacy bridge-JWT, being retired). `MOCK_*` exports in `web/src/types/mock/` are reference-only — never import in production
+10. **Polling-first recovery** — app correctness must not depend on Realtime. `recover()` (HTTP refetch) runs on `visibilitychange`, `online`, a 60-second interval, and auth-change; there is **no `resubscribe()`** and `subscribeToChanges` is a no-op for most stores. Realtime is best-effort only. See `.claude/rules/db-connection-resilience.md`
 11. **Use Gemini CLI for Figma MCP design tasks** — do not guess or approximate Figma specs in Claude Code; use Gemini CLI to inspect frames and extract tokens directly from the source file
 
 ---
@@ -254,16 +284,16 @@ These rules are enforced by CLAUDE.md Section 0. Violating them breaks the produ
 ## 8. Build + Typecheck
 
 ```bash
-# TypeScript check across all packages (must pass before commit)
-npm run typecheck
+# Frontend (web/) — mirrors Vercel's exact build command
+cd web && npm run typecheck   # tsc -b --noEmit
+cd web && npm run build       # tsc -b && vite build  → web/dist/
 
-# Production build — mirrors Vercel's exact build command
-npm run build
+# Backend (server/)
+cd server && npm run typecheck # tsc --noEmit
+cd server && npm run build     # nest build → server/dist/
 ```
 
-Output: `apps/member/dist/`
-
-> **Critical:** The Vite dev server is lenient with TypeScript. `tsc -b` enforces `noUnusedLocals`, `noUnusedParameters`, and `strictNullChecks`. Always run `typecheck` before pushing — Vercel exits with code 2 on any TS error, aborting the deploy.
+> **Critical:** The Vite dev server is lenient with TypeScript. `tsc -b` enforces `noUnusedLocals`, `noUnusedParameters`, and `strictNullChecks`. Always run `typecheck` before pushing — Vercel exits with code 2 on any TS error, aborting the frontend deploy.
 
 ---
 
@@ -272,11 +302,10 @@ Output: `apps/member/dist/`
 ```bash
 # Regenerate TypeScript types from the live DB
 supabase gen types typescript --project-id <project-ref> \
-  > packages/supabase/src/database.types.ts
+  > web/src/types/database.types.ts
 
 # Verify downstream consumers still build
-npm run typecheck
-npm run build
+cd web && npm run typecheck && npm run build
 ```
 
 ---
@@ -285,27 +314,36 @@ npm run build
 
 ```bash
 supabase functions deploy generate-qr-token
+supabase functions deploy generate-user-qr
+supabase functions deploy generate-pending-qr
 supabase functions deploy award-points-on-scan
 supabase functions deploy approve-at-door
 supabase functions deploy check-rate-limit
-supabase functions deploy generate-user-qr
+supabase functions deploy send-email
+supabase functions deploy delete-user
 
-# After adding a new domain to the CORS allowlist in _shared/cors.ts,
-# ALL functions must be redeployed.
+# After changing the CORS allowlist (in each function / _shared), redeploy ALL functions.
 ```
+
+> Most data now flows through the NestJS gateway (`/api/*`); the QR generate/scan paths are also exposed at
+> `/api/qr/*`. The edge functions above remain for QR, email, rate-limit, and account-deletion.
 
 ---
 
-## 11. Deployment (Vercel)
+## 11. Deployment
 
-Every push to `master` triggers an automatic Vercel production deploy.
+**Frontend (Vercel).** Every push to `master` triggers an automatic production deploy of `web/`.
 
 | Project | Root Directory | Build Command | Output |
 |---------|---------------|---------------|--------|
-| Member app | `apps/member` | `tsc -b && vite build` | `dist` |
-| Landing | `apps/landing` | *(none)* | `.` |
+| Web app | `web` | `tsc -b && vite build` | `dist` |
 
-Env vars are set in Vercel project Settings → Environment Variables.
+Env vars are set in Vercel project Settings → Environment Variables. Production sets `VITE_ALLOW_INDEXING=true`
+(emits `robots.txt` `Allow: /`); staging leaves it unset (`Disallow: /`).
+
+**Backend (`server/`).** The NestJS gateway is **self-hosted on EC2 behind nginx** at
+`https://api.cloud-engineer.dev` (not Vercel). Deploy/restart the Node process there and set the
+`server/.env` values in that environment. nginx terminates TLS and sets edge security headers.
 
 ---
 
@@ -313,14 +351,14 @@ Env vars are set in Vercel project Settings → Environment Variables.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `npm install` fails | React 19 peer conflict | Always use `--legacy-peer-deps` |
-| Blank screen / auth errors | Missing `.env.local` | Get credentials from team lead |
+| `npm install` peer warnings | React 19 peer graph | Harmless — `web/package.json` `overrides` pins it. Don't add `--legacy-peer-deps` |
+| Blank screen / auth errors | Missing `web/.env.local` or backend unreachable | Get credentials from team lead; check `VITE_API_URL` points at a running gateway |
 | Organizer pages redirect away | Account needs officer role | Enter organizer code at sign-up, or ask team lead to update `role` in `profiles` |
 | Admin pages redirect away | Account needs `hq_admin` role | Ask team lead to update `role` in Supabase |
-| TypeScript errors after pull | New package added | Re-run `npm install --legacy-peer-deps` |
+| TypeScript errors after pull | New package added | Re-run `npm install` in the affected app (`web/` and/or `server/`) |
 | QR scanner "camera not available" | Requires HTTPS or localhost | Use `localhost:5173` — works on Chrome desktop and Android |
 | Vercel build exits code 2 | TypeScript error (unused import, param, etc.) | Run `npm run typecheck` locally and fix before pushing |
-| Stale UI after device sleep | Realtime channel died | Check that `resubscribe()` is called in the layout — see `.claude/rules/db-connection-resilience.md` |
+| Stale UI after device sleep | Recovery poll didn't fire | Check `recover()` runs on visibility/online/60 s in the layout — see `.claude/rules/db-connection-resilience.md` (polling-first; realtime is best-effort) |
 | `total_points` TS error | Field was renamed | Use `spendable_points` for redeemable balance, `lifetime_points` for tiers |
 | CSS primary color wrong | Theme not applied | Check `useThemeStore` is mounted; verify `MemberLayout` injects CSS vars on mount |
 | Cloudflare DNS blocking SSL | Orange-cloud proxy enabled | Set DNS records to "DNS only" (grey cloud) for Vercel CNAME + Resend DKIM |
@@ -355,6 +393,7 @@ Env vars are set in Vercel project Settings → Environment Variables.
 | Vercel build safety | [`.claude/rules/vercel-build-safety.md`](.claude/rules/vercel-build-safety.md) | TS flags that cause deploy failures |
 | Agentic workflows | [`.claude/context/agentic-workflows.md`](.claude/context/agentic-workflows.md) | Claude Code workflows + Skill 6 (Figma MCP design via Gemini CLI) |
 | Context anchor | [`.claude/context/memory.md`](.claude/context/memory.md) | Decision log, architecture evolution, state of play |
+| Auth architecture | [`docs/auth/`](docs/auth/) | Firebase auth, the Supabase bridge JWT, flows, edge-function auth, troubleshooting |
 
 ---
 
@@ -438,5 +477,5 @@ To add the local Figma MCP server or Vercel MCP, append to [`.mcp.json`](.mcp.js
 
 ---
 
-*DEVCON Philippines · React 19 + Vite 7 · Supabase · Deployed on Vercel*
-*MVP 1.6 · Last updated April 21, 2026 · Deadline April 30, 2026 — Cohort 3 Graduation Showcase*
+*DEVCON Philippines · React 19 + Vite 7 (web/) · NestJS 10 (server/) · Firebase Auth · Supabase · Vercel + EC2*
+*MVP 1.8 · Last updated June 21, 2026 · Live at https://devcon.plus*

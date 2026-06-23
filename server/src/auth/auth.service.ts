@@ -168,6 +168,7 @@ export class AuthService {
     chapter_id?: string;
     school_or_company?: string;
     captchaToken?: string;
+    referral_code?: string;
   }): Promise<{ message: string }> {
     // Bot gate first — reject before any Firebase/DB work.
     await this.verifyTurnstile(input.captchaToken);
@@ -205,9 +206,11 @@ export class AuthService {
     // Create the profile row immediately with is_email_verified=false.
     // The modified trg_award_signup_bonus skips the bonus when is_email_verified=false;
     // award_signup_bonus_for_verified() handles it after email confirmation.
+    const profileId = randomUUID();
+    let profileCreated = false;
     try {
       await this.supabase.createProfileWithBonus({
-        id: randomUUID(),
+        id: profileId,
         email,
         full_name: input.full_name,
         auth_uid: createdUid,
@@ -216,11 +219,19 @@ export class AuthService {
         school_or_company: input.school_or_company ?? null,
         is_email_verified: false,
       });
+      profileCreated = true;
     } catch (err) {
       // Non-fatal row creation failure — user can still verify email and sign in,
       // at which point resolveProfile() will create the row via createProfileWithBonus.
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`createProfileWithBonus failed at signup for ${email}: ${msg}`);
+    }
+
+    // Confirm a referral server-side (best-effort) now that the referred profile exists.
+    // Replaces the former direct supabase.rpc('confirm_referral') browser call, so the RPC
+    // can be locked down to service_role. Skipped if the profile row wasn't created.
+    if (profileCreated && input.referral_code) {
+      await this.supabase.confirmReferral(input.referral_code, profileId);
     }
 
     // Generate a stateless verification JWT and send via Gmail SMTP.

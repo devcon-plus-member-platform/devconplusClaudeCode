@@ -84,6 +84,7 @@ export class AuthController {
       chapter_id: body.chapter_id,
       school_or_company: body.school_or_company,
       captchaToken: body.captchaToken,
+      referral_code: body.referral_code,
     });
   }
 
@@ -101,7 +102,10 @@ export class AuthController {
   @Post('email/signin')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RateLimitGuard)
-  @RateLimit('login')
+  // Key by email, not IP: at a venue hundreds of attendees share one wifi/CGNAT IP,
+  // so an IP-keyed login bucket would block everyone after a handful of sign-ins.
+  // Per-account keying still caps brute-force on any single account (5 / 5 min).
+  @RateLimit('login', { keyFrom: 'body.email' })
   signin(@Body() body: EmailSigninDto): Promise<BridgeSession> {
     return this.auth.emailSignin({
       email: body.email,
