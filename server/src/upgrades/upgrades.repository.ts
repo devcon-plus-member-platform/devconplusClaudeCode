@@ -156,7 +156,7 @@ export class UpgradesRepository extends BaseRepository {
   async approveRequest(
     requestId: string,
     userId: string,
-    chapterId: string,
+    chapterId: string | null,
     reviewerId: string,
     role: string,
   ): Promise<void> {

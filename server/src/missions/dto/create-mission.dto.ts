@@ -21,6 +21,10 @@ export class CreateMissionDto {
   submission_type!: 'proof_upload' | 'link' | 'self_attest';
 
   @IsOptional()
+  @IsEnum(['multi', 'single_winner'])
+  completion_mode?: 'multi' | 'single_winner';
+
+  @IsOptional()
   @IsString()
   @MaxLength(500)
   github_url?: string | null;

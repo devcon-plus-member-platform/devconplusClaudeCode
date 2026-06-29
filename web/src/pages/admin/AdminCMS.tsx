@@ -853,6 +853,13 @@ const SUBMISSION_TYPE_LABELS: Record<MissionSubmissionType, string> = {
   submit_for_approval: 'Submit for Approval (needs review)',
 }
 
+type MissionCompletionMode = 'multi' | 'single_winner'
+
+const COMPLETION_MODE_LABELS: Record<MissionCompletionMode, string> = {
+  multi:         'Multi-participant (everyone earns)',
+  single_winner: 'Single winner (bounty — locks on first approval)',
+}
+
 interface MissionRow {
   id: string
   title: string
@@ -860,6 +867,7 @@ interface MissionRow {
   xp_reward: number
   difficulty: 'easy' | 'medium' | 'hard'
   status: 'available' | 'claimed'
+  completion_mode: MissionCompletionMode
   submission_type: MissionSubmissionType
   github_url: string | null
   is_active: boolean
@@ -884,6 +892,7 @@ interface MissionForm {
   description: string
   xp_reward: string
   difficulty: 'easy' | 'medium' | 'hard'
+  completion_mode: MissionCompletionMode
   submission_type: MissionSubmissionType
   github_url: string
   is_active: boolean
@@ -894,6 +903,7 @@ const defaultMissionForm = (): MissionForm => ({
   description: '',
   xp_reward: '100',
   difficulty: 'medium',
+  completion_mode: 'multi',
   submission_type: 'proof_upload',
   github_url: '',
   is_active: true,
@@ -967,6 +977,7 @@ function MissionsTab() {
       description:     m.description ?? '',
       xp_reward:       String(m.xp_reward),
       difficulty:      m.difficulty,
+      completion_mode: m.completion_mode ?? 'multi',
       submission_type: m.submission_type ?? 'proof_upload',
       github_url:      m.github_url ?? '',
       is_active:       m.is_active,
@@ -982,6 +993,7 @@ function MissionsTab() {
       description:     form.description.trim() || null,
       xp_reward:       parseInt(form.xp_reward, 10) || 100,
       difficulty:      form.difficulty,
+      completion_mode: form.completion_mode,
       submission_type: form.submission_type,
       github_url:      form.github_url.trim() || null,
       is_active:       form.is_active,
@@ -1225,6 +1237,14 @@ function MissionsTab() {
             <select className={INPUT_CLS} value={form.submission_type} onChange={f('submission_type')}>
               {(Object.keys(SUBMISSION_TYPE_LABELS) as MissionSubmissionType[]).map((t) => (
                 <option key={t} value={t}>{SUBMISSION_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>Completion Mode</label>
+            <select className={INPUT_CLS} value={form.completion_mode} onChange={f('completion_mode')}>
+              {(Object.keys(COMPLETION_MODE_LABELS) as MissionCompletionMode[]).map((m) => (
+                <option key={m} value={m}>{COMPLETION_MODE_LABELS[m]}</option>
               ))}
             </select>
           </div>

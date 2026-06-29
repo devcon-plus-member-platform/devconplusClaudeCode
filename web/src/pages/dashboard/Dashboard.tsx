@@ -171,7 +171,8 @@ useEffect(() => {
     .slice(0, 3)
   const recentTxns = transactions.slice(0, 4)
 
-  const unclaimedMissions = missions.filter(m => m.status !== 'claimed')
+  // Only single-winner bounties disappear once claimed; multi-participant missions stay open.
+  const unclaimedMissions = missions.filter(m => !(m.completion_mode === 'single_winner' && m.status === 'claimed'))
 
   const handleStartMission = async (missionId: string, alreadyJoined: boolean) => {
     if (!alreadyJoined) {
