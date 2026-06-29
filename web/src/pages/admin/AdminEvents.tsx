@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline } from 'solar-icon-set'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -57,7 +57,7 @@ interface AttendanceExportRow extends Record<string, string | number | boolean |
 
 const eventSchema = z
   .object({
-    chapter_id: z.string(),
+    chapter_id: z.string().min(1, 'Chapter is required'),
     title: z.string().min(3, 'Title must be at least 3 characters'),
     description: z.string().min(10, 'Description must be at least 10 characters'),
     location: z.string().min(2, 'Location is required'),
@@ -72,7 +72,7 @@ const eventSchema = z
       'social',
       'networking',
       'code_camp',
-    ]),
+    ], { errorMap: () => ({ message: 'Please select a category' }) }),
     is_external: z.boolean().default(false),
     external_registration_url: z
       .string()
@@ -82,7 +82,10 @@ const eventSchema = z
     url_is_tba: z.boolean().default(false),
     visibility: z.enum(['public', 'unlisted', 'draft']).default('public'),
     is_free: z.boolean().default(true),
-    ticket_price_php: z.number({ coerce: true }).int().min(0).default(0),
+    ticket_price_php: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
+      z.number().int().positive('Price must be at least ₱1').optional()
+    ),
     capacity: z.preprocess(
       (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
       z.number().int().positive().optional()
@@ -94,11 +97,20 @@ const eventSchema = z
     requires_approval: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    // End date is optional; when provided it must be after the start date.
     if (data.end_date && data.event_date && data.end_date <= data.event_date) {
       ctx.addIssue({
         code: 'custom',
         path: ['end_date'],
-        message: 'End time must be after start time',
+        message: 'End date must be after the start date',
+      })
+    }
+    // Paid events must carry a price of at least ₱1.
+    if (!data.is_external && !data.is_free && (data.ticket_price_php === undefined || data.ticket_price_php < 1)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ticket_price_php'],
+        message: 'Price must be at least ₱1',
       })
     }
     if (data.is_external) {
@@ -240,6 +252,18 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
+  // ── Scroll affordance ────────────────────────────────────────────────────
+  // The panel is long; show a fading gradient + chevron at the bottom whenever
+  // there is more content below the fold, hiding it once scrolled to the end.
+  const scrollRef = useRef<HTMLFormElement>(null)
+  const [showScrollHint, setShowScrollHint] = useState(false)
+
+  const updateScrollHint = () => {
+    const el = scrollRef.current
+    if (!el) return
+    setShowScrollHint(el.scrollHeight - el.scrollTop - el.clientHeight > 8)
+  }
+
   // ── Custom form fields state ─────────────────────────────────────────────────
   const [customFields, setCustomFields] = useState<CustomFormField[]>(() => {
     const raw = event?.custom_form_schema
@@ -251,6 +275,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(event?.cover_image_url ?? null)
+  const [isDraggingCover, setIsDraggingCover] = useState(false)
   const coverObjectUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -292,9 +317,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
   const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const processCoverFile = (file: File) => {
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setCoverUploadError('Only JPG, PNG, or WebP images are allowed.')
       return
@@ -309,6 +332,18 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     const url = URL.createObjectURL(file)
     coverObjectUrlRef.current = url
     setCoverPreview(url)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) processCoverFile(file)
+  }
+
+  const handleCoverDrop = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    setIsDraggingCover(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) processCoverFile(file)
   }
 
   const removeCover = () => {
@@ -345,7 +380,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           url_is_tba:        normalizeExternalUrl(event.external_registration_url) === '',
           visibility:        event.visibility ?? 'public',
           is_free:           event.is_free ?? true,
-          ticket_price_php:  event.ticket_price_php ?? 0,
+          ticket_price_php:  event.ticket_price_php || undefined,
           capacity:          event.capacity ?? undefined,
           points_value:      event.points_value ?? 200,
           requires_approval: event.requires_approval ?? false,
@@ -354,7 +389,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           points_value:      200,
           requires_approval: false,
           is_free:           true,
-          ticket_price_php:  0,
+          ticket_price_php:  undefined,
           is_external:       false,
           external_registration_url: '',
           url_is_tba:        true,
@@ -385,13 +420,15 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     }
   }, [isExternal, setValue, urlIsTba])
 
+  // Recompute the scroll affordance whenever the form's height changes
+  // (sections toggle with isExternal / isFree, questions are added/removed).
+  useEffect(() => {
+    updateScrollHint()
+  }, [isExternal, isFree, customFields.length, coverPreview])
+
   const onSubmit = async (data: EventFormData) => {
     setSubmitError(null)
     setCoverUploadError(null)
-    if (!data.chapter_id) {
-      setSubmitError('Please select a chapter or HQ.')
-      return
-    }
     try {
       const schema = customFields.length > 0 ? customFields : null
       const isExternalEvent = data.is_external === true
@@ -428,8 +465,9 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         ...rest,
         chapter_id: chapterId,
         is_chapter_locked: isHqEvent ? false : true,
-        end_date: data.end_date ?? null,
+        end_date: data.end_date || null,
         capacity: data.capacity ?? null,
+        ticket_price_php: data.is_free ? 0 : (data.ticket_price_php ?? 0),
         external_registration_url: isExternalEvent ? externalUrl : null,
         visibility: isExternalEvent ? 'public' : data.visibility,
         points_value: isExternalEvent ? 0 : data.points_value,
@@ -456,7 +494,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
         <div>
@@ -477,7 +515,12 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
       </div>
 
       {/* Scrollable form body */}
-      <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <form
+        ref={scrollRef}
+        onScroll={updateScrollHint}
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
+      >
 
         {/* ── Chapter (admin-only) ── */}
         <div>
@@ -550,10 +593,17 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full h-36 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-blue hover:text-blue transition-colors"
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingCover(true) }}
+              onDragLeave={(e) => { e.preventDefault(); setIsDraggingCover(false) }}
+              onDrop={handleCoverDrop}
+              className={`w-full h-36 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${
+                isDraggingCover
+                  ? 'border-blue bg-blue/5 text-blue'
+                  : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-blue hover:text-blue'
+              }`}
             >
               <GalleryAddOutline className="w-6 h-6" />
-              <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
+              <span className="text-md3-label-md font-medium">Click or drag to upload cover image</span>
               <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
               <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
             </button>
@@ -629,7 +679,9 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
               {urlIsTba ? (
                 <p className="text-md3-label-md text-slate-400">
-                  The registration link will be shown once it is available.
+                  No link yet — members will see a disabled{' '}
+                  <span className="font-semibold">“Registration Coming Soon”</span> button on the
+                  event page until you add one.
                 </p>
               ) : (
                 <div>
@@ -707,7 +759,10 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               )}
             </div>
             <div>
-              <label className={labelClass}>End Date & Time</label>
+              <label className={labelClass}>
+                End Date & Time{' '}
+                <span className="text-slate-300 normal-case font-normal">optional</span>
+              </label>
               <input
                 {...register('end_date')}
                 type="datetime-local"
@@ -824,7 +879,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                     min={1}
                     step={1}
                     className={`${inputClass} pl-8`}
-                    placeholder="0"
+                    placeholder="500"
                   />
                 </div>
                 {errors.ticket_price_php && (
@@ -896,9 +951,15 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             </div>
 
             {customFields.length === 0 && (
-              <p className="text-md3-label-md text-slate-300 italic text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                No extra questions — only name, email, and school/company will be collected.
-              </p>
+              <div className="flex flex-col items-center justify-center text-center py-6 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-2">
+                  <ClipboardListOutline color="#94A3B8" width={20} height={20} />
+                </div>
+                <p className="text-md3-body-md font-semibold text-slate-500">No extra questions yet</p>
+                <p className="text-md3-label-md text-slate-400 mt-0.5">
+                  Only name, email, and school/company will be collected. Add a question to gather more.
+                </p>
+              </div>
             )}
 
             <div className="space-y-3">
@@ -1050,6 +1111,17 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           </button>
         </div>
       </form>
+
+      {/* Scroll affordance — fades in when more content sits below the fold */}
+      <div
+        aria-hidden="true"
+        style={{ opacity: showScrollHint ? 1 : 0 }}
+        className="pointer-events-none absolute inset-x-0 bottom-0 flex h-16 items-end justify-center bg-gradient-to-t from-white via-white/85 to-transparent transition-opacity duration-300"
+      >
+        <span className="animate-bounce pb-3">
+          <AltArrowDownOutline color="#94A3B8" width={20} height={20} />
+        </span>
+      </div>
     </div>
   )
 }
@@ -1064,11 +1136,38 @@ export default function AdminEvents() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<{ mode: 'create' | 'edit'; event?: EventWithChapter } | null>(null)
+  const [createdEvent, setCreatedEvent] = useState<EventWithChapter | null>(null)
+  const [shareCopiedId, setShareCopiedId] = useState<string | null>(null)
   const { chapters, fetchChapters } = useChaptersStore()
   const [exportDialog, setExportDialog] = useState<ExportDialogState | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [eventSearch, setEventSearch] = useState('')
+
+  // Public, member-facing URL for an event (matches the /events/:slug route).
+  const buildEventUrl = (event: EventWithChapter) =>
+    `${window.location.origin}/events/${event.slug ?? event.id}`
+
+  // Share an event link — native share sheet where available, clipboard fallback
+  // otherwise (mirrors the member-side EventDetail share behaviour).
+  const shareEvent = async (event: EventWithChapter) => {
+    const url = buildEventUrl(event)
+    if ('share' in navigator) {
+      try {
+        await navigator.share({ title: event.title, text: `${event.title} — DEVCON+`, url })
+      } catch {
+        // user cancelled — do nothing
+      }
+    } else {
+      try {
+        await (navigator as Navigator).clipboard.writeText(url)
+        setShareCopiedId(event.id)
+        setTimeout(() => setShareCopiedId((id) => (id === event.id ? null : id)), 2500)
+      } catch {
+        // clipboard unavailable
+      }
+    }
+  }
 
   const eventOptions = useMemo(() => {
     const sorted = [...events].sort((a, b) => (a.event_date ?? '').localeCompare(b.event_date ?? ''))
@@ -1361,7 +1460,7 @@ export default function AdminEvents() {
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Date</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">XP</th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3" />
+                <th className="text-right px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1429,20 +1528,35 @@ export default function AdminEvents() {
                     ) : (
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => void shareEvent(event)}
+                          title={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
+                          aria-label={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
+                        >
+                          {shareCopiedId === event.id
+                            ? <CheckCircleOutline className="w-4 h-4" color="#21C45D" />
+                            : <ShareOutline className="w-4 h-4" />}
+                        </button>
+                        <button
                           onClick={() => window.open(`/wheel/${event.id}`, '_blank', 'noopener')}
                           title="Open raffle wheel"
+                          aria-label="Open raffle wheel"
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors"
                         >
                           <ConfettiOutline className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => setSlideOver({ mode: 'edit', event })}
+                          title="Edit event"
+                          aria-label="Edit event"
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
                         >
                           <PenOutline className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(event.id)}
+                          title="Delete event"
+                          aria-label="Delete event"
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
                         >
                           <TrashBinTrashOutline className="w-4 h-4" />
@@ -1659,14 +1773,114 @@ export default function AdminEvents() {
                 chapters={chapters}
                 onClose={() => setSlideOver(null)}
                 onSaved={(savedEvent) => {
-                  if (slideOver.mode === 'create') {
+                  const wasCreate = slideOver.mode === 'create'
+                  if (wasCreate) {
                     setEvents((prev) => [savedEvent, ...prev])
                   } else {
                     setEvents((prev) => prev.map((e) => e.id === savedEvent.id ? savedEvent : e))
                   }
                   setSlideOver(null)
+                  if (wasCreate) setCreatedEvent(savedEvent)
                 }}
               />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Create-success modal */}
+      <AnimatePresence>
+        {createdEvent && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setCreatedEvent(null)}
+              className="fixed inset-0 bg-black/40 z-[60]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 360 }}
+              onClick={() => setCreatedEvent(null)}
+              className="fixed inset-0 z-[61] flex items-center justify-center p-4"
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+                className="w-[90vw] max-w-sm bg-white rounded-3xl shadow-2xl p-6"
+              >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-14 h-14 rounded-full bg-green/10 flex items-center justify-center mb-3">
+                  <CheckCircleOutline color="#21C45D" width={32} height={32} />
+                </div>
+                <h2 className="text-md3-headline-sm font-bold text-slate-900">Event created!</h2>
+                <p className="text-md3-body-md text-slate-500 mt-1">
+                  <span className="font-semibold text-slate-700">{createdEvent.title}</span> is live. What next?
+                </p>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ev = createdEvent
+                    setCreatedEvent(null)
+                    setSlideOver({ mode: 'edit', event: ev })
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 text-left hover:border-blue hover:bg-blue/5 transition-colors"
+                >
+                  <span className="w-9 h-9 rounded-lg bg-blue/10 flex items-center justify-center shrink-0">
+                    <PenOutline color="#1152D4" width={18} height={18} />
+                  </span>
+                  <span>
+                    <span className="block text-md3-body-md font-semibold text-slate-900">Edit event</span>
+                    <span className="block text-md3-label-md text-slate-400">Tweak the details you just saved</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void shareEvent(createdEvent)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 text-left hover:border-blue hover:bg-blue/5 transition-colors"
+                >
+                  <span className="w-9 h-9 rounded-lg bg-blue/10 flex items-center justify-center shrink-0">
+                    <ShareOutline color="#1152D4" width={18} height={18} />
+                  </span>
+                  <span>
+                    <span className="block text-md3-body-md font-semibold text-slate-900">
+                      {shareCopiedId === createdEvent.id ? 'Link copied!' : 'Share event link'}
+                    </span>
+                    <span className="block text-md3-label-md text-slate-400">Send the public event page to members</span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.open(buildEventUrl(createdEvent), '_blank', 'noopener')}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 text-left hover:border-blue hover:bg-blue/5 transition-colors"
+                >
+                  <span className="w-9 h-9 rounded-lg bg-blue/10 flex items-center justify-center shrink-0">
+                    <EyeOutline color="#1152D4" width={18} height={18} />
+                  </span>
+                  <span>
+                    <span className="block text-md3-body-md font-semibold text-slate-900">View event page</span>
+                    <span className="block text-md3-label-md text-slate-400">Preview how members will see it</span>
+                  </span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCreatedEvent(null)}
+                className="w-full mt-3 py-3 text-md3-label-lg font-bold text-slate-500 rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Done
+              </button>
+              </div>
             </motion.div>
           </>
         )}
