@@ -74,6 +74,7 @@ declare module 'solar-icon-set' {
   export const MedalStarCircleBoldDuotone: SolarIcon
   export const Microphone2Outline: SolarIcon
   export const MonitorOutline: SolarIcon
+  export const MutedOutline: SolarIcon
   export const NotebookOutline: SolarIcon
   export const PenNewSquareOutline: SolarIcon
   export const PenOutline: SolarIcon
@@ -88,6 +89,7 @@ declare module 'solar-icon-set' {
   export const ShareOutline: SolarIcon
   export const ShieldCheckOutline: SolarIcon
   export const ShieldOutline: SolarIcon
+  export const SoundwaveOutline: SolarIcon
   export const SquareAcademicCapOutline: SolarIcon
   export const StarOutline: SolarIcon
   export const TagOutline: SolarIcon
