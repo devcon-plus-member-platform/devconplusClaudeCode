@@ -90,12 +90,12 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">Admin Dashboard</h1>
       <p className="text-md3-body-md text-slate-500 mb-6">Platform overview for DEVCON+</p>
 
       {/* Row 1 — KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map(({ label, value, Icon, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${color}`}>

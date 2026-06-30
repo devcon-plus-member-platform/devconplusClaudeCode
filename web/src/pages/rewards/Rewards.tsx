@@ -672,7 +672,9 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
     >
       {filteredMissions.map((mission) => {
         const diff = DIFF_CONFIG[mission.difficulty] ?? DIFF_CONFIG.easy
-        const isClaimed = mission.status === 'claimed'
+        // Only single-winner (bounty) missions lock globally on claim. Multi-participant
+        // missions never show the global "Claimed" state — they rely on per-user badges.
+        const isClaimed = mission.status === 'claimed' && mission.completion_mode === 'single_winner'
         const isExpanded = expandedId === mission.id
 
         // The generated DB type for submission_type is `string | null` — the hand-written
@@ -812,8 +814,15 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                       </div>
                     )}
 
+                    {/* Single-winner bounty already claimed by someone else — no action available */}
+                    {isClaimed && !hasWon && (
+                      <div className="w-full h-11 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
+                        <p className="text-md3-label-lg font-bold text-slate-400">Already claimed</p>
+                      </div>
+                    )}
+
                     {/* Type: link */}
-                    {!hasWon && submissionType === 'link' && (
+                    {!isClaimed && !hasWon && submissionType === 'link' && (
                       <>
                         {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) ? (
                           <motion.a
@@ -848,7 +857,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                     )}
 
                     {/* Type: self_attest */}
-                    {submissionType === 'self_attest' && !hasWon && (
+                    {!isClaimed && submissionType === 'self_attest' && !hasWon && (
                       <div className="space-y-2">
                         {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
                           <a href={mission.github_url} target="_blank" rel="noopener noreferrer"
@@ -894,7 +903,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                     )}
 
                     {/* Type: proof_upload */}
-                    {!hasWon && submissionType === 'proof_upload' && (
+                    {!isClaimed && !hasWon && submissionType === 'proof_upload' && (
                       <div className="space-y-2">
                         {mission.github_url && (mission.github_url.startsWith('https://') || mission.github_url.startsWith('http://')) && (
                           <a href={mission.github_url} target="_blank" rel="noopener noreferrer"

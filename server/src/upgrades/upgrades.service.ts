@@ -71,7 +71,7 @@ export class UpgradesService {
     await this.repo.approveRequest(
       requestId,
       req.user_id,
-      req.chapter_id ?? '',
+      req.chapter_id,
       user.profileId,
       req.requested_role,
     );

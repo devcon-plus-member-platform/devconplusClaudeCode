@@ -53,6 +53,8 @@ export interface Mission {
   description: string | null;
   xp_reward: number;
   difficulty: string;
+  status: 'available' | 'claimed';
+  completion_mode: 'multi' | 'single_winner';
   submission_type: 'proof_upload' | 'link' | 'self_attest';
   github_url: string | null;
   is_active: boolean;

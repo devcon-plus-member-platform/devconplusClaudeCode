@@ -59,7 +59,7 @@ function SlideOver({ title, onClose, onSubmit, saving, submitLabel = 'Save', chi
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="w-96 bg-white h-full shadow-2xl overflow-y-auto flex flex-col">
+      <div className="w-96 max-w-[88vw] bg-white h-full shadow-2xl overflow-y-auto flex flex-col">
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <h2 className="text-md3-title-lg font-bold text-slate-900">{title}</h2>
           <button onClick={onClose}>
@@ -89,7 +89,7 @@ function SlideOver({ title, onClose, onSubmit, saving, submitLabel = 'Save', chi
 function ConfirmDelete({ label, onConfirm, onCancel }: { label: string; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl">
+      <div className="bg-white rounded-2xl p-6 w-80 max-w-[90vw] shadow-2xl">
         <p className="text-md3-body-md text-slate-700 mb-1 font-semibold">Delete {label}?</p>
         <p className="text-md3-label-md text-slate-400 mb-5">This action cannot be undone.</p>
         <div className="flex gap-2">
@@ -220,7 +220,7 @@ function RewardsTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Rewards</h2>
@@ -243,8 +243,8 @@ function RewardsTab() {
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
@@ -455,7 +455,7 @@ function JobsTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Jobs</h2>
@@ -478,8 +478,8 @@ function JobsTab() {
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Title</th>
@@ -714,7 +714,7 @@ function ArticlesTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Articles</h2>
@@ -737,8 +737,8 @@ function ArticlesTab() {
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Title</th>
@@ -853,6 +853,13 @@ const SUBMISSION_TYPE_LABELS: Record<MissionSubmissionType, string> = {
   submit_for_approval: 'Submit for Approval (needs review)',
 }
 
+type MissionCompletionMode = 'multi' | 'single_winner'
+
+const COMPLETION_MODE_LABELS: Record<MissionCompletionMode, string> = {
+  multi:         'Multi-participant (everyone earns)',
+  single_winner: 'Single winner (bounty — locks on first approval)',
+}
+
 interface MissionRow {
   id: string
   title: string
@@ -860,6 +867,7 @@ interface MissionRow {
   xp_reward: number
   difficulty: 'easy' | 'medium' | 'hard'
   status: 'available' | 'claimed'
+  completion_mode: MissionCompletionMode
   submission_type: MissionSubmissionType
   github_url: string | null
   is_active: boolean
@@ -884,6 +892,7 @@ interface MissionForm {
   description: string
   xp_reward: string
   difficulty: 'easy' | 'medium' | 'hard'
+  completion_mode: MissionCompletionMode
   submission_type: MissionSubmissionType
   github_url: string
   is_active: boolean
@@ -894,6 +903,7 @@ const defaultMissionForm = (): MissionForm => ({
   description: '',
   xp_reward: '100',
   difficulty: 'medium',
+  completion_mode: 'multi',
   submission_type: 'proof_upload',
   github_url: '',
   is_active: true,
@@ -967,6 +977,7 @@ function MissionsTab() {
       description:     m.description ?? '',
       xp_reward:       String(m.xp_reward),
       difficulty:      m.difficulty,
+      completion_mode: m.completion_mode ?? 'multi',
       submission_type: m.submission_type ?? 'proof_upload',
       github_url:      m.github_url ?? '',
       is_active:       m.is_active,
@@ -982,6 +993,7 @@ function MissionsTab() {
       description:     form.description.trim() || null,
       xp_reward:       parseInt(form.xp_reward, 10) || 100,
       difficulty:      form.difficulty,
+      completion_mode: form.completion_mode,
       submission_type: form.submission_type,
       github_url:      form.github_url.trim() || null,
       is_active:       form.is_active,
@@ -1046,7 +1058,7 @@ function MissionsTab() {
       setForm((p) => ({ ...p, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1229,6 +1241,14 @@ function MissionsTab() {
             </select>
           </div>
           <div>
+            <label className={LABEL_CLS}>Completion Mode</label>
+            <select className={INPUT_CLS} value={form.completion_mode} onChange={f('completion_mode')}>
+              {(Object.keys(COMPLETION_MODE_LABELS) as MissionCompletionMode[]).map((m) => (
+                <option key={m} value={m}>{COMPLETION_MODE_LABELS[m]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className={LABEL_CLS}>
               {form.submission_type === 'link' ? 'Link URL' : 'GitHub URL'}
             </label>
@@ -1345,7 +1365,7 @@ function XpTiersTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">XP Tiers</h2>
@@ -1368,8 +1388,8 @@ function XpTiersTab() {
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
@@ -1933,7 +1953,7 @@ function PointSubmissionsTab() {
   })
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -2081,18 +2101,18 @@ export default function AdminCMS() {
   return (
     <div className="h-full flex flex-col bg-slate-50">
       {/* Page header */}
-      <div className="px-8 pt-8 pb-4 shrink-0">
+      <div className="px-4 pt-6 md:px-8 md:pt-8 pb-4 shrink-0">
         <h1 className="text-md3-headline-sm font-black text-slate-900">CMS</h1>
         <p className="text-md3-body-md text-slate-500 mt-0.5">Manage platform content and access requests</p>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-100 px-8 pt-6 pb-0 shrink-0">
+      {/* Tab bar — horizontally scrollable on mobile so the 7 tabs never force page-wide overflow */}
+      <div className="flex gap-1 border-b border-slate-100 px-4 md:px-8 pt-6 pb-0 shrink-0 overflow-x-auto md:overflow-x-visible">
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2.5 text-md3-body-md font-semibold rounded-t-lg transition-colors ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-md3-body-md font-semibold rounded-t-lg transition-colors ${
               activeTab === tab
                 ? 'bg-white border border-b-white border-slate-100 text-blue -mb-px relative z-10'
                 : 'text-slate-400 hover:text-slate-600'

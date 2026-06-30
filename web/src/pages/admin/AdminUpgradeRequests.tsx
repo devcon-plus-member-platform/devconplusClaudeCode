@@ -80,7 +80,7 @@ export default function AdminUpgradeRequests() {
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-md3-headline-sm font-black text-slate-900">Organizer Upgrade Requests</h1>
@@ -103,8 +103,8 @@ export default function AdminUpgradeRequests() {
         <p className="text-slate-400 text-md3-body-md">Loading requests…</p>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Member</th>

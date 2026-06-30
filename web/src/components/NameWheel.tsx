@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import centerLogo from '../assets/logos/thumbnail.png'
 
 interface NameWheelProps {
   entrants: string[]
@@ -15,14 +16,16 @@ const SIZE = 360 // viewBox units (geometry is computed in these); the SVG fills
 const RADIUS = SIZE / 2
 const CENTER = SIZE / 2
 
+// DEVCON 16 vivid rainbow — matches the multicolor DEVCON 16 logo.
 const SEGMENT_FILLS = [
-  '#E0524B', // red
-  '#E8843C', // orange
-  '#EAC32E', // yellow
-  '#4FA85A', // green
-  '#3B7DD8', // blue
-  '#4A53B5', // indigo
-  '#8E4FC0', // violet
+  '#E5342B', // red
+  '#F26C21', // orange
+  '#F6B11F', // amber
+  '#2BB24C', // green
+  '#18B5C4', // cyan
+  '#1E73BE', // blue
+  '#5B3FA0', // indigo
+  '#B83A8E', // magenta
 ]
 
 const SPIN_EASE: [number, number, number, number] = [0.17, 0.67, 0.12, 0.99]
@@ -143,14 +146,18 @@ export default function NameWheel({
         </motion.g>
       </svg>
 
-      {/* Center hub / spin button */}
+      {/* Center hub / spin button — sits outside the rotating group, so the
+          DEVCON+ logo stays upright while the segments spin. */}
       <button
         type="button"
         onClick={onSpin}
         disabled={!canSpin}
-        className="absolute left-1/2 top-1/2 z-10 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-primary text-md3-title-md font-black uppercase tracking-wide text-white shadow-xl transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label="Spin the wheel"
+        className={`absolute left-1/2 top-1/2 z-10 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-blue shadow-xl transition active:scale-95 disabled:cursor-not-allowed ${
+          isSpinning ? 'animate-pulse opacity-70' : ''
+        }`}
       >
-        {isSpinning ? '…' : 'Spin'}
+        <img src={centerLogo} alt="DEVCON+" className="h-full w-full object-contain p-3" />
       </button>
     </div>
   )
