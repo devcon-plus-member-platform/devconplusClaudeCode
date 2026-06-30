@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline } from 'solar-icon-set'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -150,6 +150,22 @@ const attachChapterName = (
     ? { name: chapters.find((chapter) => chapter.id === event.chapter_id)?.name ?? '—' }
     : null,
 })
+
+// ── Sort ───────────────────────────────────────────────────────────────────────
+
+type SortColumn = 'title' | 'chapter' | 'date' | 'xp' | 'status'
+type SortDir = 'asc' | 'desc'
+
+// Default ordering: newest first by event date, falling back to created_at.
+const defaultEventTime = (event: EventWithChapter): number => {
+  const value = event.event_date ?? event.created_at
+  return value ? new Date(value).getTime() : 0
+}
+
+const eventTime = (value?: string | null): number => (value ? new Date(value).getTime() : 0)
+
+const chapterLabel = (event: EventWithChapter): string =>
+  event.chapter_id === null ? 'HQ — All Chapters' : (event.chapters?.name ?? '')
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -1130,7 +1146,6 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
 export default function AdminEvents() {
   const [events, setEvents] = useState<EventWithChapter[]>([])
-  const { pageItems, ...pagination } = usePagination(events, 10)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -1143,6 +1158,68 @@ export default function AdminEvents() {
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [eventSearch, setEventSearch] = useState('')
+
+  // Table tab (DEVCON vs external), search + sort (separate from the export
+  // dialog's `eventSearch`).
+  const [eventTab, setEventTab] = useState<'devcon' | 'external'>('devcon')
+  const [search, setSearch] = useState('')
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  const devconCount = events.filter((e) => !e.is_external).length
+  const externalCount = events.filter((e) => e.is_external).length
+
+  // Split by tab, then filter by title/chapter/location/category/status, then
+  // sort. With no active column the list stays newest-first; clicking a header
+  // sorts by that column.
+  const visibleEvents = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const base = events.filter((e) => (eventTab === 'external' ? !!e.is_external : !e.is_external))
+    const matched = q
+      ? base.filter((e) =>
+          e.title.toLowerCase().includes(q) ||
+          chapterLabel(e).toLowerCase().includes(q) ||
+          (e.location ?? '').toLowerCase().includes(q) ||
+          (e.category ?? '').toLowerCase().includes(q) ||
+          (e.status ?? '').toLowerCase().includes(q),
+        )
+      : base
+    return [...matched].sort((a, b) => {
+      if (sortColumn === null) return defaultEventTime(b) - defaultEventTime(a)
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'title': return a.title.localeCompare(b.title) * dir
+        case 'chapter': return chapterLabel(a).localeCompare(chapterLabel(b)) * dir
+        case 'date': return (eventTime(a.event_date) - eventTime(b.event_date)) * dir
+        case 'xp': return (a.points_value - b.points_value) * dir
+        case 'status': return (a.status ?? '').localeCompare(b.status ?? '') * dir
+        default: return 0
+      }
+    })
+  }, [events, search, sortColumn, sortDir, eventTab])
+
+  const { pageItems, ...pagination } = usePagination(visibleEvents, 10)
+
+  // Click cycles a column: asc → desc → back to default (newest first).
+  const handleSort = (col: SortColumn) => {
+    pagination.setPage(1)
+    if (sortColumn !== col) {
+      setSortColumn(col)
+      setSortDir('asc')
+    } else if (sortDir === 'asc') {
+      setSortDir('desc')
+    } else {
+      setSortColumn(null)
+      setSortDir('asc')
+    }
+  }
+
+  const sortIcon = (col: SortColumn) => {
+    if (sortColumn !== col) return null
+    return sortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   // Public, member-facing URL for an event (matches the /events/:slug route).
   const buildEventUrl = (event: EventWithChapter) =>
@@ -1413,10 +1490,10 @@ export default function AdminEvents() {
         </div>
         <button
           onClick={() => setSlideOver({ mode: 'create' })}
-          className="flex items-center gap-2 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-2.5 px-4 sm:px-6 py-3 bg-blue text-white text-md3-body-lg font-bold rounded-xl hover:bg-blue-dark active:scale-95 transition-colors"
         >
-          <AddCircleOutline className="w-4 h-4" />
-          Create Event
+          <AddCircleOutline className="w-6 h-6" />
+          <span className="hidden sm:inline">Create Event</span>
         </button>
       </div>
 
@@ -1434,10 +1511,10 @@ export default function AdminEvents() {
             <button
               onClick={() => openExportDialog('attendance')}
               disabled={exportLoading}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue text-white text-md3-label-md font-bold hover:bg-blue-dark transition-colors disabled:opacity-60"
+              className="flex items-center gap-2.5 px-4 sm:px-6 py-3 rounded-xl bg-blue text-white text-md3-body-lg font-bold hover:bg-blue-dark active:scale-95 transition-colors disabled:opacity-60"
             >
-              <DownloadOutline className="w-4 h-4" color="white" />
-              Export Attendance CSV
+              <DownloadOutline className="w-6 h-6" color="white" />
+              <span className="hidden sm:inline">Export Attendance CSV</span>
             </button>
           </div>
         </div>
@@ -1450,23 +1527,59 @@ export default function AdminEvents() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading events…</p>
       ) : (
+        <>
+        <div className="flex items-center gap-1 mb-4 bg-slate-100 rounded-xl p-1 w-fit shrink-0">
+          {([['devcon', 'DEVCON Events', devconCount], ['external', 'External Events', externalCount]] as const).map(([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => { setEventTab(key); pagination.setPage(1) }}
+              className={`px-4 py-1.5 rounded-lg text-md3-label-md font-bold transition-colors ${
+                eventTab === key ? 'bg-white text-blue shadow-card' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {label}
+              <span className="ml-1.5 text-md3-label-sm font-semibold opacity-70">{count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by title, chapter, or location…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
           <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Event</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Chapter</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">XP</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('title')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Event {sortIcon('title')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('chapter')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Chapter {sortIcon('chapter')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('date')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Date {sortIcon('date')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('xp')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">XP {sortIcon('xp')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Status {sortIcon('status')}</button>
+                </th>
                 <th className="text-right px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((event) => (
-                <tr key={event.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
+                <tr key={event.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3">
                     <p className="font-semibold text-slate-900">{event.title}</p>
                     {event.is_external && (
                       <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full mt-1">
@@ -1568,12 +1681,17 @@ export default function AdminEvents() {
               ))}
             </tbody>
           </table>
-          {events.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No events found.</p>
+          {visibleEvents.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {search.trim()
+                ? `No events match "${search.trim()}".`
+                : eventTab === 'external' ? 'No external events yet.' : 'No DEVCON events yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="event" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       <AnimatePresence>

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline } from 'solar-icon-set'
+import { useEffect, useMemo, useState } from 'react'
+import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
@@ -9,6 +9,18 @@ import Pagination from '../../components/Pagination'
 import type { Profile, UserRole, PointTransaction } from '@devcon-plus/supabase'
 
 const ROLES: UserRole[] = ['member', 'chapter_officer', 'hq_admin', 'super_admin']
+
+type SortColumn = 'name' | 'email' | 'role' | 'points'
+type SortDir = 'asc' | 'desc'
+
+function joinedTime(u: Profile): number {
+  return u.created_at ? new Date(u.created_at).getTime() : 0
+}
+
+function roleRank(role: string | null | undefined): number {
+  const i = ROLES.indexOf((role ?? 'member') as UserRole)
+  return i === -1 ? 0 : i
+}
 
 function getRolePillClass(role: string): string {
   switch (role) {
@@ -37,8 +49,56 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [userTxns, setUserTxns] = useState<PointTransaction[]>([])
   const [txnsLoading, setTxnsLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const { pageItems, ...pagination } = usePagination(users, 10)
+  // Filter by name/email/company, then sort. With no active column the list
+  // stays newest-first (recent on top); clicking a header sorts by that column.
+  const visibleUsers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const matched = q
+      ? users.filter((u) =>
+          u.full_name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.school_or_company ?? '').toLowerCase().includes(q),
+        )
+      : users
+    return [...matched].sort((a, b) => {
+      if (sortColumn === null) return joinedTime(b) - joinedTime(a)
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'name': return a.full_name.localeCompare(b.full_name) * dir
+        case 'email': return a.email.localeCompare(b.email) * dir
+        case 'role': return (roleRank(a.role) - roleRank(b.role)) * dir
+        case 'points': return ((a.spendable_points ?? 0) - (b.spendable_points ?? 0)) * dir
+        default: return 0
+      }
+    })
+  }, [users, search, sortColumn, sortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleUsers, 10)
+
+  // Click cycles a column: asc → desc → back to default (newest first).
+  const handleSort = (col: SortColumn) => {
+    pagination.setPage(1)
+    if (sortColumn !== col) {
+      setSortColumn(col)
+      setSortDir('asc')
+    } else if (sortDir === 'asc') {
+      setSortDir('desc')
+    } else {
+      setSortColumn(null)
+      setSortDir('asc')
+    }
+  }
+
+  const sortIcon = (col: SortColumn) => {
+    if (sortColumn !== col) return null
+    return sortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const openUser = async (user: Profile) => {
     setSelectedUser(user)
@@ -125,15 +185,34 @@ export default function AdminUsers() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading users…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by name, email, or company…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
           <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Email</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Points</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Name {sortIcon('name')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Email {sortIcon('email')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('role')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Role {sortIcon('role')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('points')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Points {sortIcon('points')}</button>
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -141,10 +220,10 @@ export default function AdminUsers() {
               {pageItems.map((u) => (
                 <tr
                   key={u.id}
-                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => void openUser(u)}
                 >
-                  <td className="px-4 py-3 font-medium text-slate-900">{u.full_name}</td>
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-medium text-slate-900">{u.full_name}</td>
                   <td className="px-4 py-3 text-slate-500">{u.email}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <select
@@ -189,12 +268,15 @@ export default function AdminUsers() {
               ))}
             </tbody>
           </table>
-          {users.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No users found.</p>
+          {visibleUsers.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {search.trim() ? `No users match "${search.trim()}".` : 'No users found.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="user" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       {/* Slide-over panel */}

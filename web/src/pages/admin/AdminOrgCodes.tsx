@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { AddCircleOutline, PowerOutline, RefreshOutline, TrashBinTrashOutline } from 'solar-icon-set'
+import { useEffect, useMemo, useState } from 'react'
+import { AddCircleOutline, PowerOutline, RefreshOutline, TrashBinTrashOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -32,6 +32,17 @@ interface OrgCode {
   chapter_name: string | null
 }
 
+type SortColumn = 'code' | 'role' | 'chapter' | 'usage' | 'expires' | 'status'
+type SortDir = 'asc' | 'desc'
+
+function createdTime(c: OrgCode): number {
+  return c.created_at ? new Date(c.created_at).getTime() : 0
+}
+
+function expiryTime(c: OrgCode): number {
+  return c.expires_at ? new Date(c.expires_at).getTime() : Number.MAX_SAFE_INTEGER
+}
+
 const CODE_PATTERN = /^DCN-[A-Z]{3}-[0-9]{4}$/
 
 const schema = z
@@ -49,7 +60,9 @@ type FormData = z.infer<typeof schema>
 
 export default function AdminOrgCodes() {
   const [codes, setCodes] = useState<OrgCode[]>([])
-  const { pageItems, ...pagination } = usePagination(codes, 10)
+  const [search, setSearch] = useState('')
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const { chapters, fetchChapters } = useChaptersStore()
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -75,6 +88,55 @@ export default function AdminOrgCodes() {
 
   const hasUsageLimit = watch('has_usage_limit')
   const hasExpiry = watch('has_expiry')
+
+  // Filter by code/chapter/role, then sort. With no active column the list
+  // stays newest-first (recent on top); clicking a header sorts by that column.
+  const visibleCodes = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const matched = q
+      ? codes.filter((c) =>
+          c.code.toLowerCase().includes(q) ||
+          (c.chapter_name ?? '').toLowerCase().includes(q) ||
+          c.assigned_role.toLowerCase().includes(q),
+        )
+      : codes
+    return [...matched].sort((a, b) => {
+      if (sortColumn === null) return createdTime(b) - createdTime(a)
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'code': return a.code.localeCompare(b.code) * dir
+        case 'role': return a.assigned_role.localeCompare(b.assigned_role) * dir
+        case 'chapter': return (a.chapter_name ?? '').localeCompare(b.chapter_name ?? '') * dir
+        case 'usage': return (a.usage_count - b.usage_count) * dir
+        case 'expires': return (expiryTime(a) - expiryTime(b)) * dir
+        case 'status': return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir
+        default: return 0
+      }
+    })
+  }, [codes, search, sortColumn, sortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleCodes, 10)
+
+  // Click cycles a column: asc → desc → back to default (newest first).
+  const handleSort = (col: SortColumn) => {
+    pagination.setPage(1)
+    if (sortColumn !== col) {
+      setSortColumn(col)
+      setSortDir('asc')
+    } else if (sortDir === 'asc') {
+      setSortDir('desc')
+    } else {
+      setSortColumn(null)
+      setSortDir('asc')
+    }
+  }
+
+  const sortIcon = (col: SortColumn) => {
+    if (sortColumn !== col) return null
+    return sortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const load = async () => {
     setIsLoading(true)
@@ -171,10 +233,10 @@ export default function AdminOrgCodes() {
         </div>
         <button
           onClick={() => { setValue('code', generateCode()); setShowForm((v) => !v) }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-2.5 px-4 sm:px-6 py-3 bg-blue text-white text-md3-body-lg font-bold rounded-xl hover:bg-blue-dark active:scale-95 transition-colors"
         >
-          <AddCircleOutline className="w-4 h-4" />
-          New Code
+          <AddCircleOutline className="w-6 h-6" />
+          <span className="hidden sm:inline">New Code</span>
         </button>
       </div>
 
@@ -311,24 +373,47 @@ export default function AdminOrgCodes() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading codes…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by code, chapter, or role…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Code</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Chapter</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Usage</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Expires</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3" />
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('code')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Code {sortIcon('code')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('role')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Role {sortIcon('role')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('chapter')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Chapter {sortIcon('chapter')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('usage')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Usage {sortIcon('usage')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('expires')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Expires {sortIcon('expires')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Status {sortIcon('status')}</button>
+                </th>
+                <th className="text-right px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((c) => (
-                <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-mono font-bold text-slate-900 text-md3-label-md tracking-wider">{c.code}</td>
+                <tr key={c.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-mono font-bold text-slate-900 text-md3-label-md tracking-wider">{c.code}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{c.assigned_role}</td>
                   <td className="px-4 py-3 text-slate-600">{c.chapter_name ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md tabular-nums">
@@ -392,12 +477,15 @@ export default function AdminOrgCodes() {
               ))}
             </tbody>
           </table>
-          {codes.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No organizer codes yet.</p>
+          {visibleCodes.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {search.trim() ? `No codes match "${search.trim()}".` : 'No organizer codes yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="code" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
     </div>
   )

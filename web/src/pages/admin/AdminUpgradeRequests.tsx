@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
+import { useEffect, useMemo, useState } from 'react'
+import { CheckCircleOutline, CloseCircleOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { apiFetch } from '../../lib/api'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { usePagination } from '../../hooks/usePagination'
@@ -27,10 +27,21 @@ const ROLE_LABELS: Record<string, string> = {
   hq_admin: 'HQ Admin',
 }
 
+type SortColumn = 'member' | 'chapter' | 'code' | 'role' | 'status'
+type SortDir = 'asc' | 'desc'
+
+const STATUS_RANK: Record<string, number> = { pending: 0, approved: 1, rejected: 2 }
+
+function createdTime(r: UpgradeRequest): number {
+  return r.created_at ? new Date(r.created_at).getTime() : 0
+}
+
 export default function AdminUpgradeRequests() {
   const { user } = useAuthStore()
   const [requests, setRequests] = useState<UpgradeRequest[]>([])
-  const { pageItems, ...pagination } = usePagination(requests, 10)
+  const [search, setSearch] = useState('')
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -79,6 +90,49 @@ export default function AdminUpgradeRequests() {
 
   const pendingCount = requests.filter((r) => r.status === 'pending').length
 
+  // Filter by member/email/code/chapter, then sort. With no active column the
+  // list stays newest-first; clicking a header sorts by that column.
+  const visibleRequests = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const matched = q
+      ? requests.filter((r) =>
+          (r.member_name ?? '').toLowerCase().includes(q) ||
+          (r.member_email ?? '').toLowerCase().includes(q) ||
+          r.organizer_code.toLowerCase().includes(q) ||
+          (r.member_chapter_name ?? '').toLowerCase().includes(q),
+        )
+      : requests
+    return [...matched].sort((a, b) => {
+      if (sortColumn === null) return createdTime(b) - createdTime(a)
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'member': return (a.member_name ?? '').localeCompare(b.member_name ?? '') * dir
+        case 'chapter': return (a.member_chapter_name ?? '').localeCompare(b.member_chapter_name ?? '') * dir
+        case 'code': return a.organizer_code.localeCompare(b.organizer_code) * dir
+        case 'role': return a.requested_role.localeCompare(b.requested_role) * dir
+        case 'status': return ((STATUS_RANK[a.status] ?? 0) - (STATUS_RANK[b.status] ?? 0)) * dir
+        default: return 0
+      }
+    })
+  }, [requests, search, sortColumn, sortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleRequests, 10)
+
+  // Click cycles a column: asc → desc → back to default (newest first).
+  const handleSort = (col: SortColumn) => {
+    pagination.setPage(1)
+    if (sortColumn !== col) { setSortColumn(col); setSortDir('asc') }
+    else if (sortDir === 'asc') { setSortDir('desc') }
+    else { setSortColumn(null); setSortDir('asc') }
+  }
+
+  const sortIcon = (col: SortColumn) => {
+    if (sortColumn !== col) return null
+    return sortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
+
   return (
     <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
@@ -102,23 +156,44 @@ export default function AdminUpgradeRequests() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading requests…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by member, email, code, or chapter…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
           <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Member</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Current Chapter</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Code</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Requested Role</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('member')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Member {sortIcon('member')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('chapter')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Current Chapter {sortIcon('chapter')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('code')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Code {sortIcon('code')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('role')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Requested Role {sortIcon('role')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Status {sortIcon('status')}</button>
+                </th>
                 <th className="px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((req) => (
-                <tr key={req.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3">
+                <tr key={req.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3">
                     <p className="font-semibold text-slate-900 text-md3-body-md">{req.member_name || '—'}</p>
                     <p className="text-md3-label-md text-slate-400">{req.member_email || '—'}</p>
                   </td>
@@ -168,12 +243,15 @@ export default function AdminUpgradeRequests() {
               ))}
             </tbody>
           </table>
-          {requests.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No upgrade requests yet.</p>
+          {visibleRequests.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {search.trim() ? `No requests match "${search.trim()}".` : 'No upgrade requests yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="request" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
     </div>
   )

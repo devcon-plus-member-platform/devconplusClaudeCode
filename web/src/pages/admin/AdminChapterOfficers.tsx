@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AddCircleOutline, FilterOutline, LetterOutline, TrashBinTrashOutline } from 'solar-icon-set'
+import { AddCircleOutline, FilterOutline, LetterOutline, TrashBinTrashOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -32,6 +32,9 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>
 
+type OfficerSortColumn = 'email' | 'status' | 'created'
+type SortDir = 'asc' | 'desc'
+
 export default function AdminChapterOfficers() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [chapters, setChapters] = useState<Chapter[]>([])
@@ -44,6 +47,9 @@ export default function AdminChapterOfficers() {
   const [invitedId, setInvitedId] = useState<string | null>(null)
   const [filterChapterId, setFilterChapterId] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<'all' | 'applied' | 'pending'>('all')
+  const [search, setSearch] = useState('')
+  const [sortColumn, setSortColumn] = useState<OfficerSortColumn | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const {
     register,
@@ -71,15 +77,20 @@ export default function AdminChapterOfficers() {
   useEffect(() => { void load() }, [])
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
     return assignments.filter((a) => {
       const chapterMatch = filterChapterId === 'all' || a.chapter_id === filterChapterId
       const statusMatch =
         filterStatus === 'all' ||
         (filterStatus === 'applied' && a.applied_at !== null) ||
         (filterStatus === 'pending' && a.applied_at === null)
-      return chapterMatch && statusMatch
+      const searchMatch =
+        !q ||
+        a.email.toLowerCase().includes(q) ||
+        (a.chapters?.name ?? '').toLowerCase().includes(q)
+      return chapterMatch && statusMatch && searchMatch
     })
-  }, [assignments, filterChapterId, filterStatus])
+  }, [assignments, filterChapterId, filterStatus, search])
 
   // Group filtered assignments by chapter, preserving sorted chapter order
   const groupedByChapter = useMemo(() => {
@@ -96,6 +107,37 @@ export default function AdminChapterOfficers() {
   }, [filtered])
 
   const { pageItems: pagedGroups, ...pagination } = usePagination(groupedByChapter, 10)
+
+  // Sort rows within each chapter group. Default (no active column) keeps the
+  // server order (newest first); clicking a header sorts every group's rows.
+  const sortRows = (rows: Assignment[]): Assignment[] => {
+    return [...rows].sort((a, b) => {
+      if (sortColumn === null) {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'email': return a.email.localeCompare(b.email) * dir
+        case 'status': return (((a.applied_at ? 1 : 0) - (b.applied_at ? 1 : 0))) * dir
+        case 'created': return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir
+        default: return 0
+      }
+    })
+  }
+
+  // Click cycles a column: asc → desc → back to default (newest first).
+  const handleSort = (col: OfficerSortColumn) => {
+    if (sortColumn !== col) { setSortColumn(col); setSortDir('asc') }
+    else if (sortDir === 'asc') { setSortDir('desc') }
+    else { setSortColumn(null); setSortDir('asc') }
+  }
+
+  const sortIcon = (col: OfficerSortColumn) => {
+    if (sortColumn !== col) return null
+    return sortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const onSubmit = async (data: FormData) => {
     setError(null)
@@ -162,10 +204,10 @@ export default function AdminChapterOfficers() {
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
         >
           <AddCircleOutline className="w-4 h-4" />
-          Assign Officer
+          <span className="hidden sm:inline">Assign Officer</span>
         </button>
       </div>
 
@@ -233,6 +275,20 @@ export default function AdminChapterOfficers() {
         </form>
       )}
 
+      {/* Search */}
+      {!isLoading && assignments.length > 0 && (
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by email or chapter…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
+      )}
+
       {/* Filters */}
       {!isLoading && assignments.length > 0 && (
         <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -267,7 +323,9 @@ export default function AdminChapterOfficers() {
       ) : assignments.length === 0 ? (
         <p className="text-center py-10 text-slate-400 text-md3-body-md">No officer assignments yet.</p>
       ) : filtered.length === 0 ? (
-        <p className="text-center py-10 text-slate-400 text-md3-body-md">No assignments match the selected filters.</p>
+        <p className="text-center py-10 text-slate-400 text-md3-body-md">
+          {search.trim() ? `No assignments match "${search.trim()}".` : 'No assignments match the selected filters.'}
+        </p>
       ) : (
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
@@ -282,19 +340,26 @@ export default function AdminChapterOfficers() {
                   {rows.length} officer{rows.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <table className="w-full text-md3-body-md">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-md3-body-md">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Created</th>
-                    <th className="px-4 py-2.5" />
+                    <th className="sticky left-0 z-[5] bg-white border-r border-slate-100 text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                      <button type="button" onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Email {sortIcon('email')}</button>
+                    </th>
+                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                      <button type="button" onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Status {sortIcon('status')}</button>
+                    </th>
+                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                      <button type="button" onClick={() => handleSort('created')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Created {sortIcon('created')}</button>
+                    </th>
+                    <th className="text-right px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((a) => (
-                    <tr key={a.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-900">{a.email}</td>
+                  {sortRows(rows).map((a) => (
+                    <tr key={a.id} className="bg-white border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                      <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-medium text-slate-900">{a.email}</td>
                       <td className="px-4 py-3">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           a.applied_at ? 'bg-green/10 text-green' : 'bg-gold/10 text-slate-500'
@@ -346,6 +411,7 @@ export default function AdminChapterOfficers() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           ))}
           </div>

@@ -62,20 +62,21 @@ function ChapterCard({
     <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
       {/* Card header — collapsed view */}
       <div
-        className="px-5 py-4 flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
+        className="px-5 py-4 cursor-pointer hover:bg-slate-50 transition-colors"
         onClick={onToggle}
       >
-        {/* Left: chapter name + region badge */}
+        {/* Top row: chapter name + region badge, with actions on the right */}
+        <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           {editingId === chapter.id ? (
             <div
-              className="flex items-center gap-2"
+              className="flex flex-wrap items-center gap-2"
               onClick={(e) => e.stopPropagation()}
             >
               <input
                 value={editName}
                 onChange={(e) => onEditNameChange(e.target.value)}
-                className="border border-slate-200 rounded-lg px-2 py-1.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue w-44"
+                className="border border-slate-200 rounded-lg px-2 py-1.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue w-full sm:w-44"
                 autoFocus
               />
               <select
@@ -102,7 +103,7 @@ function ChapterCard({
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-900">{chapter.name}</span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                 chapter.region === 'Luzon'    ? 'bg-blue/10 text-blue'   :
@@ -116,25 +117,7 @@ function ChapterCard({
           )}
         </div>
 
-        {/* Center: 3 inline stats (hidden while editing) */}
-        {editingId !== chapter.id && (
-          <div className="flex items-center gap-6 text-center shrink-0">
-            <div>
-              <p className="text-md3-body-md font-bold text-slate-900">{memberCount.toLocaleString()}</p>
-              <p className="text-[10px] text-slate-400">Members</p>
-            </div>
-            <div>
-              <p className="text-md3-body-md font-bold text-slate-900">{eventCount}</p>
-              <p className="text-[10px] text-slate-400">Events</p>
-            </div>
-            <div>
-              <p className="text-md3-body-md font-bold text-slate-900">{(xp / 1000).toFixed(0)}K</p>
-              <p className="text-[10px] text-slate-400">XP</p>
-            </div>
-          </div>
-        )}
-
-        {/* Right: Edit / Delete actions + expand chevron (hidden while editing) */}
+        {/* Edit / Delete actions + expand chevron (hidden while editing) */}
         {editingId !== chapter.id && (
           <div
             className="flex items-center gap-1 shrink-0"
@@ -178,6 +161,25 @@ function ChapterCard({
                 isExpanded ? 'rotate-180' : ''
               }`}
             />
+          </div>
+        )}
+        </div>
+
+        {/* Stats row (hidden while editing) */}
+        {editingId !== chapter.id && (
+          <div className="flex items-center gap-8 text-center mt-3">
+            <div>
+              <p className="text-md3-body-md font-bold text-slate-900">{memberCount.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-400">Members</p>
+            </div>
+            <div>
+              <p className="text-md3-body-md font-bold text-slate-900">{eventCount}</p>
+              <p className="text-[10px] text-slate-400">Events</p>
+            </div>
+            <div>
+              <p className="text-md3-body-md font-bold text-slate-900">{(xp / 1000).toFixed(0)}K</p>
+              <p className="text-[10px] text-slate-400">XP</p>
+            </div>
           </div>
         )}
       </div>
@@ -371,8 +373,8 @@ export default function AdminChapters() {
       )}
 
       {/* Add chapter form */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4 shadow-card flex items-end gap-3">
-        <div className="flex-1">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4 shadow-card flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="flex-1 min-w-0">
           <label className="text-md3-label-md font-medium text-slate-700 block mb-1">Chapter Name</label>
           <input
             value={addName}
@@ -382,12 +384,12 @@ export default function AdminChapters() {
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
           />
         </div>
-        <div>
+        <div className="sm:w-auto">
           <label className="text-md3-label-md font-medium text-slate-700 block mb-1">Region</label>
           <select
             value={addRegion}
             onChange={(e) => setAddRegion(e.target.value as Region)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-md3-body-md bg-white focus:outline-none focus:ring-2 focus:ring-blue"
+            className="w-full sm:w-auto border border-slate-200 rounded-xl px-3 py-2 text-md3-body-md bg-white focus:outline-none focus:ring-2 focus:ring-blue"
           >
             {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
@@ -395,7 +397,7 @@ export default function AdminChapters() {
         <button
           onClick={() => void addChapter()}
           disabled={adding || !addName.trim()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark disabled:opacity-60 transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark disabled:opacity-60 transition-colors shrink-0"
         >
           <AddCircleOutline className="w-4 h-4" />
           {adding ? 'Adding…' : 'Add Chapter'}
