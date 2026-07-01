@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { isValidUUID } from '../../../lib/validation'
 import { ArrowLeftOutline, GalleryAddOutline, CloseCircleLineDuotone, DangerTriangleOutline } from 'solar-icon-set'
@@ -6,12 +6,15 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { fadeUp, staggerContainer } from '../../../lib/animation'
+import { toDatetimeLocalValue, fromDatetimeLocalValue } from '../../../lib/dates'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
 import { supabase } from '../../../lib/supabase'
 import NotFound from '../../NotFound'
 import {
-  schema,
+  makeEventSchema,
+  MAX_XP_ADMIN,
+  MAX_XP_OFFICER,
   type FormData,
   type CustomFormField,
   inputClass,
@@ -44,6 +47,10 @@ export function OrgEventEdit() {
   const navigate = useNavigate()
   const { events, fetchEvents, isLoading, updateEvent, deleteEvent } = useEventsStore()
   const { user } = useAuthStore()
+  const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
+  // Chapter officers cap attendance XP at 350; admins keep the original ceiling.
+  const XP_CAP = isAdmin ? MAX_XP_ADMIN : MAX_XP_OFFICER
+  const eventSchema = useMemo(() => makeEventSchema(XP_CAP), [XP_CAP])
   const { draft, saveDraft, clearDraft } = useFormDraft<EventEditDraft>(
     `org-event-edit:${id ?? ''}`,
     'local',
@@ -114,18 +121,18 @@ export function OrgEventEdit() {
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(eventSchema),
     defaultValues: event
       ? {
           title:             hasDraft ? (draft.title             as string)  ?? event.title             : event.title,
           description:       hasDraft ? (draft.description       as string)  ?? event.description ?? '' : event.description ?? '',
           location:          hasDraft ? (draft.location          as string)  ?? event.location ?? ''    : event.location ?? '',
           event_date:        hasDraft
-            ? (draft.event_date as string) ?? (event.event_date ? new Date(event.event_date).toISOString().slice(0, 16) : '')
-            : event.event_date ? new Date(event.event_date).toISOString().slice(0, 16) : '',
+            ? (draft.event_date as string) ?? toDatetimeLocalValue(event.event_date)
+            : toDatetimeLocalValue(event.event_date),
           end_date:          hasDraft
-            ? (draft.end_date as string) ?? (event.end_date ? new Date(event.end_date).toISOString().slice(0, 16) : '')
-            : event.end_date ? new Date(event.end_date).toISOString().slice(0, 16) : '',
+            ? (draft.end_date as string) ?? toDatetimeLocalValue(event.end_date)
+            : toDatetimeLocalValue(event.end_date),
           category:          hasDraft ? (draft.category        as FormData['category'])       ?? (event.category as FormData['category'])       : event.category as FormData['category'],
           devcon_category:   hasDraft ? (draft.devcon_category as FormData['devcon_category']) ?? (event.devcon_category ?? null) as FormData['devcon_category'] : (event.devcon_category ?? null) as FormData['devcon_category'],
           points_value:      hasDraft ? (draft.points_value      as number)  ?? (event.points_value      ?? 5)                     : event.points_value      ?? 5,
@@ -162,7 +169,7 @@ export function OrgEventEdit() {
     prevCategoryRef.current = category
     // Only auto-set if the event isn't locked AND the category actually changed from stored value
     if (!isLocked && category !== event?.category) {
-      setValue('points_value', ATTENDANCE_PTS[category], { shouldValidate: false })
+      setValue('points_value', Math.min(ATTENDANCE_PTS[category], XP_CAP), { shouldValidate: false })
     }
   }
 
@@ -299,8 +306,10 @@ export function OrgEventEdit() {
         title:              data.title,
         description:        data.description,
         location:           data.location,
-        event_date:         isLocked ? (event.event_date ?? undefined) : data.event_date,
-        end_date:           isLocked ? (event.end_date ?? null)        : (data.end_date ?? null),
+        // datetime-local values are naive local wall-clock — convert to a UTC ISO
+        // instant so the event doesn't shift a day when rendered in local time.
+        event_date:         isLocked ? (event.event_date ?? undefined) : (fromDatetimeLocalValue(data.event_date) ?? data.event_date),
+        end_date:           isLocked ? (event.end_date ?? null)        : fromDatetimeLocalValue(data.end_date),
         points_value:       isLocked ? (event.points_value ?? 5)       : data.points_value,
         volunteer_points:   isLocked ? (event.volunteer_points ?? DEFAULT_VOLUNTEER_POINTS) : data.volunteer_points,
         requires_approval:  isLocked ? (event.requires_approval ?? false) : data.requires_approval,
@@ -708,7 +717,8 @@ export function OrgEventEdit() {
             <div className="space-y-4">
               {[
                 { label: 'Attendance XP', value: event.points_value },
-                { label: 'Volunteer XP',  value: event.volunteer_points },
+                // Volunteer XP — temporarily hidden. Uncomment to restore.
+                // { label: 'Volunteer XP',  value: event.volunteer_points },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <label className={labelClass}>{label}</label>
@@ -730,7 +740,7 @@ export function OrgEventEdit() {
                   type="number"
                   className={inputClass}
                   min={1}
-                  max={1000}
+                  max={XP_CAP}
                   step={1}
                 />
                 {errors.points_value && <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>}
@@ -739,6 +749,8 @@ export function OrgEventEdit() {
                 </p>
               </div>
 
+              {/* Volunteer XP — temporarily disabled. Existing value still submitted
+                  via updateEvent (volunteer_points from defaultValues). Uncomment to restore.
               <div>
                 <label className={labelClass}>Volunteer XP</label>
                 <input
@@ -754,6 +766,7 @@ export function OrgEventEdit() {
                   XP awarded on top of attendance XP for members who volunteer at this event. Default: 500 pts.
                 </p>
               </div>
+              */}
             </div>
           )}
         </motion.div>

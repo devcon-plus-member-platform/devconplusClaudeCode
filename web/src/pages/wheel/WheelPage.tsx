@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { ConfettiOutline, CupStarOutline, RestartOutline, ShareOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { CloseCircleOutline, ConfettiOutline, CupStarOutline, GalleryAddOutline, MagniferOutline, MutedOutline, RestartOutline, ShareOutline, SoundwaveOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import type { Event } from '@devcon-plus/supabase'
 import { publicFetch } from '../../lib/api'
 import { backdrop } from '../../lib/animation'
+import { playWin, setMuted, startSpinTicks, stopSpinTicks } from '../../lib/wheelSounds'
 import NameWheel from '../../components/NameWheel'
+import WheelPoster from '../../components/WheelPoster'
+
+const JUMPSTART_URL = 'https://devcon.ph/jumpstart-internships/'
 
 /** Centered celebratory modal entrance (no equivalent in lib/animation). */
 const popIn: Variants = {
@@ -15,7 +20,8 @@ const popIn: Variants = {
   exit: { opacity: 0, scale: 0.9, transition: { duration: 0.15 } },
 }
 
-const CONFETTI_COLORS = ['#F8C630', '#1152D4', '#6099F4', '#21C45D', '#F97316', '#1E2A56']
+// DEVCON 16 vivid rainbow — matches the wheel segment palette.
+const CONFETTI_COLORS = ['#E5342B', '#F26C21', '#F6B11F', '#2BB24C', '#18B5C4', '#1E73BE', '#5B3FA0', '#B83A8E']
 
 /** Lightweight, dependency-free confetti: colored pieces falling across the screen. */
 function ConfettiBurst() {
@@ -54,6 +60,16 @@ function ConfettiBurst() {
       ))}
     </div>
   )
+}
+
+/** Sui logo — square mark (served from /public/photos). */
+function SuiLogo() {
+  return <img src="/photos/sui_logo.png" alt="Sui" className="inline-block h-5 w-auto object-contain" />
+}
+
+/** nmblr logo — landscape wordmark (served from /public/photos). */
+function NmblrLogo() {
+  return <img src="/photos/nmblr_logo.png" alt="nmblr" className="inline-block h-5 w-auto object-contain" />
 }
 
 /** Centered password popup gating an event's wheel. Closes itself on success. */
@@ -105,6 +121,9 @@ function PasswordGate({
       >
         <h2 className="text-md3-title-lg font-black text-slate-900">Password</h2>
         {subtitle && <p className="mt-1 text-md3-body-sm text-slate-500">{subtitle}</p>}
+        <p className="mt-3 rounded-xl border border-primary/15 bg-primary/5 px-3.5 py-2.5 text-left text-md3-label-md leading-relaxed text-slate-500">
+          The password is the event organizer&rsquo;s email username. Check with the organizer if you don&rsquo;t have it.
+        </p>
         <input
           type="password"
           autoFocus
@@ -113,7 +132,7 @@ function PasswordGate({
           onKeyDown={(e) => {
             if (e.key === 'Enter') void submit()
           }}
-          className="mt-5 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-md3-body-md text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-md3-body-md text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         {error && (
           <p className="mt-3 rounded-lg border border-red/20 bg-red/5 px-3 py-2 text-md3-label-md text-red">
@@ -184,7 +203,7 @@ export default function WheelPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState(routeEventId ?? '')
   const [source, setSource] = useState<PoolSource>('event')
-  const [filter, setFilter] = useState<PoolFilter>('checked_in')
+  const [filter, setFilter] = useState<PoolFilter>('all')
   const [manualText, setManualText] = useState('')
 
   const [participants, setParticipants] = useState<EventParticipant[]>([])
@@ -198,6 +217,12 @@ export default function WheelPage() {
   const [verifiedEventId, setVerifiedEventId] = useState<string | null>(null)
   const [showPwModal, setShowPwModal] = useState(false)
 
+  // ── Poster generator ──────────────────────────────────────────────────────
+  const [showPoster, setShowPoster] = useState(false)
+
+  // ── On-screen registration QR (expandable) ────────────────────────────────
+  const [showQr, setShowQr] = useState(false)
+
   // ── Wheel / draw state ────────────────────────────────────────────────────
   const [entrants, setEntrants] = useState<string[]>([])
   const [removedWinners, setRemovedWinners] = useState<string[]>([])
@@ -205,6 +230,20 @@ export default function WheelPage() {
   const [isSpinning, setIsSpinning] = useState(false)
   const [winner, setWinner] = useState<string | null>(null)
   const pendingWinnerRef = useRef<{ name: string; idx: number } | null>(null)
+
+  // ── Sound ─────────────────────────────────────────────────────────────────
+  const [isMuted, setIsMuted] = useState(false)
+  const handleToggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev
+      setMuted(next)
+      if (next) stopSpinTicks()
+      return next
+    })
+  }, [])
+
+  // Stop any scheduled tick timers when the page unmounts.
+  useEffect(() => () => stopSpinTicks(), [])
 
   // Keep the selected event in sync with the route param (SPA nav between
   // /wheel and /wheel/:eventId reuses this component instead of remounting).
@@ -263,7 +302,15 @@ export default function WheelPage() {
   const needsUnlock =
     source === 'event' && Boolean(selectedEventId) && selectedEventId !== verifiedEventId
 
-  const selectedEventTitle = events.find((e) => e.id === selectedEventId)?.title ?? ''
+  const selectedEvent = events.find((e) => e.id === selectedEventId)
+  const selectedEventTitle = selectedEvent?.title ?? ''
+  // The poster QR links to the public event page (where registering enters the
+  // wheel pool), so it needs a resolved event with a slug.
+  const canMakePoster = source === 'event' && Boolean(selectedEvent?.slug)
+  // Same target as the poster QR: the public event page where attendees register.
+  const registerUrl = selectedEvent?.slug
+    ? `${window.location.origin}/events/${selectedEvent.slug}`
+    : ''
 
   // The full pool for the current source + filter (winners NOT yet removed).
   const fullPool = useMemo(() => {
@@ -303,6 +350,7 @@ export default function WheelPage() {
     setIsSpinning(true)
     setWinner(null)
     setRotation(base + adjustment)
+    startSpinTicks() // this click is the user gesture that unlocks Web Audio
   }, [canSpin, entrants, rotation])
 
   // Called when the rotate transition settles.
@@ -312,6 +360,7 @@ export default function WheelPage() {
     const won = pendingWinnerRef.current
     if (!won) return
     setWinner(won.name)
+    playWin() // chime + applause; confetti fires off the `winner` state
     // Remove by index (not by name) so repeat spins draw different people even
     // when two entrants share the same anonymized display name (e.g. "Juan D.").
     setEntrants((prev) => prev.filter((_, i) => i !== won.idx))
@@ -347,19 +396,44 @@ export default function WheelPage() {
   return (
     <div className="flex h-screen flex-col bg-slate-100 p-6 lg:p-8">
       <header className="mb-4 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-            <ConfettiOutline color="rgb(var(--color-primary))" size={22} />
-          </div>
-          <div>
-            <h1 className="text-md3-headline-sm font-black text-slate-900">DEVCON+ Raffle Wheel</h1>
-            <p className="text-md3-body-sm text-slate-500">
-              {isLocked
-                ? selectedEventTitle || 'Loading event…'
-                : 'Spin to draw a random winner from event participants.'}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+              <ConfettiOutline color="rgb(var(--color-primary))" size={22} />
+            </div>
+            <p className="text-md3-label-lg font-bold uppercase tracking-wide text-primary">
+              DEVCON+ Raffle Wheel
             </p>
           </div>
+          <button
+            type="button"
+            onClick={handleToggleMute}
+            aria-label={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
+            aria-pressed={isMuted}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white transition hover:bg-slate-50"
+          >
+            {isMuted ? (
+              <MutedOutline color="#94A3B8" size={20} />
+            ) : (
+              <SoundwaveOutline color="rgb(var(--color-primary))" size={20} />
+            )}
+          </button>
         </div>
+        {selectedEventTitle ? (
+          <h1 className="mt-2 text-md3-headline-lg font-black leading-tight text-slate-900">
+            {selectedEventTitle}
+          </h1>
+        ) : isLocked ? (
+          <h1 className="mt-2 text-md3-headline-lg font-black leading-tight text-slate-400">
+            Loading event…
+          </h1>
+        ) : (
+          <p className="mt-2 text-md3-body-md text-slate-500">
+            {source === 'event'
+              ? 'Pick an event and spin to draw a random winner from its participants.'
+              : 'Add names to the list and spin to draw a random winner.'}
+          </p>
+        )}
       </header>
 
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1fr_340px]">
@@ -394,7 +468,7 @@ export default function WheelPage() {
             <>
               <div
                 className="aspect-square w-full"
-                style={{ maxWidth: 'min(100%, calc(100vh - 230px))' }}
+                style={{ maxWidth: 'min(100%, calc(100vh - 340px))' }}
               >
                 <NameWheel
                   entrants={entrants}
@@ -521,6 +595,18 @@ export default function WheelPage() {
                   Share public wheel link
                 </button>
               )}
+
+              {/* Poster — generate a printable QR poster for this event */}
+              {canMakePoster && (
+                <button
+                  type="button"
+                  onClick={() => setShowPoster(true)}
+                  className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 py-3 text-md3-label-lg font-bold text-primary transition hover:bg-primary/10"
+                >
+                  <GalleryAddOutline color="rgb(var(--color-primary))" size={18} />
+                  Generate QR poster
+                </button>
+              )}
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
@@ -538,6 +624,38 @@ export default function WheelPage() {
                 placeholder={'Juan dela Cruz\nMaria Santos\n…'}
                 className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-md3-body-md text-slate-900 focus:border-primary focus:outline-none"
               />
+            </div>
+          )}
+
+          {/* On-screen registration QR — attendees scan it to open the event page
+              and register (which drops them into the wheel pool). Tap to blow it up
+              full-screen for scanning off a projector or from across the room. */}
+          {canMakePoster && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500">
+                  Scan to register
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowQr(true)}
+                  className="flex items-center gap-1 text-md3-label-md font-bold text-primary transition hover:opacity-80"
+                >
+                  <MagniferOutline color="rgb(var(--color-primary))" size={15} />
+                  Enlarge
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQr(true)}
+                aria-label="Enlarge registration QR code"
+                className="mx-auto block rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-primary/40 hover:shadow-md"
+              >
+                <QRCodeSVG value={registerUrl} size={172} level="M" fgColor="#1E2A56" bgColor="#FFFFFF" />
+              </button>
+              <p className="mt-3 text-center text-md3-body-sm text-slate-500">
+                Register on the event page to enter the raffle wheel pool.
+              </p>
             </div>
           )}
 
@@ -571,6 +689,27 @@ export default function WheelPage() {
           )}
         </div>
       </div>
+
+      {/* ── Credits footer ── */}
+      <footer className="mt-4 flex shrink-0 flex-col items-center justify-between gap-2 border-t border-slate-200 pt-3 text-center text-md3-label-md text-slate-500 sm:flex-row sm:text-left">
+        <p>
+          Proudly built by{' '}
+          <a
+            href={JUMPSTART_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-primary hover:underline"
+          >
+            DEVCON Jumpstart AI Engineer Internships
+          </a>{' '}
+          Cohort 3 &amp; 4
+        </p>
+        <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:justify-start">
+          Made possible through the support of:
+          <SuiLogo />
+          <NmblrLogo />
+        </p>
+      </footer>
 
       {/* ── Winner overlay (centered) ── */}
       <AnimatePresence>
@@ -633,6 +772,66 @@ export default function WheelPage() {
             onConfirm={handleVerifyPassword}
             onClose={() => setShowPwModal(false)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ── QR poster generator ── */}
+      <AnimatePresence>
+        {showPoster && selectedEvent && (
+          <WheelPoster event={selectedEvent} onClose={() => setShowPoster(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── Expanded registration QR (large — for scanning off a screen/projector) ── */}
+      <AnimatePresence>
+        {showQr && canMakePoster && (
+          <motion.div
+            variants={backdrop}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={() => setShowQr(false)}
+            className="fixed inset-0 z-[75] flex items-center justify-center bg-black/60 p-4"
+          >
+            <motion.div
+              variants={popIn}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+              className="relative flex w-full max-w-md flex-col items-center rounded-[2rem] bg-white p-8 text-center shadow-2xl"
+            >
+              <button
+                type="button"
+                onClick={() => setShowQr(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 rounded-xl p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <CloseCircleOutline color="#94A3B8" size={26} />
+              </button>
+              <p className="text-md3-title-md font-bold uppercase tracking-widest text-slate-400">
+                Scan to register
+              </p>
+              {selectedEventTitle && (
+                <p className="mt-1 max-w-full break-words text-md3-title-lg font-black leading-tight text-slate-900">
+                  {selectedEventTitle}
+                </p>
+              )}
+              <div className="mt-6 w-[min(320px,68vw)] rounded-3xl border border-slate-200 p-5 shadow-lg">
+                <QRCodeSVG
+                  value={registerUrl}
+                  size={320}
+                  level="M"
+                  fgColor="#1E2A56"
+                  bgColor="#FFFFFF"
+                  style={{ width: '100%', height: 'auto' }}
+                />
+              </div>
+              <p className="mt-5 text-md3-body-sm text-slate-500">
+                Register on the event page to enter the raffle wheel pool.
+              </p>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

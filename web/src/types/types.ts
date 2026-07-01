@@ -260,6 +260,10 @@ export interface Referral {
 
 export type MissionDifficulty  = 'easy' | 'medium' | 'hard'
 export type MissionStatus      = 'available' | 'claimed'
+/** Who can complete a mission:
+ *  multi         — every member who completes it earns XP; approving one does NOT lock it
+ *  single_winner — first approved submission wins; the mission locks (legacy bounty) */
+export type MissionCompletionMode = 'multi' | 'single_winner'
 export type SubmissionStatus   = 'pending' | 'approved' | 'rejected'
 /** How a member completes a mission:
  *  proof_upload — submits a link for admin review
@@ -274,6 +278,7 @@ export interface Mission {
   xp_reward: number
   difficulty: MissionDifficulty
   status: MissionStatus
+  completion_mode: MissionCompletionMode
   submission_type: SubmissionType
   github_url: string | null
   is_active: boolean

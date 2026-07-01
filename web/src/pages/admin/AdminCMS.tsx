@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline, StarOutline, UserOutline, LinkOutline, DocumentTextOutline, ClockCircleOutline, ArrowLeftOutline } from 'solar-icon-set'
+import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline, StarOutline, UserOutline, LinkOutline, DocumentTextOutline, ClockCircleOutline, ArrowLeftOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import { backdrop, cardItem, slideUp, staggerContainer } from '../../lib/animation'
+import type { SolarIcon } from '../../lib/icons'
 import AdminUpgradeRequests from './AdminUpgradeRequests'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -15,6 +17,9 @@ import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
 const TABS = ['Upgrade Requests', 'Rewards', 'Jobs', 'Missions', 'Point Submissions', 'Articles', 'XP Tiers'] as const
 type Tab = typeof TABS[number]
+
+// Shared sort direction for all sortable tables in this file.
+type SortDir = 'asc' | 'desc'
 
 const INPUT_CLS = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue'
 const LABEL_CLS = 'text-md3-label-md font-medium text-slate-700 block mb-1'
@@ -59,7 +64,7 @@ function SlideOver({ title, onClose, onSubmit, saving, submitLabel = 'Save', chi
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="w-96 bg-white h-full shadow-2xl overflow-y-auto flex flex-col">
+      <div className="w-96 max-w-[88vw] bg-white h-full shadow-2xl overflow-y-auto flex flex-col">
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <h2 className="text-md3-title-lg font-bold text-slate-900">{title}</h2>
           <button onClick={onClose}>
@@ -88,26 +93,14 @@ function SlideOver({ title, onClose, onSubmit, saving, submitLabel = 'Save', chi
 
 function ConfirmDelete({ label, onConfirm, onCancel }: { label: string; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl">
-        <p className="text-md3-body-md text-slate-700 mb-1 font-semibold">Delete {label}?</p>
-        <p className="text-md3-label-md text-slate-400 mb-5">This action cannot be undone.</p>
-        <div className="flex gap-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2 border border-slate-200 rounded-xl text-md3-body-md text-slate-600 font-semibold hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2 bg-red text-white rounded-xl text-md3-body-md font-bold hover:opacity-90"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      title={`Delete ${label}?`}
+      message="This action cannot be undone."
+      confirmLabel="Delete"
+      tone="danger"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   )
 }
 
@@ -137,9 +130,10 @@ const defaultRewardForm = (): RewardForm => ({
   is_coming_soon: true,
 })
 
+type RewardSortColumn = 'name' | 'points_cost' | 'type' | 'claim_method' | 'is_active' | 'is_coming_soon'
+
 function RewardsTab() {
   const [rows, setRows] = useState<Reward[]>([])
-  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -147,6 +141,57 @@ function RewardsTab() {
   const [form, setForm] = useState<RewardForm>(defaultRewardForm())
   const [saving, setSaving] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [rewardSearch, setRewardSearch] = useState('')
+  const [rewardSortColumn, setRewardSortColumn] = useState<RewardSortColumn | null>(null)
+  const [rewardSortDir, setRewardSortDir] = useState<SortDir>('asc')
+
+  // Filter by name/type/claim method, then sort. With no active column the list
+  // stays newest-first (most recently added rewards on top).
+  const visibleRewards = useMemo(() => {
+    const q = rewardSearch.trim().toLowerCase()
+    const matched = q
+      ? rows.filter((r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.type.toLowerCase().includes(q) ||
+          r.claim_method.toLowerCase().includes(q),
+        )
+      : rows
+    return [...matched].sort((a, b) => {
+      if (rewardSortColumn === null) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      const dir = rewardSortDir === 'asc' ? 1 : -1
+      switch (rewardSortColumn) {
+        case 'name': return a.name.localeCompare(b.name) * dir
+        case 'points_cost': return (a.points_cost - b.points_cost) * dir
+        case 'type': return a.type.localeCompare(b.type) * dir
+        case 'claim_method': return a.claim_method.localeCompare(b.claim_method) * dir
+        case 'is_active': return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir
+        case 'is_coming_soon': return ((a.is_coming_soon ? 1 : 0) - (b.is_coming_soon ? 1 : 0)) * dir
+        default: return 0
+      }
+    })
+  }, [rows, rewardSearch, rewardSortColumn, rewardSortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleRewards, 10)
+
+  const handleRewardSort = (col: RewardSortColumn) => {
+    pagination.setPage(1)
+    if (rewardSortColumn !== col) {
+      setRewardSortColumn(col)
+      setRewardSortDir('asc')
+    } else if (rewardSortDir === 'asc') {
+      setRewardSortDir('desc')
+    } else {
+      setRewardSortColumn(null)
+      setRewardSortDir('asc')
+    }
+  }
+
+  const rewardSortIcon = (col: RewardSortColumn) => {
+    if (rewardSortColumn !== col) return null
+    return rewardSortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const load = async () => {
     setLoading(true)
@@ -220,7 +265,7 @@ function RewardsTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Rewards</h2>
@@ -228,10 +273,10 @@ function RewardsTab() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
         >
           <AddCircleOutline className="w-4 h-4" />
-          Add Reward
+          <span className="hidden sm:inline">Add Reward</span>
         </button>
       </div>
 
@@ -242,24 +287,47 @@ function RewardsTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by name, type, or claim method…"
+            value={rewardSearch}
+            onChange={(e) => { setRewardSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Points Cost</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Type</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Claim Method</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Active</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Coming Soon</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleRewardSort('name')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Name {rewardSortIcon('name')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleRewardSort('points_cost')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Points Cost {rewardSortIcon('points_cost')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleRewardSort('type')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Type {rewardSortIcon('type')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleRewardSort('claim_method')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Claim Method {rewardSortIcon('claim_method')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleRewardSort('is_active')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Active {rewardSortIcon('is_active')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleRewardSort('is_coming_soon')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Coming Soon {rewardSortIcon('is_coming_soon')}</button>
+                </th>
                 <th className="px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((r) => (
-                <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{r.name}</td>
+                <tr key={r.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-semibold text-slate-900">{r.name}</td>
                   <td className="px-4 py-3 text-slate-700 font-mono text-md3-label-md">{r.points_cost.toLocaleString()} pts</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md capitalize">{r.type}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{r.claim_method === 'digital_delivery' ? 'Digital Delivery' : 'Onsite'}</td>
@@ -287,12 +355,15 @@ function RewardsTab() {
               ))}
             </tbody>
           </table>
-          {rows.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No rewards yet.</p>
+          {visibleRewards.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {rewardSearch.trim() ? `No rewards match "${rewardSearch.trim()}".` : 'No rewards yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="reward" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       {slideOver && (
@@ -366,9 +437,14 @@ const defaultJobForm = (): JobForm => ({
   is_active: true,
 })
 
+type JobSortColumn = 'title' | 'company' | 'location' | 'work_type' | 'is_promoted' | 'is_active'
+
+function jobPostedTime(j: Job): number {
+  return j.posted_at ? new Date(j.posted_at).getTime() : 0
+}
+
 function JobsTab() {
   const [rows, setRows] = useState<Job[]>([])
-  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -376,6 +452,58 @@ function JobsTab() {
   const [form, setForm] = useState<JobForm>(defaultJobForm())
   const [saving, setSaving] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [jobSearch, setJobSearch] = useState('')
+  const [jobSortColumn, setJobSortColumn] = useState<JobSortColumn | null>(null)
+  const [jobSortDir, setJobSortDir] = useState<SortDir>('asc')
+
+  // Filter by title/company/location/type, then sort. With no active column the
+  // list stays newest-first by posted_at (matching the load query).
+  const visibleJobs = useMemo(() => {
+    const q = jobSearch.trim().toLowerCase()
+    const matched = q
+      ? rows.filter((j) =>
+          j.title.toLowerCase().includes(q) ||
+          j.company.toLowerCase().includes(q) ||
+          (j.location ?? '').toLowerCase().includes(q) ||
+          j.work_type.toLowerCase().includes(q),
+        )
+      : rows
+    return [...matched].sort((a, b) => {
+      if (jobSortColumn === null) return jobPostedTime(b) - jobPostedTime(a)
+      const dir = jobSortDir === 'asc' ? 1 : -1
+      switch (jobSortColumn) {
+        case 'title': return a.title.localeCompare(b.title) * dir
+        case 'company': return a.company.localeCompare(b.company) * dir
+        case 'location': return (a.location ?? '').localeCompare(b.location ?? '') * dir
+        case 'work_type': return a.work_type.localeCompare(b.work_type) * dir
+        case 'is_promoted': return ((a.is_promoted ? 1 : 0) - (b.is_promoted ? 1 : 0)) * dir
+        case 'is_active': return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir
+        default: return 0
+      }
+    })
+  }, [rows, jobSearch, jobSortColumn, jobSortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleJobs, 10)
+
+  const handleJobSort = (col: JobSortColumn) => {
+    pagination.setPage(1)
+    if (jobSortColumn !== col) {
+      setJobSortColumn(col)
+      setJobSortDir('asc')
+    } else if (jobSortDir === 'asc') {
+      setJobSortDir('desc')
+    } else {
+      setJobSortColumn(null)
+      setJobSortDir('asc')
+    }
+  }
+
+  const jobSortIcon = (col: JobSortColumn) => {
+    if (jobSortColumn !== col) return null
+    return jobSortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const load = async () => {
     setLoading(true)
@@ -455,7 +583,7 @@ function JobsTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Jobs</h2>
@@ -463,10 +591,10 @@ function JobsTab() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
         >
           <AddCircleOutline className="w-4 h-4" />
-          Add Job
+          <span className="hidden sm:inline">Add Job</span>
         </button>
       </div>
 
@@ -477,24 +605,47 @@ function JobsTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by title, company, location, or type…"
+            value={jobSearch}
+            onChange={(e) => { setJobSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Title</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Company</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Location</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Type</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Promoted</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Active</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleJobSort('title')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Title {jobSortIcon('title')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleJobSort('company')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Company {jobSortIcon('company')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleJobSort('location')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Location {jobSortIcon('location')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleJobSort('work_type')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Type {jobSortIcon('work_type')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleJobSort('is_promoted')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Promoted {jobSortIcon('is_promoted')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleJobSort('is_active')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Active {jobSortIcon('is_active')}</button>
+                </th>
                 <th className="px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((j) => (
-                <tr key={j.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{j.title}</td>
+                <tr key={j.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-semibold text-slate-900">{j.title}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{j.company}</td>
                   <td className="px-4 py-3 text-slate-500 text-md3-label-md">{j.location ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md capitalize">{j.work_type.replace('_', ' ')}</td>
@@ -522,12 +673,15 @@ function JobsTab() {
               ))}
             </tbody>
           </table>
-          {rows.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No jobs yet.</p>
+          {visibleJobs.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {jobSearch.trim() ? `No jobs match "${jobSearch.trim()}".` : 'No jobs yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="job" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       {slideOver && (
@@ -630,9 +784,10 @@ const defaultArticleForm = (): ArticleForm => ({
   is_promoted: false,
 })
 
+type ArticleSortColumn = 'title' | 'category' | 'is_featured' | 'is_promoted'
+
 function ArticlesTab() {
   const [rows, setRows] = useState<NewsPost[]>([])
-  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -640,6 +795,55 @@ function ArticlesTab() {
   const [form, setForm] = useState<ArticleForm>(defaultArticleForm())
   const [saving, setSaving] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [articleSearch, setArticleSearch] = useState('')
+  const [articleSortColumn, setArticleSortColumn] = useState<ArticleSortColumn | null>(null)
+  const [articleSortDir, setArticleSortDir] = useState<SortDir>('asc')
+
+  // Filter by title/category/body, then sort. With no active column the list
+  // stays newest-first (most recently created on top).
+  const visibleArticles = useMemo(() => {
+    const q = articleSearch.trim().toLowerCase()
+    const matched = q
+      ? rows.filter((n) =>
+          n.title.toLowerCase().includes(q) ||
+          n.category.toLowerCase().includes(q) ||
+          (n.body ?? '').toLowerCase().includes(q),
+        )
+      : rows
+    return [...matched].sort((a, b) => {
+      if (articleSortColumn === null) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      const dir = articleSortDir === 'asc' ? 1 : -1
+      switch (articleSortColumn) {
+        case 'title': return a.title.localeCompare(b.title) * dir
+        case 'category': return a.category.localeCompare(b.category) * dir
+        case 'is_featured': return (((a.is_featured ? 1 : 0)) - ((b.is_featured ? 1 : 0))) * dir
+        case 'is_promoted': return (((a.is_promoted ? 1 : 0)) - ((b.is_promoted ? 1 : 0))) * dir
+        default: return 0
+      }
+    })
+  }, [rows, articleSearch, articleSortColumn, articleSortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleArticles, 10)
+
+  const handleArticleSort = (col: ArticleSortColumn) => {
+    pagination.setPage(1)
+    if (articleSortColumn !== col) {
+      setArticleSortColumn(col)
+      setArticleSortDir('asc')
+    } else if (articleSortDir === 'asc') {
+      setArticleSortDir('desc')
+    } else {
+      setArticleSortColumn(null)
+      setArticleSortDir('asc')
+    }
+  }
+
+  const articleSortIcon = (col: ArticleSortColumn) => {
+    if (articleSortColumn !== col) return null
+    return articleSortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const load = async () => {
     setLoading(true)
@@ -714,7 +918,7 @@ function ArticlesTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">Articles</h2>
@@ -722,10 +926,10 @@ function ArticlesTab() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
         >
           <AddCircleOutline className="w-4 h-4" />
-          Add Article
+          <span className="hidden sm:inline">Add Article</span>
         </button>
       </div>
 
@@ -736,22 +940,41 @@ function ArticlesTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by title, category, or body…"
+            value={articleSearch}
+            onChange={(e) => { setArticleSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Title</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Category</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Featured</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Promoted</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleArticleSort('title')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Title {articleSortIcon('title')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleArticleSort('category')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Category {articleSortIcon('category')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleArticleSort('is_featured')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Featured {articleSortIcon('is_featured')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleArticleSort('is_promoted')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Promoted {articleSortIcon('is_promoted')}</button>
+                </th>
                 <th className="px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((n) => (
-                <tr key={n.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-900 max-w-xs truncate">{n.title}</td>
+                <tr key={n.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-semibold text-slate-900 max-w-xs truncate">{n.title}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md capitalize">{n.category.replace('_', ' ')}</td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${n.is_featured ? 'bg-blue/10 text-blue' : 'bg-slate-100 text-slate-400'}`}>
@@ -777,12 +1000,15 @@ function ArticlesTab() {
               ))}
             </tbody>
           </table>
-          {rows.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No articles yet.</p>
+          {visibleArticles.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {articleSearch.trim() ? `No articles match "${articleSearch.trim()}".` : 'No articles yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="article" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       {slideOver && (
@@ -853,6 +1079,13 @@ const SUBMISSION_TYPE_LABELS: Record<MissionSubmissionType, string> = {
   submit_for_approval: 'Submit for Approval (needs review)',
 }
 
+type MissionCompletionMode = 'multi' | 'single_winner'
+
+const COMPLETION_MODE_LABELS: Record<MissionCompletionMode, string> = {
+  multi:         'Multi-participant (everyone earns)',
+  single_winner: 'Single winner (bounty — locks on first approval)',
+}
+
 interface MissionRow {
   id: string
   title: string
@@ -860,6 +1093,7 @@ interface MissionRow {
   xp_reward: number
   difficulty: 'easy' | 'medium' | 'hard'
   status: 'available' | 'claimed'
+  completion_mode: MissionCompletionMode
   submission_type: MissionSubmissionType
   github_url: string | null
   is_active: boolean
@@ -884,6 +1118,7 @@ interface MissionForm {
   description: string
   xp_reward: string
   difficulty: 'easy' | 'medium' | 'hard'
+  completion_mode: MissionCompletionMode
   submission_type: MissionSubmissionType
   github_url: string
   is_active: boolean
@@ -894,6 +1129,7 @@ const defaultMissionForm = (): MissionForm => ({
   description: '',
   xp_reward: '100',
   difficulty: 'medium',
+  completion_mode: 'multi',
   submission_type: 'proof_upload',
   github_url: '',
   is_active: true,
@@ -923,7 +1159,11 @@ function MissionsTab() {
   const [loadingQueue, setLoadingQueue] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [approveError, setApproveError] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<MissionSubmissionRow | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null)
+  const [approveTarget, setApproveTarget] = useState<MissionSubmissionRow | null>(null)
+  const [toggleTarget, setToggleTarget] = useState<MissionRow | null>(null)
 
   const { pageItems: missionItems, ...missionPagination } = usePagination(rows, 10)
   const { pageItems: queueItems, ...queuePagination } = usePagination(queue, 10)
@@ -967,6 +1207,7 @@ function MissionsTab() {
       description:     m.description ?? '',
       xp_reward:       String(m.xp_reward),
       difficulty:      m.difficulty,
+      completion_mode: m.completion_mode ?? 'multi',
       submission_type: m.submission_type ?? 'proof_upload',
       github_url:      m.github_url ?? '',
       is_active:       m.is_active,
@@ -982,6 +1223,7 @@ function MissionsTab() {
       description:     form.description.trim() || null,
       xp_reward:       parseInt(form.xp_reward, 10) || 100,
       difficulty:      form.difficulty,
+      completion_mode: form.completion_mode,
       submission_type: form.submission_type,
       github_url:      form.github_url.trim() || null,
       is_active:       form.is_active,
@@ -1041,12 +1283,29 @@ function MissionsTab() {
     }
   }
 
+  const handleReject = async (subId: string, remarks: string) => {
+    setRejectingId(subId)
+    setApproveError(null)
+    try {
+      await apiFetch(`/api/missions/submissions/${subId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ adminRemarks: remarks }),
+      })
+      setQueue((prev) => prev.filter((s) => s.id !== subId))
+      setRejectTarget(null)
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Reject failed')
+    } finally {
+      setRejectingId(null)
+    }
+  }
+
   const f = (key: keyof MissionForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((p) => ({ ...p, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1111,7 +1370,7 @@ function MissionsTab() {
                       </span>
                     )}
                     <button
-                      onClick={() => void handleToggleStatus(m)}
+                      onClick={() => { if (m.is_active) setToggleTarget(m); else void handleToggleStatus(m) }}
                       disabled={togglingStatusId === m.id}
                       className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full transition-colors disabled:opacity-40 ${m.is_active ? 'bg-green/10 text-green hover:bg-green/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
                     >
@@ -1150,40 +1409,53 @@ function MissionsTab() {
           <div className="flex-1 min-h-0 flex flex-col">
             {approveError && <p className="text-md3-body-md text-red mb-2">{approveError}</p>}
             <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
-            {queueItems.map((sub) => (
+            {queueItems.map((sub) => {
+              const busy = approvingId === sub.id || rejectingId === sub.id
+              return (
               <div key={sub.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-card">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-md3-body-md font-semibold text-slate-900">{sub.member_name || 'Unknown'}</p>
-                    <p className="text-md3-label-md text-slate-400">{sub.member_email}</p>
-                    <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.mission_title}</p>
-                    {!sub.pr_link || sub.pr_link === 'submitted-for-approval' ? (
-                      <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
-                    ) : (
-                      <a
-                        href={sub.pr_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
-                      >
-                        {sub.pr_link}
-                      </a>
-                    )}
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Submitted {new Date(sub.submitted_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => void handleApprove(sub.id)}
-                    disabled={approvingId === sub.id}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green/10 text-green text-md3-label-md font-bold rounded-lg hover:bg-green/20 transition-colors disabled:opacity-50 shrink-0"
+                <div className="min-w-0">
+                  <p className="text-md3-body-md font-semibold text-slate-900">{sub.member_name || 'Unknown'}</p>
+                  <p className="text-md3-label-md text-slate-400">{sub.member_email}</p>
+                  <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.mission_title}</p>
+                  {!sub.pr_link || sub.pr_link === 'submitted-for-approval' ? (
+                    <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
+                  ) : (
+                    <a
+                      href={sub.pr_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
+                    >
+                      {sub.pr_link}
+                    </a>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Submitted {new Date(sub.submitted_at).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50 sm:justify-end">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setRejectTarget(sub)}
+                    disabled={busy}
+                    className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 border border-red/40 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
                   >
-                    <CheckCircleOutline className="w-3.5 h-3.5" />
+                    <CloseCircleOutline color="#EF4444" width={14} height={14} />
+                    {rejectingId === sub.id ? 'Rejecting…' : 'Reject'}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setApproveTarget(sub)}
+                    disabled={busy}
+                    className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 bg-blue text-white rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
+                  >
+                    <CheckCircleOutline color="#FFFFFF" width={14} height={14} />
                     {approvingId === sub.id ? 'Approving…' : 'Approve & Award'}
-                  </button>
+                  </motion.button>
                 </div>
               </div>
-            ))}
+              )
+            })}
             </div>
             <Pagination controller={queuePagination} itemLabel="submission" className="shrink-0" />
           </div>
@@ -1229,6 +1501,14 @@ function MissionsTab() {
             </select>
           </div>
           <div>
+            <label className={LABEL_CLS}>Completion Mode</label>
+            <select className={INPUT_CLS} value={form.completion_mode} onChange={f('completion_mode')}>
+              {(Object.keys(COMPLETION_MODE_LABELS) as MissionCompletionMode[]).map((m) => (
+                <option key={m} value={m}>{COMPLETION_MODE_LABELS[m]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className={LABEL_CLS}>
               {form.submission_type === 'link' ? 'Link URL' : 'GitHub URL'}
             </label>
@@ -1251,6 +1531,41 @@ function MissionsTab() {
           onCancel={() => setConfirmDeleteId(null)}
         />
       )}
+
+      <AnimatePresence>
+        {rejectTarget && (
+          <RejectModal
+            sub={rejectTarget}
+            onConfirm={handleReject}
+            onClose={() => setRejectTarget(null)}
+            loading={rejectingId === rejectTarget.id}
+          />
+        )}
+      </AnimatePresence>
+
+      {approveTarget && (
+        <ConfirmDialog
+          title="Approve & award points?"
+          message={`${approveTarget.member_name || 'This member'} will be awarded points for "${approveTarget.mission_title}". This can't be undone.`}
+          confirmLabel="Approve & Award"
+          tone="primary"
+          loading={approvingId === approveTarget.id}
+          onConfirm={() => { void handleApprove(approveTarget.id).then(() => setApproveTarget(null)) }}
+          onCancel={() => setApproveTarget(null)}
+        />
+      )}
+
+      {toggleTarget && (
+        <ConfirmDialog
+          title="Deactivate this mission?"
+          message={`"${toggleTarget.title}" will be hidden from members until you reactivate it.`}
+          confirmLabel="Deactivate"
+          tone="danger"
+          loading={togglingStatusId === toggleTarget.id}
+          onConfirm={() => { void handleToggleStatus(toggleTarget).then(() => setToggleTarget(null)) }}
+          onCancel={() => setToggleTarget(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1263,9 +1578,10 @@ const defaultXpTierForm = (): XpTierForm => ({
   badge_color: '#F8C630',
 })
 
+type XpTierSortColumn = 'name' | 'label' | 'min_points' | 'max_points' | 'badge_color'
+
 function XpTiersTab() {
   const [rows, setRows] = useState<XpTier[]>([])
-  const { pageItems, ...pagination } = usePagination(rows, 10)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
@@ -1273,6 +1589,56 @@ function XpTiersTab() {
   const [form, setForm] = useState<XpTierForm>(defaultXpTierForm())
   const [saving, setSaving] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [tierSearch, setTierSearch] = useState('')
+  const [tierSortColumn, setTierSortColumn] = useState<XpTierSortColumn | null>(null)
+  const [tierSortDir, setTierSortDir] = useState<SortDir>('asc')
+
+  // Filter by name/label/badge color, then sort. With no active column the list
+  // keeps the server-returned order.
+  const visibleTiers = useMemo(() => {
+    const q = tierSearch.trim().toLowerCase()
+    const matched = q
+      ? rows.filter((t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.label.toLowerCase().includes(q) ||
+          (t.badge_color ?? '').toLowerCase().includes(q),
+        )
+      : rows
+    return [...matched].sort((a, b) => {
+      if (tierSortColumn === null) return 0
+      const dir = tierSortDir === 'asc' ? 1 : -1
+      switch (tierSortColumn) {
+        case 'name': return a.name.localeCompare(b.name) * dir
+        case 'label': return a.label.localeCompare(b.label) * dir
+        case 'min_points': return (a.min_points - b.min_points) * dir
+        case 'max_points': return ((a.max_points ?? Infinity) - (b.max_points ?? Infinity)) * dir
+        case 'badge_color': return (a.badge_color ?? '').localeCompare(b.badge_color ?? '') * dir
+        default: return 0
+      }
+    })
+  }, [rows, tierSearch, tierSortColumn, tierSortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleTiers, 10)
+
+  const handleTierSort = (col: XpTierSortColumn) => {
+    pagination.setPage(1)
+    if (tierSortColumn !== col) {
+      setTierSortColumn(col)
+      setTierSortDir('asc')
+    } else if (tierSortDir === 'asc') {
+      setTierSortDir('desc')
+    } else {
+      setTierSortColumn(null)
+      setTierSortDir('asc')
+    }
+  }
+
+  const tierSortIcon = (col: XpTierSortColumn) => {
+    if (tierSortColumn !== col) return null
+    return tierSortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const load = async () => {
     setLoading(true)
@@ -1345,7 +1711,7 @@ function XpTiersTab() {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-md3-title-lg font-bold text-slate-900">XP Tiers</h2>
@@ -1353,10 +1719,10 @@ function XpTiersTab() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
         >
           <AddCircleOutline className="w-4 h-4" />
-          Add Tier
+          <span className="hidden sm:inline">Add Tier</span>
         </button>
       </div>
 
@@ -1367,23 +1733,44 @@ function XpTiersTab() {
       {loading ? (
         <p className="text-slate-400 text-md3-body-md">Loading…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by name, label, or color…"
+            value={tierSearch}
+            onChange={(e) => { setTierSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-          <table className="w-full text-md3-body-md">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Label</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Min Points</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Max Points</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Badge Color</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleTierSort('name')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Name {tierSortIcon('name')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleTierSort('label')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Label {tierSortIcon('label')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleTierSort('min_points')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Min Points {tierSortIcon('min_points')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleTierSort('max_points')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Max Points {tierSortIcon('max_points')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleTierSort('badge_color')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Badge Color {tierSortIcon('badge_color')}</button>
+                </th>
                 <th className="px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((t) => (
-                <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-semibold text-slate-900">{t.name}</td>
+                <tr key={t.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-semibold text-slate-900">{t.name}</td>
                   <td className="px-4 py-3 text-slate-600 text-md3-label-md">{t.label}</td>
                   <td className="px-4 py-3 text-slate-700 font-mono text-md3-label-md">{t.min_points.toLocaleString()}</td>
                   <td className="px-4 py-3 text-slate-500 font-mono text-md3-label-md">{t.max_points !== null ? t.max_points.toLocaleString() : '∞'}</td>
@@ -1412,12 +1799,15 @@ function XpTiersTab() {
               ))}
             </tbody>
           </table>
-          {rows.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No XP tiers yet.</p>
+          {visibleTiers.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {tierSearch.trim() ? `No tiers match "${tierSearch.trim()}".` : 'No XP tiers yet.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="tier" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       {slideOver && (
@@ -1510,6 +1900,13 @@ const SUB_STATUS_COLORS: Record<SubmissionStatus, string> = {
   rejected: 'bg-red/10 text-red',
 }
 
+// Icon + tint per status — drives the colored indicator chip on the stats cards.
+const SUB_STATUS_ICONS: Record<SubmissionStatus, { Icon: SolarIcon; color: string; bg: string }> = {
+  pending:  { Icon: ClockCircleOutline, color: '#F8C630', bg: 'bg-gold/10'  },
+  approved: { Icon: CheckCircleOutline, color: '#21C45D', bg: 'bg-green/10' },
+  rejected: { Icon: CloseCircleOutline, color: '#EF4444', bg: 'bg-red/10'   },
+}
+
 function subInitials(name: string) {
   return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'
 }
@@ -1529,7 +1926,9 @@ function fmtDateShort(iso: string) {
 // ── Reject Modal ──────────────────────────────────────────────────────────────
 
 interface RejectModalProps {
-  sub: SubmissionRow
+  // Structural type — accepts both SubmissionRow (point submissions) and
+  // MissionSubmissionRow (mission review queue); only these fields are read.
+  sub: { id: string; member_name: string; mission_title: string }
   onConfirm: (subId: string, remarks: string) => Promise<void>
   onClose: () => void
   loading: boolean
@@ -1733,7 +2132,7 @@ function SubmissionDetailSheet({ sub, history, historyLoading, onClose, onApprov
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onReject(sub)}
                 disabled={actionLoading === sub.id}
-                className="flex-1 py-3 flex items-center justify-center gap-2 bg-red/10 text-red rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-red/20 transition-colors"
+                className="flex-1 py-3 flex items-center justify-center gap-2 border border-red/40 text-red rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
               >
                 <CloseCircleOutline color="#EF4444" width={20} height={20} />
                 Reject
@@ -1742,9 +2141,9 @@ function SubmissionDetailSheet({ sub, history, historyLoading, onClose, onApprov
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onApprove(sub)}
                 disabled={actionLoading === sub.id}
-                className="flex-1 py-3 flex items-center justify-center gap-2 bg-green/10 text-green rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-green/20 transition-colors"
+                className="flex-1 py-3 flex items-center justify-center gap-2 bg-blue text-white rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
               >
-                <CheckCircleOutline color="#21C45D" width={20} height={20} />
+                <CheckCircleOutline color="#FFFFFF" width={20} height={20} />
                 {actionLoading === sub.id ? 'Approving…' : 'Approve & Award'}
               </motion.button>
             </div>
@@ -1801,12 +2200,12 @@ function SubmissionCard({ sub, onTap, onApprove, onReject, actionLoading }: Subm
       </div>
 
       {sub.status === 'pending' && (
-        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50">
+        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50 sm:justify-end">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={(e) => { e.stopPropagation(); onReject(sub) }}
             disabled={actionLoading === sub.id}
-            className="flex-1 py-2 flex items-center justify-center gap-1.5 bg-red/10 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/20 transition-colors"
+            className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 border border-red/40 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
           >
             <CloseCircleOutline color="#EF4444" width={14} height={14} />
             Reject
@@ -1815,9 +2214,9 @@ function SubmissionCard({ sub, onTap, onApprove, onReject, actionLoading }: Subm
             whileTap={{ scale: 0.95 }}
             onClick={(e) => { e.stopPropagation(); onApprove(sub) }}
             disabled={actionLoading === sub.id}
-            className="flex-1 py-2 flex items-center justify-center gap-1.5 bg-green/10 text-green rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-green/20 transition-colors"
+            className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 bg-blue text-white rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
           >
-            <CheckCircleOutline color="#21C45D" width={14} height={14} />
+            <CheckCircleOutline color="#FFFFFF" width={14} height={14} />
             {actionLoading === sub.id ? 'Approving…' : 'Approve'}
           </motion.button>
         </div>
@@ -1879,6 +2278,8 @@ function PointSubmissionsTab() {
     setHistory([])
   }
 
+  const [approveTarget, setApproveTarget] = useState<SubmissionRow | null>(null)
+
   const handleApprove = async (sub: SubmissionRow) => {
     setActionLoading(sub.id)
     setActionError(null)
@@ -1933,7 +2334,7 @@ function PointSubmissionsTab() {
   })
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className="p-4 md:p-8 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -1947,22 +2348,20 @@ function PointSubmissionsTab() {
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        {SUB_STATUS_TABS.map(({ key, label }) => (
-          <div
-            key={key}
-            className={`rounded-2xl p-3 text-center border cursor-pointer transition-colors ${
-              activeStatus === key
-                ? key === 'pending' ? 'bg-gold/20 border-gold/40' : key === 'approved' ? 'bg-green/20 border-green/40' : 'bg-red/20 border-red/40'
-                : key === 'pending' ? 'bg-gold/10 border-gold/20 hover:bg-gold/15' : key === 'approved' ? 'bg-green/10 border-green/20 hover:bg-green/15' : 'bg-red/10 border-red/20 hover:bg-red/15'
-            }`}
-            onClick={() => setActiveStatus(key)}
-          >
-            <p className={`text-md3-headline-sm font-black ${key === 'approved' ? 'text-green' : key === 'rejected' ? 'text-red' : 'text-slate-900'}`}>
-              {loading ? '—' : counts[key]}
-            </p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
-          </div>
-        ))}
+        {SUB_STATUS_TABS.map(({ key, label }) => {
+          const { Icon, color, bg } = SUB_STATUS_ICONS[key]
+          return (
+            <div key={key} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${bg}`}>
+                <Icon color={color} width={18} height={18} />
+              </div>
+              <p className={`text-md3-headline-sm font-black ${loading ? 'text-slate-300' : 'text-slate-900'}`}>
+                {loading ? '—' : counts[key]}
+              </p>
+              <p className="text-md3-label-md text-slate-500 mt-0.5">{label}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Status filter pills + search */}
@@ -1972,7 +2371,7 @@ function PointSubmissionsTab() {
             key={key}
             onClick={() => setActiveStatus(key)}
             className={`flex-1 py-2 rounded-xl text-md3-label-md font-bold transition-colors relative ${
-              activeStatus === key ? 'bg-blue text-white shadow-blue' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue/30'
+              activeStatus === key ? 'bg-blue text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue/30'
             }`}
           >
             {label}
@@ -2025,7 +2424,7 @@ function PointSubmissionsTab() {
                 key={sub.id}
                 sub={sub}
                 onTap={openDetail}
-                onApprove={handleApprove}
+                onApprove={(s) => setApproveTarget(s)}
                 onReject={(s) => setRejectTarget(s)}
                 actionLoading={actionLoading}
               />
@@ -2038,7 +2437,7 @@ function PointSubmissionsTab() {
       {filtered.length > 10 && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-4 w-10 h-10 bg-blue text-white rounded-full shadow-blue flex items-center justify-center"
+          className="fixed bottom-6 right-4 w-10 h-10 bg-blue text-white rounded-full shadow-card flex items-center justify-center"
           aria-label="Scroll to top"
         >
           <ArrowLeftOutline color="white" width={16} height={16} className="rotate-90" />
@@ -2052,7 +2451,7 @@ function PointSubmissionsTab() {
             history={history}
             historyLoading={historyLoading}
             onClose={closeDetail}
-            onApprove={handleApprove}
+            onApprove={(s) => setApproveTarget(s)}
             onReject={(s) => setRejectTarget(s)}
             actionLoading={actionLoading}
           />
@@ -2069,6 +2468,18 @@ function PointSubmissionsTab() {
           />
         )}
       </AnimatePresence>
+
+      {approveTarget && (
+        <ConfirmDialog
+          title="Approve & award points?"
+          message={`${approveTarget.member_name || 'This member'} will be awarded ${approveTarget.xp_reward} pts for "${approveTarget.mission_title}". This can't be undone.`}
+          confirmLabel="Approve & Award"
+          tone="primary"
+          loading={actionLoading === approveTarget.id}
+          onConfirm={() => { void handleApprove(approveTarget).then(() => setApproveTarget(null)) }}
+          onCancel={() => setApproveTarget(null)}
+        />
+      )}
     </div>
   )
 }
@@ -2081,18 +2492,18 @@ export default function AdminCMS() {
   return (
     <div className="h-full flex flex-col bg-slate-50">
       {/* Page header */}
-      <div className="px-8 pt-8 pb-4 shrink-0">
+      <div className="px-4 pt-6 md:px-8 md:pt-8 pb-4 shrink-0">
         <h1 className="text-md3-headline-sm font-black text-slate-900">CMS</h1>
         <p className="text-md3-body-md text-slate-500 mt-0.5">Manage platform content and access requests</p>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-100 px-8 pt-6 pb-0 shrink-0">
+      {/* Tab bar — horizontally scrollable on mobile so the 7 tabs never force page-wide overflow */}
+      <div className="flex gap-1 border-b border-slate-100 px-4 md:px-8 pt-6 pb-0 shrink-0 overflow-x-auto md:overflow-x-visible">
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2.5 text-md3-body-md font-semibold rounded-t-lg transition-colors ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-md3-body-md font-semibold rounded-t-lg transition-colors ${
               activeTab === tab
                 ? 'bg-white border border-b-white border-slate-100 text-blue -mb-px relative z-10'
                 : 'text-slate-400 hover:text-slate-600'

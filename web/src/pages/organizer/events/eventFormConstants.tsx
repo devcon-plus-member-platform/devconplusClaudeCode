@@ -34,7 +34,15 @@ export interface CustomFormField {
 // Single source of truth for tag length — used in both schema validation and the UI input
 export const TAG_MAX_LENGTH = 20
 
-export const schema = z
+// Attendance-XP ceilings by role. Admins keep the original ceiling; chapter
+// officers are capped lower so they can't over-award points.
+export const MAX_XP_ADMIN = 1000
+export const MAX_XP_OFFICER = 350
+
+// The schema is parameterized by the XP ceiling so each organizer page can build
+// a role-scoped validator (chapter officers cap at 350, admins at 1000).
+export function makeEventSchema(xpMax: number) {
+  return z
   .object({
     title: z.string().min(3, 'Title must be at least 3 characters').max(100, 'Title must be under 100 characters'),
     description: z.string().min(10, 'Description must be at least 10 characters').max(1000, 'Description must be under 1,000 characters'),
@@ -63,7 +71,7 @@ export const schema = z
     points_value: z
       .number({ coerce: true })
       .min(1, 'Minimum 1 XP')
-      .max(1000, 'Maximum 1000 XP'),
+      .max(xpMax, `Maximum ${xpMax} XP`),
     volunteer_points: z
       .number({ coerce: true })
       .min(0, 'Cannot be negative')
@@ -82,6 +90,10 @@ export const schema = z
       })
     }
   })
+}
+
+// Default instance drives the FormData type and is the admin ceiling.
+export const schema = makeEventSchema(MAX_XP_ADMIN)
 
 export type FormData = z.infer<typeof schema>
 
