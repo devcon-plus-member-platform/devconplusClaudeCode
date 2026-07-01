@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, isEventArchived } from './dates'
+import { formatDate, isEventArchived, toDatetimeLocalValue, fromDatetimeLocalValue } from './dates'
 
 describe('formatDate', () => {
   const date = '2026-02-20T10:00:00Z'
@@ -52,5 +52,33 @@ describe('isEventArchived', () => {
   it('returns false when both dates are null', () => {
     const event = { end_date: null, event_date: null }
     expect(isEventArchived(event as never, now)).toBe(false)
+  })
+})
+
+describe('datetime-local conversion', () => {
+  it('fromDatetimeLocalValue returns a UTC ISO string for a naive local value', () => {
+    const iso = fromDatetimeLocalValue('2026-07-02T19:00')
+    expect(iso).not.toBeNull()
+    // A naive local value is a valid instant that parses back to the same moment.
+    expect(new Date(iso!).getTime()).toBe(new Date('2026-07-02T19:00').getTime())
+  })
+
+  it('round-trips a datetime-local value regardless of local timezone', () => {
+    // The picker value must survive form-populate → submit → re-populate unchanged.
+    const local = '2026-07-02T19:00'
+    expect(toDatetimeLocalValue(fromDatetimeLocalValue(local))).toBe(local)
+  })
+
+  it('returns empty/null for missing input', () => {
+    expect(toDatetimeLocalValue(null)).toBe('')
+    expect(toDatetimeLocalValue(undefined)).toBe('')
+    expect(toDatetimeLocalValue('')).toBe('')
+    expect(fromDatetimeLocalValue(null)).toBeNull()
+    expect(fromDatetimeLocalValue('')).toBeNull()
+  })
+
+  it('returns empty/null for invalid input', () => {
+    expect(toDatetimeLocalValue('not-a-date')).toBe('')
+    expect(fromDatetimeLocalValue('not-a-date')).toBeNull()
   })
 })

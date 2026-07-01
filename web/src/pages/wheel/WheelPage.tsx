@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { ConfettiOutline, CupStarOutline, GalleryAddOutline, MutedOutline, RestartOutline, ShareOutline, SoundwaveOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { CloseCircleOutline, ConfettiOutline, CupStarOutline, GalleryAddOutline, MagniferOutline, MutedOutline, RestartOutline, ShareOutline, SoundwaveOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import type { Event } from '@devcon-plus/supabase'
 import { publicFetch } from '../../lib/api'
@@ -61,9 +62,14 @@ function ConfettiBurst() {
   )
 }
 
-/** Sui logo — droplet mark (served from /public). */
+/** Sui logo — square mark (served from /public/photos). */
 function SuiLogo() {
-  return <img src="/sui_logo.png" alt="Sui" className="inline-block h-5 w-5 object-contain" />
+  return <img src="/photos/sui_logo.png" alt="Sui" className="inline-block h-5 w-auto object-contain" />
+}
+
+/** nmblr logo — landscape wordmark (served from /public/photos). */
+function NmblrLogo() {
+  return <img src="/photos/nmblr_logo.png" alt="nmblr" className="inline-block h-5 w-auto object-contain" />
 }
 
 /** Centered password popup gating an event's wheel. Closes itself on success. */
@@ -197,7 +203,7 @@ export default function WheelPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState(routeEventId ?? '')
   const [source, setSource] = useState<PoolSource>('event')
-  const [filter, setFilter] = useState<PoolFilter>('checked_in')
+  const [filter, setFilter] = useState<PoolFilter>('all')
   const [manualText, setManualText] = useState('')
 
   const [participants, setParticipants] = useState<EventParticipant[]>([])
@@ -213,6 +219,9 @@ export default function WheelPage() {
 
   // ── Poster generator ──────────────────────────────────────────────────────
   const [showPoster, setShowPoster] = useState(false)
+
+  // ── On-screen registration QR (expandable) ────────────────────────────────
+  const [showQr, setShowQr] = useState(false)
 
   // ── Wheel / draw state ────────────────────────────────────────────────────
   const [entrants, setEntrants] = useState<string[]>([])
@@ -298,6 +307,10 @@ export default function WheelPage() {
   // The poster QR links to the public event page (where registering enters the
   // wheel pool), so it needs a resolved event with a slug.
   const canMakePoster = source === 'event' && Boolean(selectedEvent?.slug)
+  // Same target as the poster QR: the public event page where attendees register.
+  const registerUrl = selectedEvent?.slug
+    ? `${window.location.origin}/events/${selectedEvent.slug}`
+    : ''
 
   // The full pool for the current source + filter (winners NOT yet removed).
   const fullPool = useMemo(() => {
@@ -614,6 +627,38 @@ export default function WheelPage() {
             </div>
           )}
 
+          {/* On-screen registration QR — attendees scan it to open the event page
+              and register (which drops them into the wheel pool). Tap to blow it up
+              full-screen for scanning off a projector or from across the room. */}
+          {canMakePoster && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500">
+                  Scan to register
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowQr(true)}
+                  className="flex items-center gap-1 text-md3-label-md font-bold text-primary transition hover:opacity-80"
+                >
+                  <MagniferOutline color="rgb(var(--color-primary))" size={15} />
+                  Enlarge
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQr(true)}
+                aria-label="Enlarge registration QR code"
+                className="mx-auto block rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-primary/40 hover:shadow-md"
+              >
+                <QRCodeSVG value={registerUrl} size={172} level="M" fgColor="#1E2A56" bgColor="#FFFFFF" />
+              </button>
+              <p className="mt-3 text-center text-md3-body-sm text-slate-500">
+                Register on the event page to enter the raffle wheel pool.
+              </p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleReset}
@@ -655,12 +700,14 @@ export default function WheelPage() {
             rel="noopener noreferrer"
             className="font-bold text-primary hover:underline"
           >
-            DEVCON Jumpstart Internships
+            DEVCON Jumpstart AI Engineer Internships
           </a>{' '}
           Cohort 3 &amp; 4
         </p>
-        <p className="flex items-center gap-1.5">
-          Made possible through the support of <SuiLogo />
+        <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:justify-start">
+          Made possible through the support of:
+          <SuiLogo />
+          <NmblrLogo />
         </p>
       </footer>
 
@@ -732,6 +779,59 @@ export default function WheelPage() {
       <AnimatePresence>
         {showPoster && selectedEvent && (
           <WheelPoster event={selectedEvent} onClose={() => setShowPoster(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── Expanded registration QR (large — for scanning off a screen/projector) ── */}
+      <AnimatePresence>
+        {showQr && canMakePoster && (
+          <motion.div
+            variants={backdrop}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={() => setShowQr(false)}
+            className="fixed inset-0 z-[75] flex items-center justify-center bg-black/60 p-4"
+          >
+            <motion.div
+              variants={popIn}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+              className="relative flex w-full max-w-md flex-col items-center rounded-[2rem] bg-white p-8 text-center shadow-2xl"
+            >
+              <button
+                type="button"
+                onClick={() => setShowQr(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 rounded-xl p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <CloseCircleOutline color="#94A3B8" size={26} />
+              </button>
+              <p className="text-md3-title-md font-bold uppercase tracking-widest text-slate-400">
+                Scan to register
+              </p>
+              {selectedEventTitle && (
+                <p className="mt-1 max-w-full break-words text-md3-title-lg font-black leading-tight text-slate-900">
+                  {selectedEventTitle}
+                </p>
+              )}
+              <div className="mt-6 w-[min(320px,68vw)] rounded-3xl border border-slate-200 p-5 shadow-lg">
+                <QRCodeSVG
+                  value={registerUrl}
+                  size={320}
+                  level="M"
+                  fgColor="#1E2A56"
+                  bgColor="#FFFFFF"
+                  style={{ width: '100%', height: 'auto' }}
+                />
+              </div>
+              <p className="mt-5 text-md3-body-sm text-slate-500">
+                Register on the event page to enter the raffle wheel pool.
+              </p>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -64,10 +64,12 @@ export class EventsService {
     }
 
     // chapter_officers are locked to their own chapter — ignore any chapter_id in the DTO.
-    // hq_admin+ may specify an arbitrary chapter_id via the DTO.
+    // hq_admin+ may target any chapter, OR pass null for an HQ-wide (all-chapters) event.
+    // Preserve an explicit null; only fall back to their own chapter when the field is omitted.
+    // (Using `??` here would collapse null → own chapter, silently un-scoping HQ events.)
     const resolvedChapterId =
       role === 'hq_admin' || role === 'super_admin'
-        ? (dto.chapter_id ?? chapter_id)
+        ? (dto.chapter_id !== undefined ? dto.chapter_id : chapter_id)
         : chapter_id;
 
     const event = await this.repo.create({

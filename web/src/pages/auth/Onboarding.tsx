@@ -21,7 +21,7 @@ const slides = [
     subtitle: 'Participate in events, contribute to projects, and earn points for exclusive rewards.',
   },
   {
-    image:    '/photos/devcon-luzon-chapters.png',
+    image:    '/photos/DEVCON17.svg',
     title:    'Access Global Opportunities.\nLevel Up Your Career.',
     subtitle: 'Connect with industry leaders and discover exclusive opportunities for your career.',
   },

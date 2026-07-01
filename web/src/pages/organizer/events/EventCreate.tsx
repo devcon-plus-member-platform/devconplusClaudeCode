@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { fadeUp, staggerContainer } from '../../../lib/animation'
+import { fromDatetimeLocalValue } from '../../../lib/dates'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useAuthStore } from '../../../stores/useAuthStore'
 import { supabase } from '../../../lib/supabase'
@@ -308,8 +309,10 @@ export function OrgEventCreate() {
         title:                       data.title,
         description:                 data.description,
         location:                    data.location,
-        event_date:                  data.event_date,
-        end_date:                    data.end_date ?? null,
+        // datetime-local values are naive local wall-clock — convert to a UTC ISO
+        // instant so the event doesn't shift a day when rendered in local time.
+        event_date:                  fromDatetimeLocalValue(data.event_date) ?? data.event_date,
+        end_date:                    fromDatetimeLocalValue(data.end_date),
         category:                    data.category,
         devcon_category:             data.devcon_category,
         tags,

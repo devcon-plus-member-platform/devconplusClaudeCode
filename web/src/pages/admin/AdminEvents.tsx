@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
+import { toDatetimeLocalValue, fromDatetimeLocalValue } from '../../lib/dates'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 
@@ -388,8 +389,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           title:             event.title,
           description:       event.description ?? '',
           location:          event.location ?? '',
-          event_date:        event.event_date?.slice(0, 16) ?? '',
-          end_date:          event.end_date?.slice(0, 16) ?? '',
+          event_date:        toDatetimeLocalValue(event.event_date),
+          end_date:          toDatetimeLocalValue(event.end_date),
           category:          event.category ?? 'tech_talk',
           is_external:       event.is_external ?? false,
           external_registration_url: normalizeExternalUrl(event.external_registration_url),
@@ -481,7 +482,10 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         ...rest,
         chapter_id: chapterId,
         is_chapter_locked: isHqEvent ? false : true,
-        end_date: data.end_date || null,
+        // datetime-local values are naive local wall-clock — convert to a UTC ISO
+        // instant so the event doesn't shift a day when rendered in local time.
+        event_date: fromDatetimeLocalValue(data.event_date) ?? data.event_date,
+        end_date: fromDatetimeLocalValue(data.end_date),
         capacity: data.capacity ?? null,
         ticket_price_php: data.is_free ? 0 : (data.ticket_price_php ?? 0),
         external_registration_url: isExternalEvent ? externalUrl : null,

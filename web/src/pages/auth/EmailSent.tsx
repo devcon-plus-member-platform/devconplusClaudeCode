@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
-import { LetterOutline, RestartOutline } from 'solar-icon-set'
+import { LetterOutline, RestartOutline, InfoCircleOutline } from 'solar-icon-set'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
@@ -107,8 +107,17 @@ export default function EmailSent() {
         <p className="text-md3-body-md text-slate-500 leading-relaxed max-w-xs mb-2">{body}</p>
 
         {email && (
-          <p className="text-md3-body-md font-semibold text-slate-700 mb-6 break-all">{email}</p>
+          <p className="text-md3-body-md font-semibold text-slate-700 mb-5 break-all">{email}</p>
         )}
+
+        {/* Can't find it? — prominent spam-folder reminder */}
+        <div className="flex items-start gap-3 w-full max-w-xs mb-6 rounded-2xl bg-gold/10 border border-gold/40 p-4 text-left">
+          <InfoCircleOutline className="w-5 h-5 shrink-0 mt-0.5" color="#F8C630" />
+          <p className="text-md3-body-sm text-slate-700 leading-relaxed">
+            <span className="font-bold text-slate-900">Can't find the email? Check your spam or junk folder.</span>{' '}
+            DEVCON+ emails sometimes land there. Mark it as &ldquo;Not spam&rdquo; so future emails reach your inbox.
+          </p>
+        </div>
 
         {/* Resend */}
         {resendSuccess && (

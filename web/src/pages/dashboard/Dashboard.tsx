@@ -198,7 +198,7 @@ useEffect(() => {
         }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
       >
-        
+
         {/* Quick Actions Wrapper for Scroll Collapse */}
         <motion.div
           animate={{
