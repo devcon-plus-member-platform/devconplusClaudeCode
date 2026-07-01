@@ -165,10 +165,10 @@ export default function PointsHistory() {
               <button
                 key={chip.id}
                 onClick={() => setActiveFilter(chip.id)}
-                className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
+                className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
                   activeFilter === chip.id
-                    ? 'bg-primary text-white font-semibold'
-                    : 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-white text-primary font-semibold border-primary'
+                    : 'bg-white text-slate-500 font-medium border-slate-200'
                 }`}
               >
                 {chip.label}

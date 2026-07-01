@@ -144,10 +144,10 @@ export default function Points() {
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all shrink-0 ${
+                className={`whitespace-nowrap flex-1 h-[32px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all shrink-0 border ${
                   tab === t
-                    ? 'bg-primary text-white font-semibold shadow-sm'
-                    : 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-primary text-white font-semibold border-primary shadow-sm'
+                    : 'bg-white text-slate-700 font-medium border-slate-200'
                 }`}
               >
                 {t === 'earn' ? 'Ways to Earn' : 'Share & Earn'}

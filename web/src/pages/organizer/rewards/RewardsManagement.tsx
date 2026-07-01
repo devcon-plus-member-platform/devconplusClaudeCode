@@ -215,8 +215,8 @@ function TabButton({
   return (
     <button
       onClick={() => onSelect(id)}
-      className={`flex-1 h-[32px] flex items-center justify-center rounded-[128px] text-[14px] font-proxima font-bold transition-all relative ${
-        isActive ? 'bg-blue text-white shadow-sm' : 'bg-blue/10 text-blue'
+      className={`flex-1 h-[32px] flex items-center justify-center rounded-[128px] text-[14px] font-proxima font-bold transition-all relative border ${
+        isActive ? 'bg-blue text-white border-blue shadow-sm' : 'bg-white text-slate-700 border-slate-200'
       }`}
     >
       {label}
