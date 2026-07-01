@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline } from 'solar-icon-set'
+import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline, ShieldCheckOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ApprovalCard, type Registration } from '../../components/ApprovalCard'
 import { VolunteerApprovalCard } from '../../components/VolunteerApprovalCard'
@@ -185,14 +185,28 @@ export function OrgDashboard() {
               </div>
             </div>
 
-            <motion.button
-              onClick={() => navigate('/organizer/events/create')}
-              className="font-proxima font-semibold w-full bg-[#1152d4] text-white text-[16px] h-12 rounded-[80px] flex items-center justify-center gap-2"
-              whileTap={{ scale: 0.95 }}
-            >
-              <AddCircleOutline className="w-5 h-5" color="white" />
-              Create Event
-            </motion.button>
+            <div className="flex items-center gap-3">
+              <motion.button
+                onClick={() => navigate('/organizer/events/create')}
+                className="font-proxima font-semibold flex-1 min-w-0 bg-[#1152d4] text-white text-[16px] h-12 rounded-[80px] flex items-center justify-center gap-2 whitespace-nowrap"
+                whileTap={{ scale: 0.95 }}
+              >
+                <AddCircleOutline className="w-5 h-5" color="white" />
+                Create Event
+              </motion.button>
+
+              {/* View Admin Dashboard — only visible to hq_admin / super_admin */}
+              {isAdmin && (
+                <motion.button
+                  onClick={() => navigate('/admin')}
+                  className="font-proxima font-semibold flex-1 min-w-0 bg-blue/10 text-blue text-[16px] h-12 rounded-[80px] flex items-center justify-center gap-2 whitespace-nowrap"
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <ShieldCheckOutline className="w-5 h-5" color="#1152D4" />
+                  Admin Panel
+                </motion.button>
+              )}
+            </div>
           </div>
         </div>
       </header>

@@ -1,14 +1,31 @@
-import { useEffect, useState } from 'react'
-import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline } from 'solar-icon-set'
+import { useEffect, useMemo, useState } from 'react'
+import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
+import { ROLE_DISPLAY_NAMES } from '../../lib/constants'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 import type { Profile, UserRole, PointTransaction } from '@devcon-plus/supabase'
 
 const ROLES: UserRole[] = ['member', 'chapter_officer', 'hq_admin', 'super_admin']
+
+type RoleFilter = UserRole | 'all'
+const ROLE_FILTERS: RoleFilter[] = ['all', ...ROLES]
+
+type SortColumn = 'name' | 'email' | 'role' | 'points'
+type SortDir = 'asc' | 'desc'
+
+function joinedTime(u: Profile): number {
+  return u.created_at ? new Date(u.created_at).getTime() : 0
+}
+
+function roleRank(role: string | null | undefined): number {
+  const i = ROLES.indexOf((role ?? 'member') as UserRole)
+  return i === -1 ? 0 : i
+}
 
 function getRolePillClass(role: string): string {
   switch (role) {
@@ -37,8 +54,69 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null)
   const [userTxns, setUserTxns] = useState<PointTransaction[]>([])
   const [txnsLoading, setTxnsLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const { pageItems, ...pagination } = usePagination(users, 10)
+  // Count of users per role (across the full dataset) for the filter pills.
+  const roleCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const u of users) {
+      const r = u.role ?? 'member'
+      counts[r] = (counts[r] ?? 0) + 1
+    }
+    return counts
+  }, [users])
+
+  // Filter by role, then name/email/company, then sort. With no active column
+  // the list stays newest-first (recent on top); clicking a header sorts by it.
+  const visibleUsers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const matched = users.filter((u) => {
+      if (roleFilter !== 'all' && (u.role ?? 'member') !== roleFilter) return false
+      if (!q) return true
+      return (
+        u.full_name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.school_or_company ?? '').toLowerCase().includes(q)
+      )
+    })
+    return [...matched].sort((a, b) => {
+      if (sortColumn === null) return joinedTime(b) - joinedTime(a)
+      const dir = sortDir === 'asc' ? 1 : -1
+      switch (sortColumn) {
+        case 'name': return a.full_name.localeCompare(b.full_name) * dir
+        case 'email': return a.email.localeCompare(b.email) * dir
+        case 'role': return (roleRank(a.role) - roleRank(b.role)) * dir
+        case 'points': return ((a.spendable_points ?? 0) - (b.spendable_points ?? 0)) * dir
+        default: return 0
+      }
+    })
+  }, [users, search, roleFilter, sortColumn, sortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleUsers, 10)
+
+  // Click cycles a column: asc → desc → back to default (newest first).
+  const handleSort = (col: SortColumn) => {
+    pagination.setPage(1)
+    if (sortColumn !== col) {
+      setSortColumn(col)
+      setSortDir('asc')
+    } else if (sortDir === 'asc') {
+      setSortDir('desc')
+    } else {
+      setSortColumn(null)
+      setSortDir('asc')
+    }
+  }
+
+  const sortIcon = (col: SortColumn) => {
+    if (sortColumn !== col) return null
+    return sortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   const openUser = async (user: Profile) => {
     setSelectedUser(user)
@@ -65,6 +143,8 @@ export default function AdminUsers() {
   }
 
   useEffect(() => { void load() }, [])
+
+  const [pendingRole, setPendingRole] = useState<{ user: Profile; role: UserRole } | null>(null)
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     try {
@@ -125,15 +205,56 @@ export default function AdminUsers() {
       {isLoading ? (
         <p className="text-slate-400 text-md3-body-md">Loading users…</p>
       ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by name, email, or company…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 shrink-0">
+          {ROLE_FILTERS.map((f) => {
+            const active = roleFilter === f
+            const label = f === 'all' ? 'All' : (ROLE_DISPLAY_NAMES[f] ?? f)
+            const count = f === 'all' ? users.length : (roleCounts[f] ?? 0)
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => { setRoleFilter(f); pagination.setPage(1) }}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-md3-label-md font-semibold border transition-colors ${
+                  active
+                    ? 'bg-blue text-white border-blue'
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+                <span className={active ? 'text-white/80' : 'text-slate-400'}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
           <div className="flex-1 min-h-0 overflow-y-auto">
           <table className="w-full text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Email</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Role</th>
-                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Points</th>
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Name {sortIcon('name')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Email {sortIcon('email')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('role')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Role {sortIcon('role')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('points')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Points {sortIcon('points')}</button>
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -141,15 +262,18 @@ export default function AdminUsers() {
               {pageItems.map((u) => (
                 <tr
                   key={u.id}
-                  className="border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
+                  className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
                   onClick={() => void openUser(u)}
                 >
-                  <td className="px-4 py-3 font-medium text-slate-900">{u.full_name}</td>
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-medium text-slate-900">{u.full_name}</td>
                   <td className="px-4 py-3 text-slate-500">{u.email}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <select
                       value={u.role}
-                      onChange={(e) => void handleRoleChange(u.id, e.target.value as UserRole)}
+                      onChange={(e) => {
+                        const role = e.target.value as UserRole
+                        if (role !== u.role) setPendingRole({ user: u, role })
+                      }}
                       className="text-md3-label-md border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue"
                     >
                       {ROLES.map((r) => (
@@ -189,12 +313,19 @@ export default function AdminUsers() {
               ))}
             </tbody>
           </table>
-          {users.length === 0 && (
-            <p className="text-center py-10 text-slate-400 text-md3-body-md">No users found.</p>
+          {visibleUsers.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {search.trim()
+                ? `No users match "${search.trim()}".`
+                : roleFilter !== 'all'
+                  ? `No ${ROLE_DISPLAY_NAMES[roleFilter] ?? roleFilter} users found.`
+                  : 'No users found.'}
+            </p>
           )}
           </div>
           <Pagination controller={pagination} itemLabel="user" className="border-t border-slate-100 shrink-0" />
         </div>
+        </>
       )}
 
       {/* Slide-over panel */}
@@ -318,7 +449,10 @@ export default function AdminUsers() {
                   <label className="text-md3-label-md text-slate-500 mb-1 block">Change Role</label>
                   <select
                     value={selectedUser.role ?? 'member'}
-                    onChange={(e) => void handleRoleChange(selectedUser.id, e.target.value as UserRole)}
+                    onChange={(e) => {
+                      const role = e.target.value as UserRole
+                      if (role !== (selectedUser.role ?? 'member')) setPendingRole({ user: selectedUser, role })
+                    }}
                     className="w-full text-md3-body-md border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue"
                   >
                     {ROLES.map((r) => (
@@ -341,6 +475,17 @@ export default function AdminUsers() {
           </>
         )}
       </AnimatePresence>
+
+      {pendingRole && (
+        <ConfirmDialog
+          title="Change this user's role?"
+          message={`${pendingRole.user.full_name} will be set to ${ROLE_DISPLAY_NAMES[pendingRole.role] ?? pendingRole.role}. This changes their access immediately.`}
+          confirmLabel="Change Role"
+          tone="primary"
+          onConfirm={() => { void handleRoleChange(pendingRole.user.id, pendingRole.role); setPendingRole(null) }}
+          onCancel={() => setPendingRole(null)}
+        />
+      )}
     </div>
   )
 }
