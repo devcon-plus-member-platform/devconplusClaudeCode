@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
-import { LetterOutline, RestartOutline, InfoCircleOutline } from 'solar-icon-set'
+import { LetterOutline, RestartOutline } from 'solar-icon-set'
 import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile'
 import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
