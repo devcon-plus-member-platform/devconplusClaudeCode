@@ -1082,10 +1082,10 @@ export default function Rewards() {
               <button
                 key={t}
                 onClick={() => setMainTab(t)}
-                className={`flex-1 h-[38px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all ${
+                className={`flex-1 h-[38px] flex items-center justify-center rounded-full text-[14px] font-proxima transition-all border ${
                   mainTab === t
-                    ? 'bg-primary text-white font-semibold shadow-sm'
-                    : 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-primary text-white font-semibold border-primary shadow-sm'
+                    : 'bg-white text-slate-700 font-medium border-slate-200'
                 }`}
               >
                 {t === 'missions' ? 'Missions' : 'Redeem'}
@@ -1102,10 +1102,10 @@ export default function Rewards() {
                 <button
                   key={f.id}
                   onClick={() => setMissionFilter(f.id)}
-                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
+                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
                     missionFilter === f.id
-                      ? 'bg-primary text-white font-semibold'
-                      : 'bg-primary/10 text-primary font-medium'
+                      ? 'bg-white text-primary font-semibold border-primary'
+                      : 'bg-white text-slate-500 font-medium border-slate-200'
                   }`}
                 >
                   {f.label}
@@ -1116,10 +1116,10 @@ export default function Rewards() {
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab.id, tab.label)}
-                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 ${
+                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
                     activeTab === tab.id
-                      ? 'bg-primary text-white font-semibold'
-                      : 'bg-primary/10 text-primary font-medium'
+                      ? 'bg-white text-primary font-semibold border-primary'
+                      : 'bg-white text-slate-500 font-medium border-slate-200'
                   }`}
                 >
                   {tab.label}
