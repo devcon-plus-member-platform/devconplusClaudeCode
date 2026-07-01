@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { assertSameChapter } from '../common/authz/chapter-scope';
 import { AppCacheService } from '../cache/app-cache.service';
@@ -10,6 +15,10 @@ import type { UpdateEventDto } from './dto/update-event.dto';
 
 @Injectable()
 export class EventsService {
+  // Chapter officers cannot award more than this much attendance XP per event.
+  // Admins (hq_admin / super_admin) are not capped.
+  private static readonly OFFICER_MAX_XP = 350;
+
   constructor(
     private readonly repo: EventsRepository,
     private readonly cache: AppCacheService,
@@ -44,6 +53,16 @@ export class EventsService {
   async create(dto: CreateEventDto, user: AuthenticatedUser): Promise<Event> {
     const { role, chapter_id, id: profileId } = user.profile;
 
+    // Chapter officers are capped at OFFICER_MAX_XP attendance XP; admins are not.
+    if (
+      role === 'chapter_officer' &&
+      (dto.points_value ?? 0) > EventsService.OFFICER_MAX_XP
+    ) {
+      throw new BadRequestException(
+        `Chapter officers cannot set attendance XP above ${EventsService.OFFICER_MAX_XP}`,
+      );
+    }
+
     // chapter_officers are locked to their own chapter — ignore any chapter_id in the DTO.
     // hq_admin+ may specify an arbitrary chapter_id via the DTO.
     const resolvedChapterId =
@@ -74,6 +93,16 @@ export class EventsService {
     if (event.chapter_id) assertSameChapter(user, event.chapter_id);
     // Prevent officers from moving an event to a different chapter via PATCH.
     const { role } = user.profile;
+    // Chapter officers are capped at OFFICER_MAX_XP attendance XP; admins are not.
+    if (
+      role === 'chapter_officer' &&
+      dto.points_value != null &&
+      dto.points_value > EventsService.OFFICER_MAX_XP
+    ) {
+      throw new BadRequestException(
+        `Chapter officers cannot set attendance XP above ${EventsService.OFFICER_MAX_XP}`,
+      );
+    }
     const payload: UpdateEventDto = { ...dto };
     if (role !== 'hq_admin' && role !== 'super_admin') {
       delete payload.chapter_id;

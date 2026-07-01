@@ -13,6 +13,7 @@ import {
   OFFICER_CATEGORY_LABELS,
   type OfficerResourceCategory,
 } from '../../lib/officerResources'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 interface ResourceRow {
   id: string
@@ -161,6 +162,8 @@ export default function AdminOfficerResources() {
     }
     setDraft(null)
   }
+
+  const [hideTarget, setHideTarget] = useState<ResourceRow | null>(null)
 
   const handleToggle = async (row: ResourceRow) => {
     // Don't allow activating a link with no URL.
@@ -311,7 +314,7 @@ export default function AdminOfficerResources() {
 
                               <div className="flex items-center gap-1 shrink-0">
                                 <button
-                                  onClick={() => void handleToggle(row)}
+                                  onClick={() => { if (row.is_active) setHideTarget(row); else void handleToggle(row) }}
                                   disabled={busyId === row.id}
                                   className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-40 transition-colors"
                                   title={row.is_active ? 'Hide from officers' : 'Show to officers'}
@@ -475,6 +478,18 @@ export default function AdminOfficerResources() {
             </div>
           </div>
         </div>
+      )}
+
+      {hideTarget && (
+        <ConfirmDialog
+          title="Hide this resource?"
+          message={`"${hideTarget.title}" will be hidden from officers until you show it again.`}
+          confirmLabel="Hide"
+          tone="danger"
+          loading={busyId === hideTarget.id}
+          onConfirm={() => { void handleToggle(hideTarget); setHideTarget(null) }}
+          onCancel={() => setHideTarget(null)}
+        />
       )}
     </div>
   )

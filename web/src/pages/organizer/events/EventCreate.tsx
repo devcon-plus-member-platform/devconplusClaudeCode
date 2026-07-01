@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useFormDraft } from '../../../hooks/useFormDraft'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftOutline, GalleryAddOutline, CloseCircleLineDuotone } from 'solar-icon-set'
@@ -11,7 +11,9 @@ import { useAuthStore } from '../../../stores/useAuthStore'
 import { supabase } from '../../../lib/supabase'
 import { useChaptersStore } from '../../../stores/useChaptersStore'
 import {
-  schema,
+  makeEventSchema,
+  MAX_XP_ADMIN,
+  MAX_XP_OFFICER,
   type FormData,
   type CustomFormField,
   inputClass,
@@ -49,6 +51,9 @@ export function OrgEventCreate() {
   const { user, chapterName } = useAuthStore()
 
   const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
+  // Chapter officers cap attendance XP at 350; admins keep the original ceiling.
+  const XP_CAP = isAdmin ? MAX_XP_ADMIN : MAX_XP_OFFICER
+  const eventSchema = useMemo(() => makeEventSchema(XP_CAP), [XP_CAP])
   const { chapters, fetchChapters } = useChaptersStore()
 
   const { draft, saveDraft, clearDraft } = useFormDraft<EventCreateDraft>(
@@ -109,7 +114,7 @@ export function OrgEventCreate() {
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(eventSchema),
     defaultValues: {
       title:             (draft.title             as string)  ?? '',
       description:       (draft.description       as string)  ?? '',
@@ -161,7 +166,7 @@ export function OrgEventCreate() {
   const prevCategoryRef = useRef<string | undefined>(undefined)
   if (category && category !== prevCategoryRef.current) {
     prevCategoryRef.current = category
-    setValue('points_value', ATTENDANCE_PTS[category], { shouldValidate: false })
+    setValue('points_value', Math.min(ATTENDANCE_PTS[category], XP_CAP), { shouldValidate: false })
   }
 
   // Save RHF fields → draft whenever any field changes
@@ -900,7 +905,7 @@ export function OrgEventCreate() {
                   type="number"
                   className={inputClass}
                   min={1}
-                  max={1000}
+                  max={XP_CAP}
                   step={1}
                 />
                 {errors.points_value && (

@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 interface Assignment {
   id: string
@@ -50,6 +51,8 @@ export default function AdminChapterOfficers() {
   const [search, setSearch] = useState('')
   const [sortColumn, setSortColumn] = useState<OfficerSortColumn | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [assignTarget, setAssignTarget] = useState<FormData | null>(null)
+  const [assigning, setAssigning] = useState(false)
 
   const {
     register,
@@ -164,6 +167,14 @@ export default function AdminChapterOfficers() {
     setShowForm(false)
   }
 
+  const confirmAssign = async () => {
+    if (!assignTarget) return
+    setAssigning(true)
+    await onSubmit(assignTarget)
+    setAssigning(false)
+    setAssignTarget(null)
+  }
+
   const handleResend = async (a: Assignment) => {
     setInvitingId(a.id)
     setError(null)
@@ -217,7 +228,7 @@ export default function AdminChapterOfficers() {
 
       {showForm && (
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={handleSubmit((data) => setAssignTarget(data))}
           className="bg-white border border-slate-200 rounded-2xl p-5 mb-6 shadow-card space-y-4"
         >
           <h2 className="text-md3-body-md font-bold text-slate-900">Assign Chapter Officer</h2>
@@ -417,6 +428,22 @@ export default function AdminChapterOfficers() {
           </div>
           <Pagination controller={pagination} itemLabel="chapter" className="shrink-0" />
         </div>
+      )}
+
+      {assignTarget && (
+        <ConfirmDialog
+          title="Assign this officer?"
+          message={`${assignTarget.email} will be granted Chapter Officer access${
+            chapters.find((c) => c.id === assignTarget.chapter_id)?.name
+              ? ` for ${chapters.find((c) => c.id === assignTarget.chapter_id)?.name}`
+              : ''
+          }. An existing account is upgraded immediately.`}
+          confirmLabel="Assign Officer"
+          tone="primary"
+          loading={assigning}
+          onConfirm={() => void confirmAssign()}
+          onCancel={() => setAssignTarget(null)}
+        />
       )}
     </div>
   )

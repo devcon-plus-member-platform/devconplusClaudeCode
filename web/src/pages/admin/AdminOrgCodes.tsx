@@ -7,6 +7,7 @@ import { apiFetch } from '../../lib/api'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 const generateCode = (): string => {
   const letters = Array.from({ length: 3 }, () =>
@@ -152,6 +153,9 @@ export default function AdminOrgCodes() {
     void load()
     void fetchChapters()
   }, [fetchChapters]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [rotateTarget, setRotateTarget] = useState<OrgCode | null>(null)
+  const [deactivateTarget, setDeactivateTarget] = useState<OrgCode | null>(null)
 
   const handleToggle = async (id: string, current: boolean) => {
     try {
@@ -434,7 +438,7 @@ export default function AdminOrgCodes() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => void handleRotate(c.id)}
+                        onClick={() => setRotateTarget(c)}
                         disabled={rotatingId === c.id}
                         className="p-1 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-40 transition-colors"
                         title="Rotate code"
@@ -442,7 +446,7 @@ export default function AdminOrgCodes() {
                         <RefreshOutline className={`w-4 h-4 ${rotatingId === c.id ? 'animate-spin' : ''}`} />
                       </button>
                       <button
-                        onClick={() => void handleToggle(c.id, c.is_active)}
+                        onClick={() => { if (c.is_active) setDeactivateTarget(c); else void handleToggle(c.id, c.is_active) }}
                         className="text-slate-400 hover:text-blue transition-colors"
                         title={c.is_active ? 'Deactivate' : 'Activate'}
                       >
@@ -486,6 +490,29 @@ export default function AdminOrgCodes() {
           <Pagination controller={pagination} itemLabel="code" className="border-t border-slate-100 shrink-0" />
         </div>
         </>
+      )}
+
+      {rotateTarget && (
+        <ConfirmDialog
+          title="Rotate this code?"
+          message={`The current code ${rotateTarget.code} will stop working and be replaced with a new one. Anyone holding the old code will need the new one.`}
+          confirmLabel="Rotate Code"
+          tone="danger"
+          loading={rotatingId === rotateTarget.id}
+          onConfirm={() => { void handleRotate(rotateTarget.id); setRotateTarget(null) }}
+          onCancel={() => setRotateTarget(null)}
+        />
+      )}
+
+      {deactivateTarget && (
+        <ConfirmDialog
+          title="Deactivate this code?"
+          message={`${deactivateTarget.code} will stop working — no one will be able to sign up with it until you reactivate it.`}
+          confirmLabel="Deactivate"
+          tone="danger"
+          onConfirm={() => { void handleToggle(deactivateTarget.id, deactivateTarget.is_active); setDeactivateTarget(null) }}
+          onCancel={() => setDeactivateTarget(null)}
+        />
       )}
     </div>
   )

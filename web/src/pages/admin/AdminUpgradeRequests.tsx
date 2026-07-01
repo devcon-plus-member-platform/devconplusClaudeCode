@@ -4,6 +4,7 @@ import { apiFetch } from '../../lib/api'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 interface UpgradeRequest {
   id: string
@@ -36,6 +37,10 @@ function createdTime(r: UpgradeRequest): number {
   return r.created_at ? new Date(r.created_at).getTime() : 0
 }
 
+function fmtReviewedDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export default function AdminUpgradeRequests() {
   const { user } = useAuthStore()
   const [requests, setRequests] = useState<UpgradeRequest[]>([])
@@ -45,6 +50,7 @@ export default function AdminUpgradeRequests() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ req: UpgradeRequest; type: 'approve' | 'reject' } | null>(null)
 
   const load = async () => {
     setIsLoading(true)
@@ -218,10 +224,10 @@ export default function AdminUpgradeRequests() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {req.status === 'pending' && (
+                    {req.status === 'pending' ? (
                       <div className="flex items-center gap-2 justify-end">
                         <button
-                          onClick={() => void handleApprove(req)}
+                          onClick={() => setConfirmAction({ req, type: 'approve' })}
                           disabled={actionLoading === req.id}
                           className="flex items-center gap-1 px-3 py-1.5 bg-green/10 text-green text-md3-label-md font-bold rounded-lg hover:bg-green/20 disabled:opacity-50 transition-colors"
                         >
@@ -229,7 +235,7 @@ export default function AdminUpgradeRequests() {
                           Approve
                         </button>
                         <button
-                          onClick={() => void handleReject(req)}
+                          onClick={() => setConfirmAction({ req, type: 'reject' })}
                           disabled={actionLoading === req.id}
                           className="flex items-center gap-1 px-3 py-1.5 bg-red/10 text-red text-md3-label-md font-bold rounded-lg hover:bg-red/20 disabled:opacity-50 transition-colors"
                         >
@@ -237,6 +243,10 @@ export default function AdminUpgradeRequests() {
                           Reject
                         </button>
                       </div>
+                    ) : (
+                      <span className="text-md3-label-md text-slate-400 italic whitespace-nowrap">
+                        {req.reviewed_at ? `Reviewed ${fmtReviewedDate(req.reviewed_at)}` : 'Reviewed'}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -252,6 +262,25 @@ export default function AdminUpgradeRequests() {
           <Pagination controller={pagination} itemLabel="request" className="border-t border-slate-100 shrink-0" />
         </div>
         </>
+      )}
+
+      {confirmAction && (
+        <ConfirmDialog
+          title={confirmAction.type === 'approve' ? 'Approve this request?' : 'Reject this request?'}
+          message={
+            confirmAction.type === 'approve'
+              ? `${confirmAction.req.member_name || 'This member'} will be granted ${ROLE_LABELS[confirmAction.req.requested_role] ?? confirmAction.req.requested_role} access.`
+              : `${confirmAction.req.member_name || 'This member'}'s request for ${ROLE_LABELS[confirmAction.req.requested_role] ?? confirmAction.req.requested_role} will be denied.`
+          }
+          confirmLabel={confirmAction.type === 'approve' ? 'Approve' : 'Reject'}
+          tone={confirmAction.type === 'approve' ? 'primary' : 'danger'}
+          onConfirm={() => {
+            const { req, type } = confirmAction
+            void (type === 'approve' ? handleApprove(req) : handleReject(req))
+            setConfirmAction(null)
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
       )}
     </div>
   )

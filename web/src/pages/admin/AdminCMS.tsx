@@ -4,9 +4,11 @@ import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuot
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import { backdrop, cardItem, slideUp, staggerContainer } from '../../lib/animation'
+import type { SolarIcon } from '../../lib/icons'
 import AdminUpgradeRequests from './AdminUpgradeRequests'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import type { Reward, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -91,26 +93,14 @@ function SlideOver({ title, onClose, onSubmit, saving, submitLabel = 'Save', chi
 
 function ConfirmDelete({ label, onConfirm, onCancel }: { label: string; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-2xl p-6 w-80 max-w-[90vw] shadow-2xl">
-        <p className="text-md3-body-md text-slate-700 mb-1 font-semibold">Delete {label}?</p>
-        <p className="text-md3-label-md text-slate-400 mb-5">This action cannot be undone.</p>
-        <div className="flex gap-2">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-2 border border-slate-200 rounded-xl text-md3-body-md text-slate-600 font-semibold hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2 bg-red text-white rounded-xl text-md3-body-md font-bold hover:opacity-90"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      title={`Delete ${label}?`}
+      message="This action cannot be undone."
+      confirmLabel="Delete"
+      tone="danger"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   )
 }
 
@@ -1169,7 +1159,11 @@ function MissionsTab() {
   const [loadingQueue, setLoadingQueue] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [approveError, setApproveError] = useState<string | null>(null)
+  const [rejectTarget, setRejectTarget] = useState<MissionSubmissionRow | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null)
+  const [approveTarget, setApproveTarget] = useState<MissionSubmissionRow | null>(null)
+  const [toggleTarget, setToggleTarget] = useState<MissionRow | null>(null)
 
   const { pageItems: missionItems, ...missionPagination } = usePagination(rows, 10)
   const { pageItems: queueItems, ...queuePagination } = usePagination(queue, 10)
@@ -1289,6 +1283,23 @@ function MissionsTab() {
     }
   }
 
+  const handleReject = async (subId: string, remarks: string) => {
+    setRejectingId(subId)
+    setApproveError(null)
+    try {
+      await apiFetch(`/api/missions/submissions/${subId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ adminRemarks: remarks }),
+      })
+      setQueue((prev) => prev.filter((s) => s.id !== subId))
+      setRejectTarget(null)
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Reject failed')
+    } finally {
+      setRejectingId(null)
+    }
+  }
+
   const f = (key: keyof MissionForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((p) => ({ ...p, [key]: e.target.value }))
@@ -1359,7 +1370,7 @@ function MissionsTab() {
                       </span>
                     )}
                     <button
-                      onClick={() => void handleToggleStatus(m)}
+                      onClick={() => { if (m.is_active) setToggleTarget(m); else void handleToggleStatus(m) }}
                       disabled={togglingStatusId === m.id}
                       className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full transition-colors disabled:opacity-40 ${m.is_active ? 'bg-green/10 text-green hover:bg-green/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
                     >
@@ -1398,40 +1409,53 @@ function MissionsTab() {
           <div className="flex-1 min-h-0 flex flex-col">
             {approveError && <p className="text-md3-body-md text-red mb-2">{approveError}</p>}
             <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
-            {queueItems.map((sub) => (
+            {queueItems.map((sub) => {
+              const busy = approvingId === sub.id || rejectingId === sub.id
+              return (
               <div key={sub.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-card">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-md3-body-md font-semibold text-slate-900">{sub.member_name || 'Unknown'}</p>
-                    <p className="text-md3-label-md text-slate-400">{sub.member_email}</p>
-                    <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.mission_title}</p>
-                    {!sub.pr_link || sub.pr_link === 'submitted-for-approval' ? (
-                      <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
-                    ) : (
-                      <a
-                        href={sub.pr_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
-                      >
-                        {sub.pr_link}
-                      </a>
-                    )}
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Submitted {new Date(sub.submitted_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => void handleApprove(sub.id)}
-                    disabled={approvingId === sub.id}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green/10 text-green text-md3-label-md font-bold rounded-lg hover:bg-green/20 transition-colors disabled:opacity-50 shrink-0"
+                <div className="min-w-0">
+                  <p className="text-md3-body-md font-semibold text-slate-900">{sub.member_name || 'Unknown'}</p>
+                  <p className="text-md3-label-md text-slate-400">{sub.member_email}</p>
+                  <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.mission_title}</p>
+                  {!sub.pr_link || sub.pr_link === 'submitted-for-approval' ? (
+                    <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
+                  ) : (
+                    <a
+                      href={sub.pr_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
+                    >
+                      {sub.pr_link}
+                    </a>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Submitted {new Date(sub.submitted_at).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50 sm:justify-end">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setRejectTarget(sub)}
+                    disabled={busy}
+                    className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 border border-red/40 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
                   >
-                    <CheckCircleOutline className="w-3.5 h-3.5" />
+                    <CloseCircleOutline color="#EF4444" width={14} height={14} />
+                    {rejectingId === sub.id ? 'Rejecting…' : 'Reject'}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setApproveTarget(sub)}
+                    disabled={busy}
+                    className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 bg-blue text-white rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
+                  >
+                    <CheckCircleOutline color="#FFFFFF" width={14} height={14} />
                     {approvingId === sub.id ? 'Approving…' : 'Approve & Award'}
-                  </button>
+                  </motion.button>
                 </div>
               </div>
-            ))}
+              )
+            })}
             </div>
             <Pagination controller={queuePagination} itemLabel="submission" className="shrink-0" />
           </div>
@@ -1505,6 +1529,41 @@ function MissionsTab() {
           label="mission"
           onConfirm={() => void handleDelete(confirmDeleteId)}
           onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
+
+      <AnimatePresence>
+        {rejectTarget && (
+          <RejectModal
+            sub={rejectTarget}
+            onConfirm={handleReject}
+            onClose={() => setRejectTarget(null)}
+            loading={rejectingId === rejectTarget.id}
+          />
+        )}
+      </AnimatePresence>
+
+      {approveTarget && (
+        <ConfirmDialog
+          title="Approve & award points?"
+          message={`${approveTarget.member_name || 'This member'} will be awarded points for "${approveTarget.mission_title}". This can't be undone.`}
+          confirmLabel="Approve & Award"
+          tone="primary"
+          loading={approvingId === approveTarget.id}
+          onConfirm={() => { void handleApprove(approveTarget.id).then(() => setApproveTarget(null)) }}
+          onCancel={() => setApproveTarget(null)}
+        />
+      )}
+
+      {toggleTarget && (
+        <ConfirmDialog
+          title="Deactivate this mission?"
+          message={`"${toggleTarget.title}" will be hidden from members until you reactivate it.`}
+          confirmLabel="Deactivate"
+          tone="danger"
+          loading={togglingStatusId === toggleTarget.id}
+          onConfirm={() => { void handleToggleStatus(toggleTarget).then(() => setToggleTarget(null)) }}
+          onCancel={() => setToggleTarget(null)}
         />
       )}
     </div>
@@ -1841,6 +1900,13 @@ const SUB_STATUS_COLORS: Record<SubmissionStatus, string> = {
   rejected: 'bg-red/10 text-red',
 }
 
+// Icon + tint per status — drives the colored indicator chip on the stats cards.
+const SUB_STATUS_ICONS: Record<SubmissionStatus, { Icon: SolarIcon; color: string; bg: string }> = {
+  pending:  { Icon: ClockCircleOutline, color: '#F8C630', bg: 'bg-gold/10'  },
+  approved: { Icon: CheckCircleOutline, color: '#21C45D', bg: 'bg-green/10' },
+  rejected: { Icon: CloseCircleOutline, color: '#EF4444', bg: 'bg-red/10'   },
+}
+
 function subInitials(name: string) {
   return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'
 }
@@ -1860,7 +1926,9 @@ function fmtDateShort(iso: string) {
 // ── Reject Modal ──────────────────────────────────────────────────────────────
 
 interface RejectModalProps {
-  sub: SubmissionRow
+  // Structural type — accepts both SubmissionRow (point submissions) and
+  // MissionSubmissionRow (mission review queue); only these fields are read.
+  sub: { id: string; member_name: string; mission_title: string }
   onConfirm: (subId: string, remarks: string) => Promise<void>
   onClose: () => void
   loading: boolean
@@ -2064,7 +2132,7 @@ function SubmissionDetailSheet({ sub, history, historyLoading, onClose, onApprov
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onReject(sub)}
                 disabled={actionLoading === sub.id}
-                className="flex-1 py-3 flex items-center justify-center gap-2 bg-red/10 text-red rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-red/20 transition-colors"
+                className="flex-1 py-3 flex items-center justify-center gap-2 border border-red/40 text-red rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
               >
                 <CloseCircleOutline color="#EF4444" width={20} height={20} />
                 Reject
@@ -2073,9 +2141,9 @@ function SubmissionDetailSheet({ sub, history, historyLoading, onClose, onApprov
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onApprove(sub)}
                 disabled={actionLoading === sub.id}
-                className="flex-1 py-3 flex items-center justify-center gap-2 bg-green/10 text-green rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-green/20 transition-colors"
+                className="flex-1 py-3 flex items-center justify-center gap-2 bg-blue text-white rounded-xl text-md3-body-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
               >
-                <CheckCircleOutline color="#21C45D" width={20} height={20} />
+                <CheckCircleOutline color="#FFFFFF" width={20} height={20} />
                 {actionLoading === sub.id ? 'Approving…' : 'Approve & Award'}
               </motion.button>
             </div>
@@ -2132,12 +2200,12 @@ function SubmissionCard({ sub, onTap, onApprove, onReject, actionLoading }: Subm
       </div>
 
       {sub.status === 'pending' && (
-        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50">
+        <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50 sm:justify-end">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={(e) => { e.stopPropagation(); onReject(sub) }}
             disabled={actionLoading === sub.id}
-            className="flex-1 py-2 flex items-center justify-center gap-1.5 bg-red/10 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/20 transition-colors"
+            className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 border border-red/40 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
           >
             <CloseCircleOutline color="#EF4444" width={14} height={14} />
             Reject
@@ -2146,9 +2214,9 @@ function SubmissionCard({ sub, onTap, onApprove, onReject, actionLoading }: Subm
             whileTap={{ scale: 0.95 }}
             onClick={(e) => { e.stopPropagation(); onApprove(sub) }}
             disabled={actionLoading === sub.id}
-            className="flex-1 py-2 flex items-center justify-center gap-1.5 bg-green/10 text-green rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-green/20 transition-colors"
+            className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 bg-blue text-white rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
           >
-            <CheckCircleOutline color="#21C45D" width={14} height={14} />
+            <CheckCircleOutline color="#FFFFFF" width={14} height={14} />
             {actionLoading === sub.id ? 'Approving…' : 'Approve'}
           </motion.button>
         </div>
@@ -2209,6 +2277,8 @@ function PointSubmissionsTab() {
     setDetailSub(null)
     setHistory([])
   }
+
+  const [approveTarget, setApproveTarget] = useState<SubmissionRow | null>(null)
 
   const handleApprove = async (sub: SubmissionRow) => {
     setActionLoading(sub.id)
@@ -2278,22 +2348,20 @@ function PointSubmissionsTab() {
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        {SUB_STATUS_TABS.map(({ key, label }) => (
-          <div
-            key={key}
-            className={`rounded-2xl p-3 text-center border cursor-pointer transition-colors ${
-              activeStatus === key
-                ? key === 'pending' ? 'bg-gold/20 border-gold/40' : key === 'approved' ? 'bg-green/20 border-green/40' : 'bg-red/20 border-red/40'
-                : key === 'pending' ? 'bg-gold/10 border-gold/20 hover:bg-gold/15' : key === 'approved' ? 'bg-green/10 border-green/20 hover:bg-green/15' : 'bg-red/10 border-red/20 hover:bg-red/15'
-            }`}
-            onClick={() => setActiveStatus(key)}
-          >
-            <p className={`text-md3-headline-sm font-black ${key === 'approved' ? 'text-green' : key === 'rejected' ? 'text-red' : 'text-slate-900'}`}>
-              {loading ? '—' : counts[key]}
-            </p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
-          </div>
-        ))}
+        {SUB_STATUS_TABS.map(({ key, label }) => {
+          const { Icon, color, bg } = SUB_STATUS_ICONS[key]
+          return (
+            <div key={key} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-card">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2 ${bg}`}>
+                <Icon color={color} width={18} height={18} />
+              </div>
+              <p className={`text-md3-headline-sm font-black ${loading ? 'text-slate-300' : 'text-slate-900'}`}>
+                {loading ? '—' : counts[key]}
+              </p>
+              <p className="text-md3-label-md text-slate-500 mt-0.5">{label}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Status filter pills + search */}
@@ -2303,7 +2371,7 @@ function PointSubmissionsTab() {
             key={key}
             onClick={() => setActiveStatus(key)}
             className={`flex-1 py-2 rounded-xl text-md3-label-md font-bold transition-colors relative ${
-              activeStatus === key ? 'bg-blue text-white shadow-blue' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue/30'
+              activeStatus === key ? 'bg-blue text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue/30'
             }`}
           >
             {label}
@@ -2356,7 +2424,7 @@ function PointSubmissionsTab() {
                 key={sub.id}
                 sub={sub}
                 onTap={openDetail}
-                onApprove={handleApprove}
+                onApprove={(s) => setApproveTarget(s)}
                 onReject={(s) => setRejectTarget(s)}
                 actionLoading={actionLoading}
               />
@@ -2369,7 +2437,7 @@ function PointSubmissionsTab() {
       {filtered.length > 10 && (
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-4 w-10 h-10 bg-blue text-white rounded-full shadow-blue flex items-center justify-center"
+          className="fixed bottom-6 right-4 w-10 h-10 bg-blue text-white rounded-full shadow-card flex items-center justify-center"
           aria-label="Scroll to top"
         >
           <ArrowLeftOutline color="white" width={16} height={16} className="rotate-90" />
@@ -2383,7 +2451,7 @@ function PointSubmissionsTab() {
             history={history}
             historyLoading={historyLoading}
             onClose={closeDetail}
-            onApprove={handleApprove}
+            onApprove={(s) => setApproveTarget(s)}
             onReject={(s) => setRejectTarget(s)}
             actionLoading={actionLoading}
           />
@@ -2400,6 +2468,18 @@ function PointSubmissionsTab() {
           />
         )}
       </AnimatePresence>
+
+      {approveTarget && (
+        <ConfirmDialog
+          title="Approve & award points?"
+          message={`${approveTarget.member_name || 'This member'} will be awarded ${approveTarget.xp_reward} pts for "${approveTarget.mission_title}". This can't be undone.`}
+          confirmLabel="Approve & Award"
+          tone="primary"
+          loading={actionLoading === approveTarget.id}
+          onConfirm={() => { void handleApprove(approveTarget).then(() => setApproveTarget(null)) }}
+          onCancel={() => setApproveTarget(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { isValidUUID } from '../../../lib/validation'
 import { ArrowLeftOutline, GalleryAddOutline, CloseCircleLineDuotone, DangerTriangleOutline } from 'solar-icon-set'
@@ -11,7 +11,9 @@ import { useAuthStore } from '../../../stores/useAuthStore'
 import { supabase } from '../../../lib/supabase'
 import NotFound from '../../NotFound'
 import {
-  schema,
+  makeEventSchema,
+  MAX_XP_ADMIN,
+  MAX_XP_OFFICER,
   type FormData,
   type CustomFormField,
   inputClass,
@@ -44,6 +46,10 @@ export function OrgEventEdit() {
   const navigate = useNavigate()
   const { events, fetchEvents, isLoading, updateEvent, deleteEvent } = useEventsStore()
   const { user } = useAuthStore()
+  const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
+  // Chapter officers cap attendance XP at 350; admins keep the original ceiling.
+  const XP_CAP = isAdmin ? MAX_XP_ADMIN : MAX_XP_OFFICER
+  const eventSchema = useMemo(() => makeEventSchema(XP_CAP), [XP_CAP])
   const { draft, saveDraft, clearDraft } = useFormDraft<EventEditDraft>(
     `org-event-edit:${id ?? ''}`,
     'local',
@@ -114,7 +120,7 @@ export function OrgEventEdit() {
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(eventSchema),
     defaultValues: event
       ? {
           title:             hasDraft ? (draft.title             as string)  ?? event.title             : event.title,
@@ -162,7 +168,7 @@ export function OrgEventEdit() {
     prevCategoryRef.current = category
     // Only auto-set if the event isn't locked AND the category actually changed from stored value
     if (!isLocked && category !== event?.category) {
-      setValue('points_value', ATTENDANCE_PTS[category], { shouldValidate: false })
+      setValue('points_value', Math.min(ATTENDANCE_PTS[category], XP_CAP), { shouldValidate: false })
     }
   }
 
@@ -730,7 +736,7 @@ export function OrgEventEdit() {
                   type="number"
                   className={inputClass}
                   min={1}
-                  max={1000}
+                  max={XP_CAP}
                   step={1}
                 />
                 {errors.points_value && <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>}
