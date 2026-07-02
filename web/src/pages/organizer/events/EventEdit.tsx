@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { isValidUUID } from '../../../lib/validation'
-import { ArrowLeftOutline, GalleryAddOutline, CloseCircleLineDuotone, DangerTriangleOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, DangerTriangleOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -32,6 +32,7 @@ import {
 import type { Json } from '@devcon-plus/supabase'
 import { useFormDraft } from '../../../hooks/useFormDraft'
 import { MarkdownEditor } from '../../../components/MarkdownEditor'
+import CoverImageUpload from '../../../components/CoverImageUpload'
 
 type EventEditDraft = FormData & {
   tags: string[]
@@ -65,8 +66,7 @@ export function OrgEventEdit() {
 
   const event = events.find((e) => e.id === id)
 
-  // ── Cover image ──────────────────────────────────────────────────────────
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // ── Cover image (managed by <CoverImageUpload />, kept here for submit) ────
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(
     event?.cover_image_url ?? null
@@ -210,32 +210,6 @@ export function OrgEventEdit() {
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [isSubmitting])
 
-  // ── Cover image handlers ────────────────────────────────────────────────
-  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setCoverUploadError('Only JPG, PNG, or WebP images are allowed.')
-      return
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      setCoverUploadError('Image must be under 5 MB.')
-      return
-    }
-    setCoverFile(file)
-    setCoverUploadError(null)
-    setCoverPreview(URL.createObjectURL(file))
-  }
-
-  const removeCover = () => {
-    setCoverFile(null)
-    setCoverPreview(null)
-    setCoverUploadError(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
 
   // ── TagOutline handlers ────────────────────────────────────────────────────────
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -429,37 +403,14 @@ export function OrgEventEdit() {
         {/* ── MEDIA ── */}
         <motion.div variants={fadeUp}>
           <SectionHeader title="Media" />
-          {coverPreview ? (
-            <div className="relative rounded-xl overflow-hidden mb-3 border border-slate-200">
-              <img src={coverPreview} alt="Cover preview" className="w-full h-44 object-cover" />
-              <button
-                type="button"
-                onClick={removeCover}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center"
-              >
-                <CloseCircleLineDuotone className="w-4 h-4" color="#EF4444" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-36 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-blue hover:text-blue transition-colors mb-3"
-            >
-              <GalleryAddOutline className="w-6 h-6" />
-              <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
-              <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
-              <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
-            </button>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFileChange}
+          <CoverImageUpload
+            initialPreviewUrl={event.cover_image_url}
+            onChange={({ file, previewUrl }) => {
+              setCoverFile(file)
+              setCoverPreview(previewUrl)
+            }}
+            error={coverUploadError}
           />
-          {coverUploadError && <p className="text-md3-label-md text-red mt-1">{coverUploadError}</p>}
         </motion.div>
 
         {/* ── CATEGORIZATION ── */}

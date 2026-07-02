@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,6 +12,7 @@ import { useChaptersStore } from '../../stores/useChaptersStore'
 import { toDatetimeLocalValue, fromDatetimeLocalValue } from '../../lib/dates'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import CoverImageUpload from '../../components/CoverImageUpload'
 
 // ── Custom form field types ────────────────────────────────────────────────────
 
@@ -289,18 +290,9 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   })
   const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({})
 
-  // ── Cover image ──────────────────────────────────────────────────────────
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // ── Cover image (managed by <CoverImageUpload />, kept here for submit) ────
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(event?.cover_image_url ?? null)
-  const [isDraggingCover, setIsDraggingCover] = useState(false)
-  const coverObjectUrlRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (coverObjectUrlRef.current) URL.revokeObjectURL(coverObjectUrlRef.current)
-    }
-  }, [])
 
   const addField = () =>
     setCustomFields(prev => [...prev, {
@@ -330,49 +322,6 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     const field = customFields.find(f => f.id === fieldId)
     if (!field) return
     updateField(fieldId, { options: field.options.filter((_, i) => i !== index) })
-  }
-
-  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
-
-  const processCoverFile = (file: File) => {
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setCoverUploadError('Only JPG, PNG, or WebP images are allowed.')
-      return
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      setCoverUploadError('Image must be under 5 MB.')
-      return
-    }
-    if (coverObjectUrlRef.current) URL.revokeObjectURL(coverObjectUrlRef.current)
-    setCoverFile(file)
-    setCoverUploadError(null)
-    const url = URL.createObjectURL(file)
-    coverObjectUrlRef.current = url
-    setCoverPreview(url)
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) processCoverFile(file)
-  }
-
-  const handleCoverDrop = (e: React.DragEvent<HTMLButtonElement>) => {
-    e.preventDefault()
-    setIsDraggingCover(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) processCoverFile(file)
-  }
-
-  const removeCover = () => {
-    if (coverObjectUrlRef.current) {
-      URL.revokeObjectURL(coverObjectUrlRef.current)
-      coverObjectUrlRef.current = null
-    }
-    setCoverFile(null)
-    setCoverPreview(null)
-    setCoverUploadError(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const {
@@ -595,47 +544,13 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             Cover Image <span className="text-slate-300 normal-case font-normal">optional</span>
           </label>
 
-          {coverPreview ? (
-            <div className="relative rounded-xl overflow-hidden mb-3 border border-slate-200">
-              <img
-                src={coverPreview}
-                alt="Cover preview"
-                className="w-full h-44 object-cover"
-              />
-              <button
-                type="button"
-                onClick={removeCover}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center"
-              >
-                <CloseCircleLineDuotone className="w-4 h-4" color="#EF4444" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setIsDraggingCover(true) }}
-              onDragLeave={(e) => { e.preventDefault(); setIsDraggingCover(false) }}
-              onDrop={handleCoverDrop}
-              className={`w-full h-36 rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-colors ${
-                isDraggingCover
-                  ? 'border-blue bg-blue/5 text-blue'
-                  : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-blue hover:text-blue'
-              }`}
-            >
-              <GalleryAddOutline className="w-6 h-6" />
-              <span className="text-md3-label-md font-medium">Click or drag to upload cover image</span>
-              <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
-              <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
-            </button>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFileChange}
+          <CoverImageUpload
+            initialPreviewUrl={event?.cover_image_url}
+            onChange={({ file, previewUrl }) => {
+              setCoverFile(file)
+              setCoverPreview(previewUrl)
+            }}
+            error={coverUploadError}
           />
         </div>
 
@@ -1103,12 +1018,6 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         {submitError && (
           <p className="text-md3-label-md text-red bg-red/5 border border-red/20 rounded-xl px-3 py-2">
             {submitError}
-          </p>
-        )}
-
-        {coverUploadError && (
-          <p className="text-md3-label-md text-red bg-red/5 border border-red/20 rounded-xl px-3 py-2">
-            {coverUploadError}
           </p>
         )}
 
