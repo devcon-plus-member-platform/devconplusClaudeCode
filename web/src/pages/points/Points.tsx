@@ -103,14 +103,14 @@ export default function Points() {
                 </div>
               </div>
 
-              {/* Lifetime */}
+              {/* All-time */}
               <div className="flex items-center gap-3 pt-1">
                 <div className="w-10 h-10 rounded-full bg-blue/5 flex items-center justify-center shrink-0">
                   <BoltOutline className="w-5 h-5" color="rgb(var(--color-primary))" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-slate-600 font-bold text-md3-body-md leading-none">
-                    {lifetimePoints.toLocaleString()} lifetime XP
+                    {lifetimePoints.toLocaleString()} all-time XP
                   </span>
                   {prestigeUnlocked ? (
                     <span className="text-gold text-[10px] font-bold uppercase tracking-wider mt-1">Prestige Unlocked!</span>
@@ -122,7 +122,7 @@ export default function Points() {
                 </div>
               </div>
 
-              {/* Lifetime progress bar */}
+              {/* All-time progress bar */}
               {!prestigeUnlocked && (
                 <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
                   <motion.div
@@ -200,7 +200,7 @@ export default function Points() {
                 <p className="text-md3-label-md text-slate-500 text-center">
                   Redeeming rewards deducts from your{' '}
                   <span className="font-semibold text-slate-700">spendable balance only</span>
-                  {' '}— lifetime points are never reduced.
+                  {' '}— all-time points are never reduced.
                 </p>
               </motion.div>
             )}

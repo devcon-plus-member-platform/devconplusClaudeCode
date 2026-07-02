@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftOutline } from 'solar-icon-set'
 import ComingSoonModal from '../../components/ComingSoonModal'
+import ComingSoonBadge from '../../components/ComingSoonBadge'
 import { useAuthStore } from '../../stores/useAuthStore'
 
 const COMING_SOON_OPTIONS = ['Profile Visibility', 'Data Export']
@@ -66,7 +67,8 @@ export default function Privacy() {
             className="w-full bg-white rounded-2xl shadow-card px-4 py-4 flex items-center text-left"
           >
             <span className="flex-1 font-medium text-slate-900 text-md3-body-md">{opt}</span>
-            <span className="text-slate-300">›</span>
+            <ComingSoonBadge />
+            <span className="ml-2 text-slate-300">›</span>
           </button>
         ))}
 

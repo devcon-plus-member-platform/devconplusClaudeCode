@@ -43,7 +43,7 @@ const markdownComponents: Components = {
 
 export function MarkdownContent({ value, className = '' }: MarkdownContentProps) {
   return (
-    <div className={className}>
+    <div className={`break-words ${className}`}>
       <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
         {value}
       </Markdown>

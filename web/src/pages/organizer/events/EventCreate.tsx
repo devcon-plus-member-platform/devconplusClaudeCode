@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { useFormDraft } from '../../../hooks/useFormDraft'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, GalleryAddOutline, CloseCircleLineDuotone } from 'solar-icon-set'
+import { ArrowLeftOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -25,11 +25,13 @@ import {
   ATTENDANCE_PTS,
   DEFAULT_VOLUNTEER_POINTS,
   TAG_MAX_LENGTH,
+  DESCRIPTION_MAX_LENGTH,
   SectionHeader,
   CustomFieldsBuilder,
 } from './eventFormConstants'
 import type { Json } from '@devcon-plus/supabase'
 import { MarkdownEditor } from '../../../components/MarkdownEditor'
+import CoverImageUpload from '../../../components/CoverImageUpload'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -63,20 +65,9 @@ export function OrgEventCreate() {
     { exclude: ['chapter_id'] },
   )
 
-  // Cover image (managed outside RHF)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // Cover image (managed by <CoverImageUpload />, kept here for submit)
   const [coverFile, setCoverFile] = useState<File | null>(null)
-  const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
-  // Track the object URL so we can revoke it to prevent memory leaks
-  const coverObjectUrlRef = useRef<string | null>(null)
-
-  // Revoke the blob URL when the component unmounts
-  useEffect(() => {
-    return () => {
-      if (coverObjectUrlRef.current) URL.revokeObjectURL(coverObjectUrlRef.current)
-    }
-  }, [])
 
   // Tags (managed outside RHF)
   const [tags, setTags] = useState<string[]>((draft.tags as string[]) ?? [])
@@ -195,42 +186,6 @@ export function OrgEventCreate() {
   useEffect(() => {
     if (isHqSelected) setValue('is_chapter_locked', false)
   }, [isHqSelected, setValue])
-
-  // ── Cover image handlers ─────────────────────────────────────────────────
-
-  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setCoverUploadError('Only JPG, PNG, or WebP images are allowed.')
-      return
-    }
-    if (file.size > MAX_IMAGE_SIZE) {
-      setCoverUploadError('Image must be under 5 MB.')
-      return
-    }
-    // Revoke previous object URL before creating a new one
-    if (coverObjectUrlRef.current) URL.revokeObjectURL(coverObjectUrlRef.current)
-    setCoverFile(file)
-    setCoverUploadError(null)
-    const url = URL.createObjectURL(file)
-    coverObjectUrlRef.current = url
-    setCoverPreview(url)
-  }
-
-  const removeCover = () => {
-    if (coverObjectUrlRef.current) {
-      URL.revokeObjectURL(coverObjectUrlRef.current)
-      coverObjectUrlRef.current = null
-    }
-    setCoverFile(null)
-    setCoverPreview(null)
-    setCoverUploadError(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
 
   // ── TagOutline handlers ──────────────────────────────────────────────────────────
 
@@ -407,6 +362,7 @@ export function OrgEventCreate() {
                     value={field.value}
                     onChange={field.onChange as (value: string) => void}
                     error={errors.description?.message}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
                   />
                 )}
               />
@@ -418,46 +374,10 @@ export function OrgEventCreate() {
         <motion.div variants={fadeUp}>
           <SectionHeader title="Media" />
 
-          {/* Cover image preview */}
-          {coverPreview ? (
-            <div className="relative rounded-xl overflow-hidden mb-3 border border-slate-200">
-              <img
-                src={coverPreview}
-                alt="Cover preview"
-                className="w-full h-44 object-cover"
-              />
-              <button
-                type="button"
-                onClick={removeCover}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center"
-              >
-                <CloseCircleLineDuotone className="w-4 h-4" color="#EF4444" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-36 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-blue hover:text-blue transition-colors mb-3"
-            >
-              <GalleryAddOutline className="w-6 h-6" />
-              <span className="text-md3-label-md font-medium">Tap to upload cover image</span>
-              <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
-              <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
-            </button>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={handleFileChange}
+          <CoverImageUpload
+            onChange={({ file }) => setCoverFile(file)}
+            error={coverUploadError}
           />
-
-          {coverUploadError && (
-            <p className="text-md3-label-md text-red mt-1">{coverUploadError}</p>
-          )}
         </motion.div>
 
         {/* ── CATEGORIZATION ── */}

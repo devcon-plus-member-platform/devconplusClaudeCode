@@ -24,7 +24,7 @@ export default function XPCard() {
           </p>
         </div>
 
-        {/* Lifetime + progress */}
+        {/* All-time + progress */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <BoltBroken color="#64748B" className="w-4 h-4 shrink-0" />
