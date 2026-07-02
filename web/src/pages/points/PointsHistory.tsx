@@ -136,14 +136,14 @@ export default function PointsHistory() {
             {/* Divider */}
             <div className="w-px h-[50px] bg-slate-100" />
 
-            {/* Lifetime */}
+            {/* All-time */}
             <div className="flex-1 flex items-center gap-[10px] pl-[20px]">
               <div className="shrink-0 size-[40px] bg-slate-50 rounded-full flex items-center justify-center">
                 <BoltOutline className="size-5" color="rgb(var(--color-primary))" />
               </div>
               <div className="flex flex-col justify-center translate-y-px">
                 <p className="font-proxima text-slate-500 text-[12px] leading-none mb-[6px]">
-                  Lifetime
+                  All-time
                 </p>
                 <div className="flex items-baseline gap-1">
                   <p className="font-proxima font-extrabold text-[24px] text-slate-900 leading-none tracking-tight">

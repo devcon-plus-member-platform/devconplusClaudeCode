@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, GalleryAddOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
@@ -1162,6 +1163,18 @@ export default function AdminEvents() {
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
   const [eventSearch, setEventSearch] = useState('')
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Auto-open the create slide-over when arriving from the Admin Dashboard's
+  // "Create Event" button (navigate('/admin/events', { state: { openCreate: true } })).
+  // Clear the router state afterwards so a refresh/back doesn't reopen it.
+  useEffect(() => {
+    if ((location.state as { openCreate?: boolean } | null)?.openCreate) {
+      setSlideOver({ mode: 'create' })
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, location.pathname, navigate])
 
   // Table tab (DEVCON vs external), search + sort (separate from the export
   // dialog's `eventSearch`).
