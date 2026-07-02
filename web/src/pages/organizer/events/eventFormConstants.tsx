@@ -34,6 +34,11 @@ export interface CustomFormField {
 // Single source of truth for tag length — used in both schema validation and the UI input
 export const TAG_MAX_LENGTH = 20
 
+// Single source of truth for description length — MUST match the NestJS gateway's
+// @MaxLength(5000) on CreateEventDto.description, so the client blocks + indicates the
+// same ceiling the backend enforces (otherwise an over-limit description 400s silently).
+export const DESCRIPTION_MAX_LENGTH = 5000
+
 // Attendance-XP ceilings by role. Admins keep the original ceiling; chapter
 // officers are capped lower so they can't over-award points.
 export const MAX_XP_ADMIN = 1000
@@ -45,7 +50,7 @@ export function makeEventSchema(xpMax: number) {
   return z
   .object({
     title: z.string().min(3, 'Title must be at least 3 characters').max(100, 'Title must be under 100 characters'),
-    description: z.string().min(10, 'Description must be at least 10 characters').max(1000, 'Description must be under 1,000 characters'),
+    description: z.string().min(10, 'Description must be at least 10 characters').max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
     location: z.string().min(2, 'Location is required').max(200, 'Location must be under 200 characters'),
     event_date: z.string().min(1, 'Start date is required'),
     end_date: z.string().optional(),

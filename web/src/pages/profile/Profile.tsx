@@ -7,6 +7,7 @@ import { usePointsStore } from '../../stores/usePointsStore'
 import { useThemeStore, PROGRAM_THEMES } from '../../stores/useThemeStore'
 import { ROLE_DISPLAY_NAMES } from '../../lib/constants'
 import ComingSoonModal from '../../components/ComingSoonModal'
+import ComingSoonBadge from '../../components/ComingSoonBadge'
 import ProfileExpCard from '../../components/ProfileExpCard'
 import { useInterestsStore } from '../../stores/useInterestsStore'
 
@@ -225,7 +226,7 @@ export default function Profile() {
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-card">
           <div className="flex items-center gap-2 mb-3">
             <p className="text-md3-body-md font-bold text-slate-900">Theme</p>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Coming soon</span>
+            <ComingSoonBadge />
           </div>
           {/* Theme switching temporarily disabled — picker is non-interactive (code retained).
               To re-enable, remove `opacity-50 pointer-events-none` below and the "Coming soon" badge above. */}
@@ -293,7 +294,10 @@ export default function Profile() {
             onClick={() => setShowHelpModal(true)}
             className="w-full px-4 py-4 flex items-center justify-between text-left border-t border-slate-100 hover:bg-slate-50 transition-colors"
           >
-            <span className="text-md3-body-md font-semibold text-slate-900">Help & Support</span>
+            <span className="flex items-center gap-2 text-md3-body-md font-semibold text-slate-900">
+              Help & Support
+              <ComingSoonBadge />
+            </span>
             <AltArrowRightOutline className="w-4 h-4" color="#CBD5E1" />
           </button>
         </div>

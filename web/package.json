@@ -29,6 +29,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-easy-crop": "^6.0.2",
     "react-hook-form": "^7.56.1",
     "react-is": "^19.2.4",
     "react-markdown": "^10.1.0",

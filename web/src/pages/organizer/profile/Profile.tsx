@@ -7,14 +7,15 @@ import { useAuthStore } from '../../../stores/useAuthStore'
 import { ROLE_DISPLAY_NAMES } from '../../../lib/constants'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import ComingSoonModal from '../../../components/ComingSoonModal'
+import ComingSoonBadge from '../../../components/ComingSoonBadge'
 import { staggerContainer, cardItem } from '../../../lib/animation'
 
-const MENU_ITEMS: { label: string; icon?: ComponentType<{ className?: string }>; path?: string; modal?: string }[] = [
+const MENU_ITEMS: { label: string; icon?: ComponentType<{ className?: string }>; path?: string; modal?: string; comingSoon?: boolean }[] = [
   { label: 'Edit Profile',          path: '/organizer/profile/edit'           },
-  { label: 'Manage Co-Organizers',  modal: 'Manage Co-Organizers' },
+  { label: 'Manage Co-Organizers',  modal: 'Manage Co-Organizers', comingSoon: true },
   { label: 'Notifications',         path: '/organizer/profile/notifications'  },
   { label: 'Privacy & Security',    path: '/organizer/profile/privacy'        },
-  { label: 'Help & Support',        modal: 'Help & Support'                   },
+  { label: 'Help & Support',        modal: 'Help & Support', comingSoon: true    },
 ]
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
@@ -175,6 +176,7 @@ export function OrgProfile() {
               <span className="flex items-center gap-2 text-md3-body-md font-semibold text-slate-900">
                 {item.icon && <item.icon className="w-4 h-4 text-slate-400" />}
                 {item.label}
+                {item.comingSoon && <ComingSoonBadge />}
               </span>
               <AltArrowRightOutline className="w-4 h-4" color="#CBD5E1" />
             </button>

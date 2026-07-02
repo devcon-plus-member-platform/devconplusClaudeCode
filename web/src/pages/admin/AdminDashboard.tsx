@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { UsersGroupRoundedOutline, CalendarOutline, StarOutline, BuildingsOutline } from 'solar-icon-set'
+import { useNavigate } from 'react-router-dom'
+import { UsersGroupRoundedOutline, CalendarOutline, StarOutline, BuildingsOutline, AddCircleOutline } from 'solar-icon-set'
 import {
   AreaChart,
   Area,
@@ -28,6 +29,7 @@ interface AttendanceRow { event: string; attendance: number }
 const KPI_SKELETON = { totalMembers: 0, totalEvents: 0, xpDistributed: 0, activeChapters: 0 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate()
   const [kpis, setKpis] = useState<KpiData>(KPI_SKELETON)
   const [memberGrowth, setMemberGrowth] = useState<GrowthRow[]>([])
   const [xpByChapter, setXpByChapter] = useState<XpRow[]>([])
@@ -91,8 +93,19 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">Admin Dashboard</h1>
-      <p className="text-md3-body-md text-slate-500 mb-6">Platform overview for DEVCON+</p>
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">Admin Dashboard</h1>
+          <p className="text-md3-body-md text-slate-500">Platform overview for DEVCON+</p>
+        </div>
+        <button
+          onClick={() => navigate('/admin/events', { state: { openCreate: true } })}
+          className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark active:scale-95 transition-colors shrink-0"
+        >
+          <AddCircleOutline className="w-5 h-5" />
+          <span className="hidden sm:inline">Create Event</span>
+        </button>
+      </div>
 
       {/* Row 1 — KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

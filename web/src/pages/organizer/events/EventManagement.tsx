@@ -26,7 +26,14 @@ export function OrgEventManagement() {
   const chapterEvents = events.filter(
     (e) => e.chapter_id === (user?.chapter_id ?? null) || (isAdmin && e.chapter_id === null),
   )
-  const pastEvents     = chapterEvents.filter((e) => isEventArchived(e))
+  const pastEvents     = chapterEvents
+    .filter((e) => isEventArchived(e))
+    // Most recent past event first (events with no date sink to the bottom)
+    .sort((a, b) => {
+      const ta = a.event_date ? new Date(a.event_date).getTime() : 0
+      const tb = b.event_date ? new Date(b.event_date).getTime() : 0
+      return tb - ta
+    })
   const upcomingEvents = chapterEvents.filter((e) => !isEventArchived(e))
   const currentEvent   = upcomingEvents.find((e) => e.is_featured) ?? upcomingEvents[0]
 
