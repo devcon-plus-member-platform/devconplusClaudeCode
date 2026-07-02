@@ -17,6 +17,7 @@ import { useMissionsStore } from '../../stores/useMissionsStore'
 import { SkeletonRewardCard, SkeletonJobCard } from '../../components/Skeleton'
 import { staggerContainer, cardItem, slideUp, backdrop } from '../../lib/animation'
 import ComingSoonModal from '../../components/ComingSoonModal'
+import ComingSoonBadge from '../../components/ComingSoonBadge'
 import { SwipeButton } from '../../components/SwipeButton'
 
 // Flower-of-life pattern matching Dashboard
@@ -1116,13 +1117,14 @@ export default function Rewards() {
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab.id, tab.label)}
-                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
+                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center gap-1.5 rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
                     activeTab === tab.id
                       ? 'bg-white text-primary font-semibold border-primary'
                       : 'bg-white text-slate-500 font-medium border-slate-200'
                   }`}
                 >
                   {tab.label}
+                  {tab.id !== 'redeem' && tab.id !== 'receipts' && <ComingSoonBadge compact />}
                 </button>
               ))
             )}

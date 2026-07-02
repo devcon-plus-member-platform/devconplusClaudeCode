@@ -25,6 +25,7 @@ import {
   ATTENDANCE_PTS,
   DEFAULT_VOLUNTEER_POINTS,
   TAG_MAX_LENGTH,
+  DESCRIPTION_MAX_LENGTH,
   SectionHeader,
   CustomFieldsBuilder,
 } from './eventFormConstants'
@@ -407,6 +408,7 @@ export function OrgEventCreate() {
                     value={field.value}
                     onChange={field.onChange as (value: string) => void}
                     error={errors.description?.message}
+                    maxLength={DESCRIPTION_MAX_LENGTH}
                   />
                 )}
               />

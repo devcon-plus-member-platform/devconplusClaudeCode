@@ -14,11 +14,12 @@ export function MarkdownEditor({
   value,
   onChange,
   error,
-  maxLength = 1000,
+  maxLength,
 }: MarkdownEditorProps) {
   const [tab, setTab] = useState<EditorTab>('edit')
   const length = value.length
-  const isOverLimit = length > maxLength
+  // When no maxLength is provided the field is uncapped — never flag "over limit".
+  const isOverLimit = maxLength !== undefined && length > maxLength
 
   return (
     <div>
@@ -76,7 +77,7 @@ export function MarkdownEditor({
             isOverLimit ? 'text-red font-semibold' : 'text-slate-400'
           }`}
         >
-          {length} / {maxLength}
+          {maxLength !== undefined ? `${length} / ${maxLength}` : length}
         </span>
       </div>
 
