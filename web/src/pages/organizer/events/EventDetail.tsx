@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, BoltOutline, PenOutline, UserSpeakOutline, MapPointOutline, ShareOutline, CopyOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, BoltOutline, PenOutline, UserSpeakOutline, MapPointOutline, ShareOutline, CopyOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
+import WheelPoster from '../../../components/WheelPoster'
+import EventQRModal from '../../../components/EventQRModal'
 import { MarkdownContent } from '../../../components/MarkdownContent'
+import { getEventThemeStyle } from '../../../lib/eventTheme'
 import { apiFetch } from '../../../lib/api'
 
 // Flower-of-life pattern matching Rewards/Dashboard/Events
@@ -17,6 +20,8 @@ export function OrgEventDetail() {
   const navigate = useNavigate()
   const { events, fetchEvents, isLoading } = useEventsStore()
   const [showAnnounce, setShowAnnounce] = useState(false)
+  const [showPoster, setShowPoster]     = useState(false)
+  const [showQr, setShowQr]             = useState(false)
   const [shareToast, setShareToast]     = useState(false)
   const [statsTotal, setStatsTotal]       = useState(0)
   const [statsPending, setStatsPending]   = useState(0)
@@ -232,6 +237,46 @@ export function OrgEventDetail() {
         >
           View Registrants
         </motion.button>
+
+        {/* ── Raffle wheel & QR ── */}
+        <motion.div variants={fadeUp} className="mt-6">
+          <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-400 mb-2 px-1">
+            Raffle &amp; QR
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <motion.button
+              onClick={() => window.open(`/wheel/${event.id}`, '_blank', 'noopener')}
+              className="py-4 border border-blue/30 text-blue rounded-xl
+                         hover:bg-blue/5 transition-colors flex flex-col items-center justify-center gap-1.5"
+              whileTap={{ scale: 0.97 }}
+            >
+              <ConfettiOutline className="w-5 h-5" />
+              <span className="text-md3-label-md font-bold">Raffle</span>
+            </motion.button>
+            <motion.button
+              onClick={() => setShowQr(true)}
+              disabled={!event.slug}
+              className="py-4 border border-blue/30 text-blue rounded-xl
+                         hover:bg-blue/5 transition-colors flex flex-col items-center justify-center gap-1.5
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+              whileTap={{ scale: 0.97 }}
+            >
+              <QRCodeOutline className="w-5 h-5" />
+              <span className="text-md3-label-md font-bold">QR Code</span>
+            </motion.button>
+            <motion.button
+              onClick={() => setShowPoster(true)}
+              disabled={!event.slug}
+              className="py-4 border border-blue/30 text-blue rounded-xl
+                         hover:bg-blue/5 transition-colors flex flex-col items-center justify-center gap-1.5
+                         disabled:opacity-40 disabled:cursor-not-allowed"
+              whileTap={{ scale: 0.97 }}
+            >
+              <GalleryAddOutline className="w-5 h-5" />
+              <span className="text-md3-label-md font-bold">Poster</span>
+            </motion.button>
+          </div>
+        </motion.div>
       </motion.div>
 
       <SendAnnouncementSheet
@@ -240,6 +285,21 @@ export function OrgEventDetail() {
         isOpen={showAnnounce}
         onClose={() => setShowAnnounce(false)}
       />
+
+      {/* QR poster generator + plain QR — organizer surface is non-themed, so force
+          the modals' `bg-primary` chrome to DEVCON blue (poster/QR art is hardcoded). */}
+      <AnimatePresence>
+        {showPoster && event.slug && (
+          <div style={getEventThemeStyle('devcon')}>
+            <WheelPoster event={event} onClose={() => setShowPoster(false)} />
+          </div>
+        )}
+        {showQr && event.slug && (
+          <div style={getEventThemeStyle('devcon')}>
+            <EventQRModal event={event} onClose={() => setShowQr(false)} />
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   )

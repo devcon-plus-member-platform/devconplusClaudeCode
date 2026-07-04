@@ -59,6 +59,9 @@ export interface Mission {
   github_url: string | null;
   is_active: boolean;
   created_at: string;
+  // Global aggregate counts across all members (populated by findActiveMissions).
+  participant_count?: number;
+  submission_count?: number;
 }
 
 export interface MissionParticipant {
@@ -130,13 +133,24 @@ export interface PointTransaction {
   created_at: string;
 }
 
+/** Per-chapter roll-up — one row for EVERY chapter (0-member chapters included). */
+export interface ChapterStat {
+  chapter: string;
+  members: number;
+  xp: number;
+}
+
 export interface AdminAnalytics {
   totalMembers: number;
   totalEvents: number;
   xpDistributed: number;
   activeChapters: number;
   memberGrowth: { month: string; count: number }[];
+  /** Back-compat: every chapter's XP, sorted desc. Derived from chapterStats. */
   xpByChapter: { chapter: string; xp: number }[];
+  /** Every chapter with both member count and XP — powers the "Top Chapters" toggle. */
+  chapterStats: ChapterStat[];
+  /** Attendance per completed DEVCON event (external events excluded). */
   attendanceTrend: { event: string; attendance: number }[];
 }
 

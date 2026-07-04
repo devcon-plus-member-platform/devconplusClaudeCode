@@ -687,8 +687,10 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
             ? mission.submission_type
             : 'self_attest'
 
-        const participantCount = participants.filter((p) => p.mission_id === mission.id).length
-        const submissionCount  = submissions.filter((s) => s.mission_id === mission.id).length
+        // Global tallies come from the server (service-role aggregate). Fall back to the
+        // caller's own rows only if the backend hasn't supplied counts yet (caps at 1).
+        const participantCount = mission.participant_count ?? participants.filter((p) => p.mission_id === mission.id).length
+        const submissionCount  = mission.submission_count ?? submissions.filter((s) => s.mission_id === mission.id).length
 
         const isJoined     = userId ? participants.some((p) => p.mission_id === mission.id && p.user_id === userId) : false
         const mySubmission = userId ? submissions.find((s) => s.mission_id === mission.id && s.user_id === userId) : undefined
@@ -796,7 +798,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
                         <div>
                           <p className="text-md3-label-md font-semibold text-red leading-snug">Needs Revision</p>
                           <p className="text-[12px] text-red/80 mt-0.5 leading-snug">
-                            {mySubmission.rejection_reason ?? "Your submission wasn't approved. Please revise and try again."}
+                            {mySubmission.admin_remarks ?? "Your submission wasn't approved. Please revise and try again."}
                           </p>
                         </div>
                       </div>

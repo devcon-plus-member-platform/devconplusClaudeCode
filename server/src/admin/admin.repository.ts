@@ -3,6 +3,7 @@ import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type {
   AdminAnalytics,
+  ChapterStat,
   PointTransaction,
   Profile,
   ProfileRole,
@@ -75,35 +76,89 @@ export class AdminRepository extends BaseRepository {
     return (data?.name as string | null) ?? null;
   }
 
-  // ── Analytics (all 7 queries run in parallel) ─────────────────────────────
+  // ── Analytics ─────────────────────────────────────────────────────────────
+  // KPI counts + member-growth/xp-distributed/active-chapters stay on their RPCs.
+  // chapterStats (member + XP per chapter) and attendanceTrend are computed here
+  // from raw tables so we can (a) include EVERY chapter — even 0-member ones — and
+  // (b) exclude external events from the attendance trend. The live-DB RPCs did
+  // neither, and their bodies drift from the migrations, so we own the shape here.
+
+  // Number of most-recent completed DEVCON events to plot on the attendance trend.
+  private static readonly ATTENDANCE_TREND_LIMIT = 12;
 
   async getAnalytics(): Promise<AdminAnalytics> {
+    const nowIso = new Date().toISOString();
+
     const [
       membersRes,
       eventsRes,
       xpRes,
-      chaptersRes,
+      activeChaptersRes,
       growthRes,
-      xpChapterRes,
-      attendanceRes,
+      chaptersRes,
+      profilesRes,
+      trendEventsRes,
+      checkinsRes,
     ] = await Promise.all([
       this.db.from('profiles').select('*', { count: 'exact', head: true }),
       this.db.from('events').select('*', { count: 'exact', head: true }),
       this.db.rpc('get_total_xp_distributed' as never),
       this.db.rpc('get_active_chapters_count' as never),
       this.db.rpc('get_member_growth' as never),
-      this.db.rpc('get_xp_by_chapter' as never),
-      this.db.rpc('get_attendance_trend' as never),
+      this.db.from('chapters').select('id, name').order('name', { ascending: true }),
+      this.db.from('profiles').select('chapter_id, lifetime_points'),
+      // Completed, non-external events (is_external false OR null), newest first.
+      this.db
+        .from('events')
+        .select('id, title, event_date')
+        .or('is_external.is.null,is_external.eq.false')
+        .lte('event_date', nowIso)
+        .order('event_date', { ascending: false })
+        .limit(AdminRepository.ATTENDANCE_TREND_LIMIT),
+      this.db.from('event_registrations').select('event_id').eq('checked_in', true),
     ]);
+
+    const chapters   = (chaptersRes.data as { id: string; name: string }[] | null) ?? [];
+    const profiles   = (profilesRes.data as { chapter_id: string | null; lifetime_points: number | null }[] | null) ?? [];
+    const trendEvents = (trendEventsRes.data as { id: string; title: string }[] | null) ?? [];
+    const checkins   = (checkinsRes.data as { event_id: string }[] | null) ?? [];
+
+    // ── chapterStats: one row per chapter, members + XP rolled up ─────────────
+    const rollup = new Map<string, { members: number; xp: number }>();
+    for (const c of chapters) rollup.set(c.id, { members: 0, xp: 0 });
+    for (const p of profiles) {
+      if (!p.chapter_id) continue;
+      const entry = rollup.get(p.chapter_id);
+      if (!entry) continue; // orphaned chapter_id — skip
+      entry.members += 1;
+      entry.xp += p.lifetime_points ?? 0;
+    }
+    const chapterStats: ChapterStat[] = chapters.map((c) => ({
+      chapter: c.name,
+      members: rollup.get(c.id)?.members ?? 0,
+      xp:      rollup.get(c.id)?.xp ?? 0,
+    }));
+
+    // ── attendanceTrend: checked-in count per completed DEVCON event ──────────
+    const attendanceByEvent = new Map<string, number>();
+    for (const r of checkins) {
+      attendanceByEvent.set(r.event_id, (attendanceByEvent.get(r.event_id) ?? 0) + 1);
+    }
+    // trendEvents is newest-first; reverse for a left-to-right chronological line.
+    const attendanceTrend = [...trendEvents].reverse().map((e) => ({
+      event:      e.title,
+      attendance: attendanceByEvent.get(e.id) ?? 0,
+    }));
 
     return {
       totalMembers:    membersRes.count ?? 0,
       totalEvents:     eventsRes.count ?? 0,
       xpDistributed:   (xpRes.data as number | null) ?? 0,
-      activeChapters:  (chaptersRes.data as number | null) ?? 0,
+      activeChapters:  (activeChaptersRes.data as number | null) ?? 0,
       memberGrowth:    (growthRes.data as { month: string; count: number }[] | null) ?? [],
-      xpByChapter:     (xpChapterRes.data as { chapter: string; xp: number }[] | null) ?? [],
-      attendanceTrend: (attendanceRes.data as { event: string; attendance: number }[] | null) ?? [],
+      xpByChapter:     [...chapterStats].sort((a, b) => b.xp - a.xp).map(({ chapter, xp }) => ({ chapter, xp })),
+      chapterStats,
+      attendanceTrend,
     };
   }
 }

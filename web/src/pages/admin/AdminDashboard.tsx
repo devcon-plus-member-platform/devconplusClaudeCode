@@ -23,17 +23,24 @@ interface KpiData {
 }
 
 interface GrowthRow { month: string; count: number }
-interface XpRow { chapter: string; xp: number }
+interface ChapterStat { chapter: string; members: number; xp: number }
 interface AttendanceRow { event: string; attendance: number }
 
+type ChapterMetric = 'members' | 'xp'
+
 const KPI_SKELETON = { totalMembers: 0, totalEvents: 0, xpDistributed: 0, activeChapters: 0 }
+
+// Per-bar row height so the chart grows to fit every chapter instead of squashing.
+const CHAPTER_BAR_HEIGHT = 30
+const CHART_MIN_HEIGHT = 200
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [kpis, setKpis] = useState<KpiData>(KPI_SKELETON)
   const [memberGrowth, setMemberGrowth] = useState<GrowthRow[]>([])
-  const [xpByChapter, setXpByChapter] = useState<XpRow[]>([])
+  const [chapterStats, setChapterStats] = useState<ChapterStat[]>([])
   const [attendanceTrend, setAttendanceTrend] = useState<AttendanceRow[]>([])
+  const [chapterMetric, setChapterMetric] = useState<ChapterMetric>('members')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -43,7 +50,7 @@ export default function AdminDashboard() {
         const analytics = await apiFetch<{
           totalMembers: number; totalEvents: number
           xpDistributed: number; activeChapters: number
-          memberGrowth: GrowthRow[]; xpByChapter: XpRow[]
+          memberGrowth: GrowthRow[]; chapterStats: ChapterStat[]
           attendanceTrend: AttendanceRow[]
         }>('/api/admin/analytics')
         setKpis({
@@ -53,7 +60,7 @@ export default function AdminDashboard() {
           activeChapters: analytics.activeChapters,
         })
         setMemberGrowth(analytics.memberGrowth)
-        setXpByChapter(analytics.xpByChapter)
+        setChapterStats(analytics.chapterStats ?? [])
         setAttendanceTrend(analytics.attendanceTrend)
       } finally {
         setIsLoading(false)
@@ -61,6 +68,13 @@ export default function AdminDashboard() {
     }
     void load()
   }, [])
+
+  // XP chart: every chapter, highest XP first.
+  const xpByChapter = [...chapterStats].sort((a, b) => b.xp - a.xp)
+  // "Top Chapters" chart: every chapter, ranked by the toggled metric.
+  const topChapters = [...chapterStats].sort((a, b) => b[chapterMetric] - a[chapterMetric])
+  // Grow both charts vertically so no chapter label is dropped.
+  const chapterChartHeight = Math.max(CHART_MIN_HEIGHT, chapterStats.length * CHAPTER_BAR_HEIGHT)
 
   const kpiCards = [
     {
@@ -139,7 +153,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Row 3 — XP by Chapter Horizontal Bar Chart */}
+      {/* Row 3 — XP by Chapter Horizontal Bar Chart (all chapters) */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card mt-4">
         <p className="text-md3-body-lg font-bold text-slate-900 mb-4">XP by Chapter</p>
         {isLoading || xpByChapter.length === 0 ? (
@@ -147,10 +161,10 @@ export default function AdminDashboard() {
             {isLoading ? 'Loading…' : 'No data yet'}
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={xpByChapter} layout="vertical">
+          <ResponsiveContainer width="100%" height={chapterChartHeight}>
+            <BarChart data={xpByChapter} layout="vertical" margin={{ left: 8, right: 16 }}>
               <XAxis type="number" tick={{ fontSize: 10 }} />
-              <YAxis dataKey="chapter" type="category" tick={{ fontSize: 11 }} width={80} />
+              <YAxis dataKey="chapter" type="category" tick={{ fontSize: 11 }} width={96} interval={0} />
               <Tooltip formatter={(v) => [Number(v).toLocaleString(), 'XP']} />
               <Bar dataKey="xp" fill="#F8C630" radius={[0, 4, 4, 0]} />
             </BarChart>
@@ -158,7 +172,55 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Row 4 — Event Attendance Trend Line Chart */}
+      {/* Row 4 — Top Chapters (toggle: Members / XP) */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card mt-4">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <p className="text-md3-body-lg font-bold text-slate-900">Top Chapters</p>
+          {/* Segmented toggle — admin surface uses blue (non-themed) */}
+          <div className="flex gap-1.5 shrink-0">
+            {([
+              { key: 'members', label: 'Members' },
+              { key: 'xp',      label: 'XP'      },
+            ] as const).map(({ key, label }) => {
+              const active = chapterMetric === key
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setChapterMetric(key)}
+                  className={`px-3.5 py-1.5 rounded-full border text-md3-label-md font-semibold transition-colors ${
+                    active
+                      ? 'bg-blue text-white border-blue shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        {isLoading || topChapters.length === 0 ? (
+          <div className="h-[260px] flex items-center justify-center text-slate-400 text-md3-body-md">
+            {isLoading ? 'Loading…' : 'No data yet'}
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={chapterChartHeight}>
+            <BarChart data={topChapters} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+              <YAxis dataKey="chapter" type="category" tick={{ fontSize: 11 }} width={96} interval={0} />
+              <Tooltip formatter={(v) => [Number(v).toLocaleString(), chapterMetric === 'members' ? 'Members' : 'XP']} />
+              <Bar
+                dataKey={chapterMetric}
+                fill={chapterMetric === 'members' ? '#1152D4' : '#F8C630'}
+                radius={[0, 4, 4, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Row 5 — Event Attendance Trend Line Chart */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card mt-4">
         <p className="text-md3-body-lg font-bold text-slate-900 mb-4">Event Attendance Trend</p>
         {isLoading || attendanceTrend.length === 0 ? (

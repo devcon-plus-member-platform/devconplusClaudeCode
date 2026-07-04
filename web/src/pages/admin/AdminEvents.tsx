@@ -487,6 +487,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
       {/* Scrollable form body */}
       <form
         ref={scrollRef}
+        noValidate
         onScroll={updateScrollHint}
         onSubmit={handleSubmit(onSubmit)}
         className="flex-1 overflow-y-auto px-6 py-4 space-y-4"

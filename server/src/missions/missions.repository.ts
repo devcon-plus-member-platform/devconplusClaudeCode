@@ -19,16 +19,49 @@ export class MissionsRepository extends BaseRepository {
   // ── Member reads ──────────────────────────────────────────────────────────
 
   async findActiveMissions(): Promise<Mission[]> {
+    // Embed global aggregate counts over the mission_participants / mission_submissions
+    // FKs. Service-role bypasses RLS, so these are true totals across all members — the
+    // member endpoint only returns the caller's own participant/submission rows, so the
+    // frontend cannot compute these counts itself (it would cap at 1).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (this.db as any)
+    const { data, error } = await (this.db as any)
       .from('missions')
-      .select('*')
+      .select('*, mission_participants(count), mission_submissions(count)')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(50);
-    return this.unwrap(
-      result as { data: Mission[] | null; error: { message: string } | null },
-    );
+
+    // Resilience: if the embedded-count query fails (e.g. FK relationship missing due to
+    // live-DB drift), fall back to a plain read so the missions feed still works — the
+    // counts just render from the frontend's per-user fallback rather than 400-ing the feed.
+    if (error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fallback = await (this.db as any)
+        .from('missions')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      return this.unwrap(
+        fallback as { data: Mission[] | null; error: { message: string } | null },
+      );
+    }
+
+    return (data ?? []).map((row: Record<string, unknown>) => {
+      const {
+        mission_participants: p,
+        mission_submissions: s,
+        ...rest
+      } = row as Record<string, unknown> & {
+        mission_participants?: Array<{ count?: number }>;
+        mission_submissions?: Array<{ count?: number }>;
+      };
+      return {
+        ...(rest as unknown as Mission),
+        participant_count: p?.[0]?.count ?? 0,
+        submission_count: s?.[0]?.count ?? 0,
+      } as Mission;
+    });
   }
 
   async findUserParticipants(userId: string): Promise<MissionParticipant[]> {
