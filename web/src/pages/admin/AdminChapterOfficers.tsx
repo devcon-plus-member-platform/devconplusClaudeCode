@@ -8,6 +8,7 @@ import { apiFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import type { Profile } from '@devcon-plus/supabase'
 
 interface Assignment {
   id: string
@@ -36,7 +37,12 @@ type FormData = z.infer<typeof schema>
 type OfficerSortColumn = 'email' | 'status' | 'created'
 type SortDir = 'asc' | 'desc'
 
+/** The two things this page shows: real accounts vs. pre-registration email rules. */
+type View = 'registered' | 'assignments'
+
 export default function AdminChapterOfficers() {
+  const [view, setView] = useState<View>('registered')
+  const [officers, setOfficers] = useState<Profile[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -65,20 +71,60 @@ export default function AdminChapterOfficers() {
 
   const load = async () => {
     setIsLoading(true)
-    const [assignRes, chaptersRes] = await Promise.all([
+    const [assignRes, chaptersRes, usersResult] = await Promise.all([
       supabase
         .from('officer_email_assignments')
         .select('*, chapters(name)')
         .order('created_at', { ascending: false }),
       supabase.from('chapters').select('id, name').order('name'),
+      // Same source as the Users tab; we keep only the accounts that currently hold the role.
+      apiFetch<Profile[]>('/api/admin/users').catch(() => [] as Profile[]),
     ])
     setAssignments((assignRes.data ?? []) as Assignment[])
     setChapters((chaptersRes.data ?? []) as Chapter[])
+    setOfficers(usersResult.filter((u) => u.role === 'chapter_officer'))
     setIsLoading(false)
   }
 
   useEffect(() => { void load() }, [])
 
+  const chapterNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of chapters) m.set(c.id, c.name)
+    return m
+  }, [chapters])
+
+  // ── Registered officers (real accounts) ───────────────────────────────────
+  const filteredOfficers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return officers.filter((o) => {
+      const chapterMatch = filterChapterId === 'all' || o.chapter_id === filterChapterId
+      const chapterName = chapterNameById.get(o.chapter_id) ?? ''
+      const searchMatch =
+        !q ||
+        o.full_name.toLowerCase().includes(q) ||
+        o.email.toLowerCase().includes(q) ||
+        chapterName.toLowerCase().includes(q)
+      return chapterMatch && searchMatch
+    })
+  }, [officers, filterChapterId, search, chapterNameById])
+
+  const officersByChapter = useMemo(() => {
+    const map = new Map<string, { chapterName: string; rows: Profile[] }>()
+    for (const o of filteredOfficers) {
+      const key = o.chapter_id ?? 'none'
+      const name = chapterNameById.get(o.chapter_id) ?? 'No Chapter'
+      if (!map.has(key)) map.set(key, { chapterName: name, rows: [] })
+      map.get(key)!.rows.push(o)
+    }
+    // Alphabetical members within each chapter; chapters alphabetical too.
+    for (const g of map.values()) g.rows.sort((a, b) => a.full_name.localeCompare(b.full_name))
+    return Array.from(map.entries()).sort(([, a], [, b]) => a.chapterName.localeCompare(b.chapterName))
+  }, [filteredOfficers, chapterNameById])
+
+  const { pageItems: pagedOfficerGroups, ...officerPagination } = usePagination(officersByChapter, 10)
+
+  // ── Email assignments (pre-registration rules) ────────────────────────────
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return assignments.filter((a) => {
@@ -110,6 +156,8 @@ export default function AdminChapterOfficers() {
   }, [filtered])
 
   const { pageItems: pagedGroups, ...pagination } = usePagination(groupedByChapter, 10)
+
+  const activePagination = view === 'registered' ? officerPagination : pagination
 
   // Sort rows within each chapter group. Default (no active column) keeps the
   // server order (newest first); clicking a header sorts every group's rows.
@@ -204,13 +252,17 @@ export default function AdminChapterOfficers() {
     setAssignments((prev) => prev.filter((a) => a.id !== id))
   }
 
+  const hasData = view === 'registered' ? officers.length > 0 : assignments.length > 0
+
   return (
     <div className="p-8 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-md3-headline-sm font-black text-slate-900">Chapter Officers</h1>
           <p className="text-md3-body-md text-slate-500 mt-0.5">
-            Pre-assign an email to a chapter — they become an officer automatically on sign-up
+            {view === 'registered'
+              ? 'Members who currently hold Chapter Officer access, grouped by chapter'
+              : 'Pre-assign an email to a chapter — they become an officer automatically on sign-up'}
           </p>
         </div>
         <button
@@ -220,6 +272,31 @@ export default function AdminChapterOfficers() {
           <AddCircleOutline className="w-4 h-4" />
           <span className="hidden sm:inline">Assign Officer</span>
         </button>
+      </div>
+
+      {/* View toggle: real accounts vs. pre-registration email rules */}
+      <div className="flex items-center gap-2 mb-5 shrink-0">
+        {([
+          { key: 'registered', label: 'Registered Officers', count: officers.length },
+          { key: 'assignments', label: 'Email Assignments', count: assignments.length },
+        ] as const).map((tab) => {
+          const active = view === tab.key
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => { setView(tab.key); setSearch(''); setFilterChapterId('all') }}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-md3-label-md font-semibold border transition-colors ${
+                active
+                  ? 'bg-blue text-white border-blue'
+                  : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {tab.label}
+              <span className={active ? 'text-white/80' : 'text-slate-400'}>{tab.count}</span>
+            </button>
+          )
+        })}
       </div>
 
       {error && (
@@ -287,26 +364,26 @@ export default function AdminChapterOfficers() {
       )}
 
       {/* Search */}
-      {!isLoading && assignments.length > 0 && (
+      {!isLoading && hasData && (
         <div className="relative mb-4 shrink-0">
           <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="search"
-            placeholder="Search by email or chapter…"
+            placeholder={view === 'registered' ? 'Search by name, email, or chapter…' : 'Search by email or chapter…'}
             value={search}
-            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            onChange={(e) => { setSearch(e.target.value); activePagination.setPage(1) }}
             className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
           />
         </div>
       )}
 
       {/* Filters */}
-      {!isLoading && assignments.length > 0 && (
+      {!isLoading && hasData && (
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <FilterOutline color="#94A3B8" size={16} />
           <select
             value={filterChapterId}
-            onChange={(e) => setFilterChapterId(e.target.value)}
+            onChange={(e) => { setFilterChapterId(e.target.value); activePagination.setPage(1) }}
             className="border border-slate-200 rounded-xl px-3 py-1.5 text-md3-label-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue"
           >
             <option value="all">All Chapters</option>
@@ -314,120 +391,183 @@ export default function AdminChapterOfficers() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-            className="border border-slate-200 rounded-xl px-3 py-1.5 text-md3-label-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue"
-          >
-            <option value="all">All Statuses</option>
-            <option value="applied">Applied</option>
-            <option value="pending">Pending</option>
-          </select>
+          {view === 'assignments' && (
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+              className="border border-slate-200 rounded-xl px-3 py-1.5 text-md3-label-md bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue"
+            >
+              <option value="all">All Statuses</option>
+              <option value="applied">Applied</option>
+              <option value="pending">Pending</option>
+            </select>
+          )}
           <span className="text-md3-label-sm text-slate-400 ml-auto">
-            {filtered.length} of {assignments.length} assignments
+            {view === 'registered'
+              ? `${filteredOfficers.length} of ${officers.length} officers`
+              : `${filtered.length} of ${assignments.length} assignments`}
           </span>
         </div>
       )}
 
-      {isLoading ? (
-        <p className="text-slate-400 text-md3-body-md">Loading assignments…</p>
-      ) : assignments.length === 0 ? (
-        <p className="text-center py-10 text-slate-400 text-md3-body-md">No officer assignments yet.</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-center py-10 text-slate-400 text-md3-body-md">
-          {search.trim() ? `No assignments match "${search.trim()}".` : 'No assignments match the selected filters.'}
-        </p>
-      ) : (
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
-          {pagedGroups.map(([chapterId, { chapterName, rows }]) => (
-            <div key={chapterId} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-              {/* Chapter section header */}
-              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-md3-label-md font-bold text-slate-700 uppercase tracking-wider">
-                  {chapterName}
-                </span>
-                <span className="text-md3-label-sm text-slate-400">
-                  {rows.length} officer{rows.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-              <table className="w-full min-w-[480px] text-md3-body-md">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="sticky left-0 z-[5] bg-white border-r border-slate-100 text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
-                      <button type="button" onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Email {sortIcon('email')}</button>
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
-                      <button type="button" onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Status {sortIcon('status')}</button>
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
-                      <button type="button" onClick={() => handleSort('created')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Created {sortIcon('created')}</button>
-                    </th>
-                    <th className="text-right px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortRows(rows).map((a) => (
-                    <tr key={a.id} className="bg-white border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                      <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-medium text-slate-900">{a.email}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          a.applied_at ? 'bg-green/10 text-green' : 'bg-gold/10 text-slate-500'
-                        }`}>
-                          {a.applied_at ? 'Applied' : 'Pending'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 text-md3-label-md">
-                        {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {confirmDeleteId === a.id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="text-md3-label-md px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                            >Cancel</button>
-                            <button
-                              onClick={() => void handleDelete(a.id)}
-                              disabled={deletingId === a.id}
-                              className="text-md3-label-md px-2 py-1 rounded-lg bg-red text-white disabled:opacity-50 hover:bg-red/80 transition-colors"
-                            >{deletingId === a.id ? '…' : 'Delete'}</button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-1">
-                            {invitedId === a.id ? (
-                              <span className="text-[10px] font-bold text-green px-2 py-1">Sent ✓</span>
-                            ) : (
-                              <button
-                                onClick={() => void handleResend(a)}
-                                disabled={invitingId === a.id}
-                                className="p-1 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-50 transition-colors"
-                                title="Resend invite email"
-                              >
-                                <LetterOutline color="#94A3B8" size={16} />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setConfirmDeleteId(a.id)}
-                              className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                              title="Remove assignment"
-                            >
-                              <TrashBinTrashOutline color="#94A3B8" size={16} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
+      {/* ── Registered Officers view ───────────────────────────────────────── */}
+      {view === 'registered' && (
+        isLoading ? (
+          <p className="text-slate-400 text-md3-body-md">Loading officers…</p>
+        ) : officers.length === 0 ? (
+          <p className="text-center py-10 text-slate-400 text-md3-body-md">No chapter officers registered yet.</p>
+        ) : filteredOfficers.length === 0 ? (
+          <p className="text-center py-10 text-slate-400 text-md3-body-md">
+            {search.trim() ? `No officers match "${search.trim()}".` : 'No officers match the selected filters.'}
+          </p>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
+              {pagedOfficerGroups.map(([chapterId, { chapterName, rows }]) => (
+                <div key={chapterId} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+                  {/* Chapter section header */}
+                  <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-md3-label-md font-bold text-slate-700 uppercase tracking-wider">
+                      {chapterName}
+                    </span>
+                    <span className="text-md3-label-sm text-slate-400">
+                      {rows.length} officer{rows.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-md3-body-md">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="sticky left-0 z-[5] bg-white border-r border-slate-100 text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                          <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Email</th>
+                          <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Joined</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((o) => (
+                          <tr key={o.id} className="bg-white border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                            <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-medium text-slate-900">{o.full_name}</td>
+                            <td className="px-4 py-3 text-slate-600">{o.email}</td>
+                            <td className="px-4 py-3 text-slate-600 text-md3-label-md">
+                              {o.created_at
+                                ? new Date(o.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+            <Pagination controller={officerPagination} itemLabel="chapter" className="shrink-0" />
           </div>
-          <Pagination controller={pagination} itemLabel="chapter" className="shrink-0" />
-        </div>
+        )
+      )}
+
+      {/* ── Email Assignments view ─────────────────────────────────────────── */}
+      {view === 'assignments' && (
+        isLoading ? (
+          <p className="text-slate-400 text-md3-body-md">Loading assignments…</p>
+        ) : assignments.length === 0 ? (
+          <p className="text-center py-10 text-slate-400 text-md3-body-md">No officer assignments yet.</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-center py-10 text-slate-400 text-md3-body-md">
+            {search.trim() ? `No assignments match "${search.trim()}".` : 'No assignments match the selected filters.'}
+          </p>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
+            {pagedGroups.map(([chapterId, { chapterName, rows }]) => (
+              <div key={chapterId} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+                {/* Chapter section header */}
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-md3-label-md font-bold text-slate-700 uppercase tracking-wider">
+                    {chapterName}
+                  </span>
+                  <span className="text-md3-label-sm text-slate-400">
+                    {rows.length} officer{rows.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[480px] text-md3-body-md">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="sticky left-0 z-[5] bg-white border-r border-slate-100 text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                        <button type="button" onClick={() => handleSort('email')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Email {sortIcon('email')}</button>
+                      </th>
+                      <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                        <button type="button" onClick={() => handleSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Status {sortIcon('status')}</button>
+                      </th>
+                      <th className="text-left px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                        <button type="button" onClick={() => handleSort('created')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Created {sortIcon('created')}</button>
+                      </th>
+                      <th className="text-right px-4 py-2.5 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortRows(rows).map((a) => (
+                      <tr key={a.id} className="bg-white border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                        <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-medium text-slate-900">{a.email}</td>
+                        <td className="px-4 py-3">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            a.applied_at ? 'bg-green/10 text-green' : 'bg-gold/10 text-slate-500'
+                          }`}>
+                            {a.applied_at ? 'Applied' : 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 text-md3-label-md">
+                          {new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {confirmDeleteId === a.id ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="text-md3-label-md px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                              >Cancel</button>
+                              <button
+                                onClick={() => void handleDelete(a.id)}
+                                disabled={deletingId === a.id}
+                                className="text-md3-label-md px-2 py-1 rounded-lg bg-red text-white disabled:opacity-50 hover:bg-red/80 transition-colors"
+                              >{deletingId === a.id ? '…' : 'Delete'}</button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1">
+                              {invitedId === a.id ? (
+                                <span className="text-[10px] font-bold text-green px-2 py-1">Sent ✓</span>
+                              ) : (
+                                <button
+                                  onClick={() => void handleResend(a)}
+                                  disabled={invitingId === a.id}
+                                  className="p-1 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue disabled:opacity-50 transition-colors"
+                                  title="Resend invite email"
+                                >
+                                  <LetterOutline color="#94A3B8" size={16} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setConfirmDeleteId(a.id)}
+                                className="p-1 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
+                                title="Remove assignment"
+                              >
+                                <TrashBinTrashOutline color="#94A3B8" size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            ))}
+            </div>
+            <Pagination controller={pagination} itemLabel="chapter" className="shrink-0" />
+          </div>
+        )
       )}
 
       {assignTarget && (

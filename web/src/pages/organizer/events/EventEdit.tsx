@@ -366,6 +366,7 @@ export function OrgEventEdit() {
       )}
 
       <motion.form
+        noValidate
         onSubmit={handleSubmit(onSubmit)}
         className="p-4 space-y-5"
         variants={staggerContainer}

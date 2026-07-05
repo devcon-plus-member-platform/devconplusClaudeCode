@@ -283,6 +283,9 @@ export interface Mission {
   github_url: string | null
   is_active: boolean
   created_at: string
+  // Global aggregate counts across all members (from the /api/missions read).
+  participant_count?: number
+  submission_count?: number
 }
 
 export interface MissionParticipant {
@@ -297,6 +300,6 @@ export interface MissionSubmission {
   user_id: string
   pr_link: string
   status: SubmissionStatus
-  rejection_reason: string | null
+  admin_remarks: string | null
   submitted_at: string
 }
