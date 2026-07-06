@@ -1,7 +1,7 @@
 # DEVCON+ — Product Requirements & Developer Handover
 > Version: 1.4 | Last Updated: June 21, 2026 | v1.3 by Clayton · June 2026 architecture sync
 > Live App: https://devcon.plus  (beta + `plus-beta.devcon.ph` 301-redirect here)
-> Backend API: https://api.cloud-engineer.dev  (NestJS gateway — self-hosted EC2 + nginx)
+> Backend API: https://api.devcon.plus  (NestJS gateway — self-hosted EC2 + nginx)
 > Repository: `devcon-plus/` — two apps: `web/` (React frontend) + `server/` (NestJS gateway) + `supabase/`
 
 > **⚠️ Architecture update (June 2026):** Auth migrated to **Firebase** (Google + email/password), a
@@ -38,7 +38,7 @@ It is built and currently maintained by a two-person intern team (Kenshin and Ki
 | Organizer flow | Live | Event creation, registrant approval, QR scanner, announcements, co-organizers |
 | Admin panel | Live | User mgmt, org codes, chapter officers, officer resources, upgrade reviews, CSV export, kiosk |
 | Authentication | Live | Email/password + Google OAuth via **Firebase** (Supabase Auth cut) |
-| Backend gateway (`server/`) | Live | NestJS on EC2 + nginx (`api.cloud-engineer.dev`); frontend fetches via `apiFetch`/`publicFetch` |
+| Backend gateway (`server/`) | Live | NestJS on EC2 + nginx (`api.devcon.plus`); frontend fetches via `apiFetch`/`publicFetch` |
 | QR check-in system | Live | Atomic check-in, double-award prevention, door approval flow |
 | Points & rewards | Live | Earn points on attendance, view history, rewards catalog + claim PIN workflow |
 | PWA (add to home screen) | Live | Icons, shortcuts, apple-touch-icon configured |
@@ -235,7 +235,7 @@ Each route tree is wrapped with `<RouteErrorBoundary />` — an error boundary t
 
 ### NestJS gateway (`server/`)
 
-- Self-hosted on **EC2 behind nginx** → `https://api.cloud-engineer.dev`. Global prefix `/api` (auth at `/auth/*`), port 8000.
+- Self-hosted on **EC2 behind nginx** → `https://api.devcon.plus`. Global prefix `/api` (auth at `/auth/*`), port 8000.
 - Verifies Firebase ID tokens (`AuthGuard`) + `email_verified`, enforces `@Roles()` hierarchy, identity-keyed rate limits, Upstash Redis profile cache. Uses the Supabase service-role key server-side.
 
 ### Edge Functions (Deno runtime)

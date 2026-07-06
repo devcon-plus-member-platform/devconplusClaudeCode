@@ -4,7 +4,7 @@
 > Last Updated: June 21, 2026  
 > Prepared by: Outgoing Development Team (DEVCON Jumpstart Internship, Cohort 3); updated by the continuing team  
 > Live App: https://devcon.plus  (beta + `plus-beta.devcon.ph` 301-redirect here)  
-> Backend API: https://api.cloud-engineer.dev  (NestJS gateway — self-hosted EC2 + nginx)  
+> Backend API: https://api.devcon.plus  (NestJS gateway — self-hosted EC2 + nginx)  
 > Repository: https://github.com/rocketwolf98/devconplusClaudeCode  
 
 > **⚠️ Read first — what changed since v1.0 (May 11):** DEVCON+ is no longer a pure-Supabase, no-backend app.
@@ -299,7 +299,7 @@ All framer-motion variants are exported from `web/src/lib/animation.ts`. Never r
 ## 3.2 Backend
 
 **Auth provider:** **Firebase Auth** (Google OAuth via popup + email/password). Supabase Auth was cut (`20260531_phase4_cut_supabase_auth.sql`).  
-**Primary backend:** **NestJS gateway** (`server/`) on EC2 behind nginx → `https://api.cloud-engineer.dev`. Global prefix `/api` (auth at `/auth/*`), port 8000.  
+**Primary backend:** **NestJS gateway** (`server/`) on EC2 behind nginx → `https://api.devcon.plus`. Global prefix `/api` (auth at `/auth/*`), port 8000.  
 **Gateway authz:** `AuthGuard` verifies the Firebase ID token + `email_verified`, resolves the profile by `auth_uid` (Upstash Redis cache); `RolesGuard` + `@Roles()` enforce `member < chapter_officer < hq_admin < super_admin`; identity-keyed rate limits + global `ThrottlerGuard` (300/min/IP).  
 **Supabase role:** Postgres + RLS + Edge Functions. The gateway uses the service-role key (bypasses RLS) and mints a short-lived **bridge JWT** (`supabase-jwt.service.ts`) so the browser can still hit PostgREST directly (legacy — "Phase 7" retires this).  
 **Edge Function runtime:** Deno  
@@ -392,7 +392,7 @@ entries and redeploy all functions after a change.
 - **CI/CD:** Every push to `master` triggers a production deploy. TypeScript errors abort the deploy.
 
 ### EC2 + nginx (backend gateway)
-- The NestJS gateway (`server/`) is **self-hosted on EC2 behind nginx** → `https://api.cloud-engineer.dev`.
+- The NestJS gateway (`server/`) is **self-hosted on EC2 behind nginx** → `https://api.devcon.plus`.
 - Deploy/restart the Node process there; set `server/.env` in that environment. nginx terminates TLS and sets edge security headers (the API has no `helmet`).
 
 ### Cloudflare (DNS)
@@ -409,7 +409,7 @@ entries and redeploy all functions after a change.
 |---------|---------|--------|
 | Firebase Auth | Authentication (Google + email/password) | Live |
 | Supabase | Database (Postgres + RLS), Edge Functions | Live |
-| NestJS gateway (EC2 + nginx) | Primary backend / data path (`api.cloud-engineer.dev`) | Live |
+| NestJS gateway (EC2 + nginx) | Primary backend / data path (`api.devcon.plus`) | Live |
 | Upstash Redis | Gateway profile cache + rate-limit buckets | Live |
 | Vercel | Frontend hosting, CI/CD, custom domain (`devcon.plus`) | Live |
 | Google OAuth (GCP) | Social sign-in (via Firebase) on `devcon.plus` | Live |
@@ -452,7 +452,7 @@ Post-graduation (May) work has focused on resilience, legal compliance, and anal
 | Change | Notes |
 |--------|-------|
 | **Firebase Auth migration** | Google OAuth + email/password now via Firebase; Supabase Auth cut (`20260528`/`20260531`). New `/oauth-callback` + `/complete-profile` flows; `profiles.auth_uid` added, `profiles.id` FK dropped. |
-| **NestJS gateway is the primary backend** | `server/` on EC2 + nginx (`api.cloud-engineer.dev`). Stores moved to `apiFetch`/`publicFetch`; gateway does Firebase verify + `email_verified` + role/chapter/owner scoping + Upstash cache/rate-limits. |
+| **NestJS gateway is the primary backend** | `server/` on EC2 + nginx (`api.devcon.plus`). Stores moved to `apiFetch`/`publicFetch`; gateway does Firebase verify + `email_verified` + role/chapter/owner scoping + Upstash cache/rate-limits. |
 | **Bridge-JWT era** | Gateway mints a short-lived Supabase JWT so residual direct PostgREST calls still work; "Phase 7" retires `supabase-js`. |
 | **Realtime inverted to polling-first** (Jun 14) | `subscribeToChanges` no-ops on events/points/rewards/missions; only a best-effort announcements channel remains; `recover()` polls every 60 s. |
 | **Custom domain live** | Production `https://devcon.plus`; beta + `plus-beta.devcon.ph` 301-redirect; staging `staging.devcon.plus` (noindex). |
@@ -741,7 +741,7 @@ git push origin master
 ```
 
 ### Backend Deploy (NestJS gateway)
-The gateway runs on **EC2 behind nginx** (`https://api.cloud-engineer.dev`). Build and restart the Node
+The gateway runs on **EC2 behind nginx** (`https://api.devcon.plus`). Build and restart the Node
 process on the host (`cd server && npm run build && npm run start`, typically under a process manager) and
 keep `server/.env` set in that environment. It is not part of the Vercel pipeline.
 
@@ -776,7 +776,7 @@ supabase functions deploy delete-user
 |---------|-----------|-----------|
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `web/.env.local` | Vercel env vars |
 | `VITE_GOOGLE_CLIENT_ID` + `VITE_FIREBASE_*` | `web/.env.local` | Vercel env vars |
-| `VITE_API_URL` | `http://localhost:8000` (or staging API) | `https://api.cloud-engineer.dev` |
+| `VITE_API_URL` | `http://localhost:8000` (or staging API) | `https://api.devcon.plus` |
 | `VITE_ALLOW_INDEXING` | unset | `true` on prod, unset on staging |
 | `VITE_APP_ENV` | `development` | `production` |
 | Gateway secrets (`SUPABASE_SERVICE_ROLE_KEY`, `*_JWT_SECRET`, Firebase admin, ...) | `server/.env` | EC2 host env |
@@ -945,7 +945,7 @@ The outgoing team is available for questions and pair sessions during this windo
 | **devcon_category** | Event field that triggers per-event theme overrides. Values: `'devcon'`, `'she'`, `'kids'`, `'campus'`. Processed by `getEventThemeStyle()` in `lib/eventTheme.ts`. |
 | **ComingSoonModal** | Reusable modal component for features not yet implemented. Every incomplete feature must route to this — never leave a dead-end. |
 | **Polling-first recovery** | The freshness model (since 2026-06-14). `recover()` refetches over HTTP on `visibilitychange`, `online`, a 60-second interval, and auth-change (+5 s/+15 s follow-ups). There is **no `resubscribe()`** — realtime is best-effort only. (Supersedes the old "two-layer recovery".) |
-| **NestJS gateway** | The backend in `server/` (EC2 + nginx, `api.cloud-engineer.dev`). The primary data path: the frontend calls it via `apiFetch`/`publicFetch`. Verifies Firebase ID tokens + roles. |
+| **NestJS gateway** | The backend in `server/` (EC2 + nginx, `api.devcon.plus`). The primary data path: the frontend calls it via `apiFetch`/`publicFetch`. Verifies Firebase ID tokens + roles. |
 | **bridge JWT** | A short-lived Supabase JWT (`role: authenticated`, `sub = profiles.id`) the gateway mints so the browser can still hit PostgREST directly. Legacy — retired in "Phase 7". |
 | **apiFetch / publicFetch** | Helpers in `web/src/lib/api.ts`. `apiFetch` injects the Firebase ID token (auto-refresh on 401); `publicFetch` is for public reads. |
 | **Firebase Auth** | The authentication provider (Google popup + email/password). Replaced Supabase Auth in May–June 2026. |
