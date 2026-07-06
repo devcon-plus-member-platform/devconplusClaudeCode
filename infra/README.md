@@ -7,7 +7,7 @@ This Terraform stack provisions a small, low-cost EC2 host for the DEVCON+ NestJ
 - NestJS container bound to `127.0.0.1:8000`
 - Docker Compose installed during bootstrap on Amazon Linux 2023
 - CloudWatch Agent + CloudWatch alarms for a lean monitoring baseline
-- Let’s Encrypt readiness for `api.devcon.ph` once DNS exists
+- Let’s Encrypt readiness for `api.devcon.plus` once DNS exists
 
 It intentionally does **not** add heavier infrastructure yet:
 
@@ -55,7 +55,7 @@ Fill in:
 
 - `ssh_public_key`: contents of your `.pub` file
 - `allowed_admin_cidr`: your current public IP with `/32`
-- `api_domain`: planned TLS hostname, default `api.devcon.ph`
+- `api_domain`: planned TLS hostname, default `api.devcon.plus`
 
 Optional:
 
@@ -151,7 +151,7 @@ curl http://<public-ip>/api/health
 Expected runtime URLs:
 
 - before TLS: `http://<elastic-ip>/api/health`
-- after TLS: `https://api.devcon.ph/api/health`
+- after TLS: `https://api.devcon.plus/api/health`
 
 ## 6. Monitoring and logs
 
@@ -179,25 +179,25 @@ sudo tail -n 200 /var/log/user-data.log
 
 ## 7. TLS cutover later, once DNS exists
 
-Do this only after `api.devcon.ph` points to the Elastic IP.
+Do this only after `api.devcon.plus` points to the Elastic IP.
 
 Recommended DNS flow:
 
-1. Create a Cloudflare `A` record for `api.devcon.ph`
+1. Create a Cloudflare `A` record for `api.devcon.plus`
 2. Set it to `DNS only` first
 3. Wait for DNS to resolve publicly
 
 Then on EC2:
 
 ```bash
-sudo certbot --nginx --redirect -d api.devcon.ph
+sudo certbot --nginx --redirect -d api.devcon.plus
 sudo systemctl status certbot-renew.timer --no-pager || sudo systemctl status certbot.timer --no-pager
 ```
 
 After cert issuance, update `server/.env.production`:
 
 ```env
-SERVER_URL=https://api.devcon.ph
+SERVER_URL=https://api.devcon.plus
 CORS_ORIGIN=https://plus-beta.devcon.ph,https://devconplusbeta-v1.vercel.app
 ```
 
@@ -211,7 +211,7 @@ docker compose -f docker-compose.ec2.yml up -d --build
 Verify:
 
 ```bash
-curl https://api.devcon.ph/api/health
+curl https://api.devcon.plus/api/health
 ```
 
 ## 8. Ongoing operations

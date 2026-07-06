@@ -5,7 +5,7 @@
 > Platform for DEVCON Philippines — 11 chapters, 60,000+ members.
 >
 > **Live app (production):** https://devcon.plus  (beta + `plus-beta.devcon.ph` 301-redirect here; staging: `staging.devcon.plus`)
-> **Backend API:** https://api.cloud-engineer.dev  (NestJS gateway — self-hosted EC2 + nginx)
+> **Backend API:** https://api.devcon.plus  (NestJS gateway — self-hosted EC2 + nginx)
 > **Repo:** https://github.com/rocketwolf98/devconplusClaudeCode
 
 > **⚠️ Architecture note (June 2026):** This is now a **two-app** repo — a React frontend in `web/` **and** a
@@ -122,7 +122,7 @@ cd server && npm run dev
 
 Frontend opens at [http://localhost:5173](http://localhost:5173); the API runs at `http://localhost:8000`
 (set `VITE_API_URL` to match). For frontend-only work you can point `VITE_API_URL` at the deployed staging
-API (`https://api.cloud-engineer.dev`) and skip running `server/` locally.
+API (`https://api.devcon.plus`) and skip running `server/` locally.
 
 Open Chrome DevTools → Toggle Device Toolbar (`Ctrl+Shift+M`) → set width to **390px**. The app is designed for 390px mobile. Desktop gets a sidebar layout automatically at `md` breakpoint.
 
@@ -342,7 +342,7 @@ Env vars are set in Vercel project Settings → Environment Variables. Productio
 (emits `robots.txt` `Allow: /`); staging leaves it unset (`Disallow: /`).
 
 **Backend (`server/`).** The NestJS gateway is **self-hosted on EC2 behind nginx** at
-`https://api.cloud-engineer.dev` (not Vercel). Deploy/restart the Node process there and set the
+`https://api.devcon.plus` (not Vercel). Deploy/restart the Node process there and set the
 `server/.env` values in that environment. nginx terminates TLS and sets edge security headers.
 
 ---
