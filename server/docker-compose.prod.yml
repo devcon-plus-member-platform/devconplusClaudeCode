@@ -1,6 +1,6 @@
 # Production slot — deployed from master by deploy-backend-production.yml.
 # Dormant until the dev -> master structural merge: runs on the same EC2 host
-# as the staging slot, on port 8010, behind nginx server_name api.devcon.ph.
+# as the staging slot, on port 8010, behind nginx server_name api.devcon.plus.
 # See the merge-day runbook before first use (prod-repo checkout + .env.prod).
 services:
   api:
