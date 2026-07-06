@@ -5,7 +5,7 @@
 > Status: MVP shipped & live; in post-launch hardening (auth migration, security audit, resilience)
 > Live App (production): https://devcon.plus
 >   ↳ `devconplusbeta-v1.vercel.app` and `plus-beta.devcon.ph` 301-redirect here. Staging: https://staging.devcon.plus (noindex)
-> Backend API: https://api.cloud-engineer.dev  (NestJS gateway, self-hosted EC2 + nginx)
+> Backend API: https://api.devcon.plus  (NestJS gateway, self-hosted EC2 + nginx)
 > Lovable Prototype (UX Reference ONLY): https://devconplusrndprototype.lovable.app/onboarding
 
 > **⚠️ Architecture has shifted since MVP 1.7.** DEVCON+ is no longer a pure-Supabase, no-backend app.
@@ -92,7 +92,7 @@ devcon-plus/
 │   │                        #          chapters, interests, announcements, referrals, email
 │   ├── package.json
 │   ├── .env.example / .env.production.example
-│   └── ...                  # Deployed to EC2 behind nginx → https://api.cloud-engineer.dev
+│   └── ...                  # Deployed to EC2 behind nginx → https://api.devcon.plus
 ├── supabase/                # Supabase CLI — migrations, Edge Functions, seed
 └── docs/                    # auth/* docs, migration-plans/*
 ```
@@ -127,7 +127,7 @@ devcon-plus/
 | Concern | Choice |
 |---------|--------|
 | Framework | **NestJS 10** (Express platform) |
-| Runtime | Node 20, deployed on **EC2 behind nginx** → `https://api.cloud-engineer.dev` |
+| Runtime | Node 20, deployed on **EC2 behind nginx** → `https://api.devcon.plus` |
 | Global prefix | `/api` (auth routes are at `/auth/*`, outside the prefix). Port `8000` |
 | Auth | `AuthGuard` verifies the **Firebase ID token** (firebase-admin) + `email_verified` gate, then resolves the profile by `auth_uid`. `RolesGuard` + `@Roles()` enforce the role hierarchy `member < chapter_officer < hq_admin < super_admin` |
 | Supabase access | `SupabaseService` uses the **service-role key** (bypasses RLS). `supabase-jwt.service.ts` mints the short-lived **bridge JWT** the browser uses for direct PostgREST |
