@@ -1,5 +1,5 @@
 # Deploys the NestJS backend (server/) on dev to the staging slot of the EC2
-# host (container devcon-plus-api, port 8000, https://api.cloud-engineer.dev).
+# host (container devcon-plus-api, port 8000, https://api.devcon.plus).
 #
 # Flow: tests gate -> Docker image built in CI and pushed to GHCR -> EC2 pulls
 # the image via SSM and restarts the container. Building in CI keeps the small
@@ -72,7 +72,7 @@ jobs:
     env:
       AWS_REGION: ap-southeast-1
       INSTANCE_ID: i-02e08aceb6d701d77
-      HEALTH_URL: https://api.cloud-engineer.dev/api/health
+      HEALTH_URL: https://api.devcon.plus/api/health
     steps:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

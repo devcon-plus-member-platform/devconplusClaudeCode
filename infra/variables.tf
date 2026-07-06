@@ -13,7 +13,7 @@ variable "instance_name" {
 variable "api_domain" {
   description = "Desired public hostname for the backend once DNS is ready."
   type        = string
-  default     = "api.devcon.ph"
+  default     = "api.devcon.plus"
 }
 
 variable "ssh_public_key" {
