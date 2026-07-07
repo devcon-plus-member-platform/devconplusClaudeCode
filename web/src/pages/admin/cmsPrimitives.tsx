@@ -7,7 +7,7 @@ import ConfirmDialog from '../../components/ConfirmDialog'
 
 // Shared form/dialog primitives for the admin CMS surfaces (AdminCMS + AdminMissions).
 // Kept in one module so the stateful RejectModal has a single source of truth —
-// it's used by both the CMS "Point Submissions" tab and the Missions review queue.
+// it's used by the Point Submissions panel on the Missions page.
 
 export const INPUT_CLS = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue'
 export const LABEL_CLS = 'text-md3-label-md font-medium text-slate-700 block mb-1'

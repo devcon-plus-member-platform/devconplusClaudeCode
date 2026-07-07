@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline, DownloadOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../../../lib/supabase'
+import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
 import WheelPoster from '../../../components/WheelPoster'
@@ -99,6 +100,30 @@ export function OrgEventSummary() {
 
   const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
 
+  const handleExportCsv = () => {
+    const headers = [
+      'member_name',
+      'member_email',
+      'school_or_company',
+      'status',
+      'checked_in',
+      'registered_at',
+    ]
+    const rows = filtered.map((r) => ({
+      member_name: r.member_name,
+      member_email: r.member_email,
+      school_or_company: r.school_or_company,
+      status: r.status,
+      checked_in: r.checked_in ?? false,
+      registered_at: r.registered_at,
+    }))
+    const csv = buildCsv(headers, rows)
+    const dateStamp = getPhilippineDateStamp()
+    const label = event.title ? `-${slugify(event.title)}` : ''
+    const suffix = filter !== 'all' ? `-${filter}` : ''
+    downloadCsv(`registrants-${dateStamp}${label}${suffix}.csv`, csv)
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* ── Header ── */}
@@ -127,12 +152,24 @@ export function OrgEventSummary() {
                 Event Summary
               </h1>
             </div>
-            <button
-              onClick={() => navigate(`/organizer/events/${id}/edit`)}
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
-            >
-              <PenOutline className="w-4 h-4" color="white" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {filtered.length > 0 && (
+                <button
+                  onClick={handleExportCsv}
+                  className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                             text-white text-md3-label-md font-bold active:bg-white/40 transition-colors shadow-sm shrink-0"
+                >
+                  <DownloadOutline className="w-3.5 h-3.5" color="white" />
+                  Export
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/organizer/events/${id}/edit`)}
+                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
+              >
+                <PenOutline className="w-4 h-4" color="white" />
+              </button>
+            </div>
           </div>
         </div>
       </header>
