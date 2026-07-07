@@ -12,7 +12,7 @@ export default function SplashScreen() {
       const { user, isInitialized } = useAuthStore.getState()
       let dest = '/onboarding'
       if (isInitialized && user) dest = '/home'
-      else if (hasSeenOnboarding()) dest = '/sign-in'
+      else if (hasSeenOnboarding()) dest = '/events'
       navigate(dest, { replace: true })
     }, 2600)
 
