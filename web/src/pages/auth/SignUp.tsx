@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
-import { EyeOutline, EyeClosedOutline, CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
+import { EyeOutline, EyeClosedOutline, CheckCircleOutline, CloseCircleOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useFormDraft } from '../../hooks/useFormDraft'
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter'
@@ -394,33 +394,41 @@ export default function SignUp() {
 
           <div>
             <label className="text-md3-body-md font-medium text-slate-700 block mb-1">
-              Nearest Chapter
+              Nearest Chapter and Volunteer Community*
             </label>
-            <select
-              {...register('chapter_id')}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white focus:outline-none focus:ring-2 focus:ring-blue"
-            >
-              <option value="">Select your chapter…</option>
-              {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
-                const group = chapters
-                  .filter((c) => c.region === region)
-                  .sort((a, b) => {
-                    if (region === 'Luzon') {
-                      if (a.name === 'Manila' && b.name !== 'Manila') return -1
-                      if (b.name === 'Manila' && a.name !== 'Manila') return 1
-                    }
-                    return a.name.localeCompare(b.name)
-                  })
-                if (!group.length) return null
-                return (
-                  <optgroup key={region} label={region}>
-                    {group.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </optgroup>
-                )
-              })}
-            </select>
+            <div className="relative">
+              <select
+                {...register('chapter_id')}
+                className="w-full appearance-none border border-slate-200 rounded-xl px-4 py-3 pr-11 text-md3-body-md bg-white focus:outline-none focus:ring-2 focus:ring-blue"
+              >
+                <option value="">Select Location</option>
+                {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
+                  const group = chapters
+                    .filter((c) => c.region === region)
+                    .sort((a, b) => {
+                      if (region === 'Luzon') {
+                        if (a.name === 'Manila' && b.name !== 'Manila') return -1
+                        if (b.name === 'Manila' && a.name !== 'Manila') return 1
+                      }
+                      return a.name.localeCompare(b.name)
+                    })
+                  if (!group.length) return null
+                  return (
+                    <optgroup key={region} label={region}>
+                      {group.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  )
+                })}
+              </select>
+              <AltArrowDownOutline
+                className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                color="#94A3B8"
+                width={16}
+                height={16}
+              />
+            </div>
             {errors.chapter_id && <p className="text-red text-md3-label-md mt-1">{errors.chapter_id.message}</p>}
             {chaptersLoading && chapters.length === 0 && (
               <p className="text-md3-label-md text-slate-400 mt-1">Loading chapters…</p>
