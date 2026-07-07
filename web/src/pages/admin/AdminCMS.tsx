@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline, StarOutline, UserOutline, LinkOutline, DocumentTextOutline, ClockCircleOutline, ArrowLeftOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
+import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CloseCircleLineDuotone, CheckCircleOutline, CloseCircleOutline, StarOutline, UserOutline, LinkOutline, DocumentTextOutline, ClockCircleOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import { cardItem, slideUp, staggerContainer } from '../../lib/animation'
@@ -1781,16 +1781,6 @@ function PointSubmissionsTab() {
           </motion.div>
         )}
       </div>
-
-      {filtered.length > 10 && (
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-4 w-10 h-10 bg-blue text-white rounded-full shadow-card flex items-center justify-center"
-          aria-label="Scroll to top"
-        >
-          <ArrowLeftOutline color="white" width={16} height={16} className="rotate-90" />
-        </button>
-      )}
 
       <AnimatePresence>
         {detailSub && (

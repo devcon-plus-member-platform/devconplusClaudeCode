@@ -69,8 +69,6 @@ export default function AdminDashboard() {
     void load()
   }, [])
 
-  // XP chart: every chapter, highest XP first.
-  const xpByChapter = [...chapterStats].sort((a, b) => b.xp - a.xp)
   // "Top Chapters" chart: every chapter, ranked by the toggled metric.
   const topChapters = [...chapterStats].sort((a, b) => b[chapterMetric] - a[chapterMetric])
   // Grow both charts vertically so no chapter label is dropped.
@@ -153,26 +151,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Row 3 — XP by Chapter Horizontal Bar Chart (all chapters) */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card mt-4">
-        <p className="text-md3-body-lg font-bold text-slate-900 mb-4">XP by Chapter</p>
-        {isLoading || xpByChapter.length === 0 ? (
-          <div className="h-[260px] flex items-center justify-center text-slate-400 text-md3-body-md">
-            {isLoading ? 'Loading…' : 'No data yet'}
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={chapterChartHeight}>
-            <BarChart data={xpByChapter} layout="vertical" margin={{ left: 8, right: 16 }}>
-              <XAxis type="number" tick={{ fontSize: 10 }} />
-              <YAxis dataKey="chapter" type="category" tick={{ fontSize: 11 }} width={96} interval={0} />
-              <Tooltip formatter={(v) => [Number(v).toLocaleString(), 'XP']} />
-              <Bar dataKey="xp" fill="#F8C630" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-
-      {/* Row 4 — Top Chapters (toggle: Members / XP) */}
+      {/* Row 3 — Top Chapters (toggle: Members / XP) */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card mt-4">
         <div className="flex items-center justify-between gap-3 mb-4">
           <p className="text-md3-body-lg font-bold text-slate-900">Top Chapters</p>
@@ -220,7 +199,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Row 5 — Event Attendance Trend Line Chart */}
+      {/* Row 4 — Event Attendance Trend Line Chart */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-card mt-4">
         <p className="text-md3-body-lg font-bold text-slate-900 mb-4">Event Attendance Trend</p>
         {isLoading || attendanceTrend.length === 0 ? (
