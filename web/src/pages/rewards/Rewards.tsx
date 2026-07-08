@@ -137,9 +137,9 @@ function RedemptionModal({ reward, spendablePoints, onClose, onGoToMissions }: R
 
                   {reward.deadline && new Date(reward.deadline).getTime() > Date.now() && (
                     <div className="flex items-center gap-1.5 mb-4 -mt-2">
-                      <ClockCircleOutline className="size-[15px]" color="#F97316" />
-                      <p className="text-[12px] font-proxima font-semibold text-[#F97316] leading-none">
-                        Available until {formatDate.short(reward.deadline)}
+                      <ClockCircleOutline className="size-[15px]" color="rgb(var(--color-primary))" />
+                      <p className="text-[12px] font-proxima font-semibold text-primary leading-none">
+                        Available until {formatDate.dateTime(reward.deadline)}
                       </p>
                     </div>
                   )}
@@ -276,7 +276,7 @@ function RewardCard({ reward, spendablePoints, onRedeem }: RewardCardProps) {
   const isOutOfStock = reward.stock_remaining !== null && reward.stock_remaining === 0
   const deadlineLabel =
     reward.deadline && new Date(reward.deadline).getTime() > Date.now()
-      ? formatDate.short(reward.deadline)
+      ? formatDate.dateTime(reward.deadline)
       : null
 
   return (
@@ -299,9 +299,9 @@ function RewardCard({ reward, spendablePoints, onRedeem }: RewardCardProps) {
 
         {/* Limited-time deadline chip */}
         {deadlineLabel && (
-          <div className="absolute top-2 left-2 z-20 flex items-center gap-[3px] bg-white/90 backdrop-blur-sm px-[8px] py-[3px] rounded-full shadow-sm">
-            <ClockCircleOutline className="size-[11px]" color="#F97316" />
-            <p className="text-[9px] font-proxima font-bold text-[#F97316] leading-none">
+          <div className="absolute top-2 left-2 z-20 flex items-center gap-[3px] bg-white/90 backdrop-blur-sm px-[8px] py-[3px] rounded-full shadow-sm border border-primary/30">
+            <ClockCircleOutline className="size-[11px]" color="rgb(var(--color-primary))" />
+            <p className="text-[9px] font-proxima font-bold text-primary leading-none">
               Until {deadlineLabel}
             </p>
           </div>

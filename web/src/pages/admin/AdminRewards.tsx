@@ -495,19 +495,22 @@ export default function AdminRewards() {
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 capitalize">
                           {r.type}
                         </span>
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                          r.is_active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'
-                        }`}>
-                          {r.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                        {(() => {
+                          // A reward is effectively inactive once its deadline passes,
+                          // even before the cron job flips is_active in the DB.
+                          const pastDeadline = r.deadline != null && new Date(r.deadline).getTime() < Date.now()
+                          const active = r.is_active && !pastDeadline
+                          return (
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'
+                            }`}>
+                              {active ? 'Active' : 'Inactive'}
+                            </span>
+                          )
+                        })()}
                         {r.is_coming_soon && (
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                             Coming Soon
-                          </span>
-                        )}
-                        {r.deadline && new Date(r.deadline).getTime() < Date.now() && (
-                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-red/10 text-red">
-                            Expired
                           </span>
                         )}
                       </div>
@@ -515,7 +518,7 @@ export default function AdminRewards() {
                         {r.points_cost.toLocaleString()} pts
                         {r.stock_remaining != null && ` · ${r.stock_remaining} in stock`}
                         {r.max_per_user != null && ` · max ${r.max_per_user}/user`}
-                        {r.deadline && ` · until ${formatDate.compact(r.deadline)}`}
+                        {r.deadline && ` · until ${formatDate.dateTime(r.deadline)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
