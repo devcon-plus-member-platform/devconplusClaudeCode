@@ -7,23 +7,27 @@ import { markOnboardingSeen } from '../../lib/onboarding'
 const slides = [
   {
     image:    '/photos/devcon-iloilo.png',
-    title:    "Your Portal to\nThe Philippines’ Largest\nVolunteer Tech Community!",
-    subtitle: "Sync, Support, Succeed. Get instant access to the Philippines’ largest tech volunteer community!",
+    title:    'The Philippines’ Largest\nVolunteer Tech Community.',
+    subtitle: 'You belong here. Join 60,000+ builders across 13 nationwide locations to grow the network you need for what’s next.',
+    cta:      'Get Started',
   },
   {
     image:    '/photos/devcon-mindanao.png',
-    title:    '11 Chapters. 16 Years.\n60,000+ Geeks for Good.',
-    subtitle: 'Join chapters across the country and make an impact locally and nationally.',
+    title:    '17 Years of\nGrassroots Impact.',
+    subtitle: 'As a non-profit, we host 100+ free, high-impact events annually. We bring 19,000+ attendees together in person to push the boundaries of tech.',
+    cta:      'Start Learning',
   },
   {
     image:    '/photos/devcon-summit-group.jpg',
-    title:    'Volunteer. Earn Points.\nUnlock Rewards.',
-    subtitle: 'Participate in events, contribute to projects, and earn points for exclusive rewards.',
+    title:    'Build, Contribute,\nand Find Jobs.',
+    subtitle: 'Whether you attend to grow or volunteer to lead, create real impact. Build your portfolio with projects and events that matter.',
+    cta:      'Expand Your Network',
   },
   {
     image:    '/photos/DEVCON17.svg',
-    title:    'Access Global Opportunities.\nLevel Up Your Career.',
-    subtitle: 'Connect with industry leaders and discover exclusive opportunities for your career.',
+    title:    'Engineer an AI-Ready Nation.',
+    subtitle: 'Help us leave no one behind. Join our events, mentor in open-source AI code camps, or lead an "Hour of AI for Kids" to empower the next generation of builders.',
+    cta:      'Join Now',
   },
 ]
 
@@ -87,7 +91,7 @@ export default function Onboarding() {
             <img
               src={slide.image}
               alt=""
-              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-70"
               loading={i === 0 ? 'eager' : 'lazy'}
               draggable={false}
             />
@@ -135,7 +139,7 @@ export default function Onboarding() {
                 onClick={() => leaveOnboarding('/sign-up')}
                 className="w-full h-[54px] bg-white/10 backdrop-blur-xl border border-white/20 text-white font-bold rounded-2xl text-[17px] flex items-center justify-center shadow-lg transition-all active:scale-[0.98] hover:bg-white/20"
               >
-                Get Started
+                {slides[current].cta}
               </button>
               <button
                 onClick={() => leaveOnboarding('/sign-in')}
@@ -156,7 +160,7 @@ export default function Onboarding() {
                 onClick={() => setCurrent((c) => c + 1)}
                 className="w-full h-[54px] bg-white/10 backdrop-blur-xl border border-white/20 text-white font-bold rounded-2xl text-[17px] flex items-center justify-center shadow-lg transition-all active:scale-[0.98] hover:bg-white/20"
               >
-                Next
+                {slides[current].cta}
               </button>
               <button
                 onClick={() => leaveOnboarding('/sign-up')}

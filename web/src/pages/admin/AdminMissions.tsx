@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { AddCircleOutline, PenOutline, TrashBinTrashOutline, CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
+import { AddCircleOutline, PenOutline, TrashBinTrashOutline } from 'solar-icon-set'
 import { apiFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
-import { INPUT_CLS, LABEL_CLS, SlideOver, ConfirmDelete, RejectModal, ToggleRow } from './cmsPrimitives'
+import { INPUT_CLS, LABEL_CLS, SlideOver, ConfirmDelete, ToggleRow } from './cmsPrimitives'
+import PointSubmissionsPanel from './PointSubmissionsPanel'
 
 // ── Missions ─────────────────────────────────────────────────────────────────
 
@@ -39,19 +39,6 @@ interface MissionRow {
   created_at: string
 }
 
-interface MissionSubmissionRow {
-  id: string
-  mission_id: string
-  user_id: string
-  pr_link: string | null
-  status: 'pending' | 'approved'
-  submitted_at: string
-  // Flat fields returned by GET /api/missions/queue (see server MissionSubmissionWithDetails)
-  mission_title: string
-  member_name: string
-  member_email: string
-}
-
 interface MissionForm {
   title: string
   description: string
@@ -81,7 +68,7 @@ const DIFF_COLORS = {
 } as const
 
 export default function AdminMissions() {
-  const [subTab, setSubTab] = useState<'manage' | 'queue'>('manage')
+  const [subTab, setSubTab] = useState<'manage' | 'submissions'>('manage')
 
   // ── Mission CRUD ──────────────────────────────────────────────────────────
   const [rows, setRows] = useState<MissionRow[]>([])
@@ -92,20 +79,10 @@ export default function AdminMissions() {
   const [form, setForm] = useState<MissionForm>(defaultMissionForm())
   const [saving, setSaving] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-
-  // ── Review queue ──────────────────────────────────────────────────────────
-  const [queue, setQueue] = useState<MissionSubmissionRow[]>([])
-  const [loadingQueue, setLoadingQueue] = useState(false)
-  const [approvingId, setApprovingId] = useState<string | null>(null)
-  const [approveError, setApproveError] = useState<string | null>(null)
-  const [rejectTarget, setRejectTarget] = useState<MissionSubmissionRow | null>(null)
-  const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null)
-  const [approveTarget, setApproveTarget] = useState<MissionSubmissionRow | null>(null)
   const [toggleTarget, setToggleTarget] = useState<MissionRow | null>(null)
 
   const { pageItems: missionItems, ...missionPagination } = usePagination(rows, 10)
-  const { pageItems: queueItems, ...queuePagination } = usePagination(queue, 10)
 
   const loadMissions = async () => {
     setLoadingMissions(true)
@@ -119,20 +96,7 @@ export default function AdminMissions() {
     }
   }
 
-  const loadQueue = async () => {
-    setLoadingQueue(true)
-    try {
-      const data = await apiFetch<MissionSubmissionRow[]>('/api/missions/queue')
-      setQueue(data)
-    } catch (err) {
-      setApproveError(err instanceof Error ? err.message : 'Failed to load queue')
-    } finally {
-      setLoadingQueue(false)
-    }
-  }
-
   useEffect(() => { void loadMissions() }, [])
-  useEffect(() => { if (subTab === 'queue') void loadQueue() }, [subTab])
 
   const openCreate = () => {
     setEditingItem(null)
@@ -208,37 +172,6 @@ export default function AdminMissions() {
     }
   }
 
-  const handleApprove = async (subId: string) => {
-    setApprovingId(subId)
-    setApproveError(null)
-    try {
-      await apiFetch(`/api/missions/submissions/${subId}/approve`, { method: 'POST' })
-      setQueue((prev) => prev.filter((s) => s.id !== subId))
-      await loadMissions()
-    } catch (err) {
-      setApproveError(err instanceof Error ? err.message : 'Approve failed')
-    } finally {
-      setApprovingId(null)
-    }
-  }
-
-  const handleReject = async (subId: string, remarks: string) => {
-    setRejectingId(subId)
-    setApproveError(null)
-    try {
-      await apiFetch(`/api/missions/submissions/${subId}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ adminRemarks: remarks }),
-      })
-      setQueue((prev) => prev.filter((s) => s.id !== subId))
-      setRejectTarget(null)
-    } catch (err) {
-      setApproveError(err instanceof Error ? err.message : 'Reject failed')
-    } finally {
-      setRejectingId(null)
-    }
-  }
-
   const f = (key: keyof MissionForm) =>
     (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((p) => ({ ...p, [key]: e.target.value }))
@@ -264,7 +197,7 @@ export default function AdminMissions() {
 
       {/* Sub-tabs */}
       <div className="flex gap-2 mb-6">
-        {(['manage', 'queue'] as const).map((t) => (
+        {(['manage', 'submissions'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setSubTab(t)}
@@ -272,12 +205,12 @@ export default function AdminMissions() {
               subTab === t ? 'bg-blue text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
             }`}
           >
-            {t === 'manage' ? 'Mission Manager' : `Review Queue${queue.length > 0 ? ` (${queue.length})` : ''}`}
+            {t === 'manage' ? 'Mission Manager' : 'Point Submissions'}
           </button>
         ))}
       </div>
 
-      {error && <p className="text-md3-body-md text-red mb-4">{error}</p>}
+      {subTab === 'manage' && error && <p className="text-md3-body-md text-red mb-4">{error}</p>}
 
       {/* Mission Manager */}
       {subTab === 'manage' && (
@@ -334,72 +267,8 @@ export default function AdminMissions() {
         )
       )}
 
-      {/* Review Queue */}
-      {subTab === 'queue' && (
-        loadingQueue ? (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : queue.length === 0 ? (
-          <p className="text-md3-body-md text-slate-400 text-center py-12">No pending submissions. The queue is clear.</p>
-        ) : (
-          <div className="flex-1 min-h-0 flex flex-col">
-            {approveError && <p className="text-md3-body-md text-red mb-2">{approveError}</p>}
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
-            {queueItems.map((sub) => {
-              const busy = approvingId === sub.id || rejectingId === sub.id
-              return (
-              <div key={sub.id} className="bg-white border border-slate-100 rounded-xl px-4 py-3 shadow-card">
-                <div className="min-w-0">
-                  <p className="text-md3-body-md font-semibold text-slate-900">{sub.member_name || 'Unknown'}</p>
-                  <p className="text-md3-label-md text-slate-400">{sub.member_email}</p>
-                  <p className="text-md3-label-md text-slate-500 mt-1 font-medium">{sub.mission_title}</p>
-                  {!sub.pr_link || sub.pr_link === 'submitted-for-approval' ? (
-                    <span className="text-md3-label-md text-slate-400 mt-1 block italic">Submitted for approval</span>
-                  ) : (
-                    <a
-                      href={sub.pr_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-md3-label-md text-blue hover:underline mt-1 block truncate"
-                    >
-                      {sub.pr_link}
-                    </a>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Submitted {new Date(sub.submitted_at).toLocaleString()}
-                  </p>
-                </div>
-                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-50 sm:justify-end">
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setRejectTarget(sub)}
-                    disabled={busy}
-                    className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 border border-red/40 text-red rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-red/10 transition-colors"
-                  >
-                    <CloseCircleOutline color="#EF4444" width={14} height={14} />
-                    {rejectingId === sub.id ? 'Rejecting…' : 'Reject'}
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setApproveTarget(sub)}
-                    disabled={busy}
-                    className="flex-1 sm:flex-none sm:px-5 py-2 flex items-center justify-center gap-1.5 bg-blue text-white rounded-xl text-md3-label-md font-bold disabled:opacity-50 hover:bg-blue-dark transition-colors"
-                  >
-                    <CheckCircleOutline color="#FFFFFF" width={14} height={14} />
-                    {approvingId === sub.id ? 'Approving…' : 'Approve & Award'}
-                  </motion.button>
-                </div>
-              </div>
-              )
-            })}
-            </div>
-            <Pagination controller={queuePagination} itemLabel="submission" className="shrink-0" />
-          </div>
-        )
-      )}
+      {/* Point Submissions (moved here from the CMS) */}
+      {subTab === 'submissions' && <PointSubmissionsPanel />}
 
       {/* SlideOver: Create / Edit */}
       {slideOver && (
@@ -468,29 +337,6 @@ export default function AdminMissions() {
           label="mission"
           onConfirm={() => void handleDelete(confirmDeleteId)}
           onCancel={() => setConfirmDeleteId(null)}
-        />
-      )}
-
-      <AnimatePresence>
-        {rejectTarget && (
-          <RejectModal
-            sub={rejectTarget}
-            onConfirm={handleReject}
-            onClose={() => setRejectTarget(null)}
-            loading={rejectingId === rejectTarget.id}
-          />
-        )}
-      </AnimatePresence>
-
-      {approveTarget && (
-        <ConfirmDialog
-          title="Approve & award points?"
-          message={`${approveTarget.member_name || 'This member'} will be awarded points for "${approveTarget.mission_title}". This can't be undone.`}
-          confirmLabel="Approve & Award"
-          tone="primary"
-          loading={approvingId === approveTarget.id}
-          onConfirm={() => { void handleApprove(approveTarget.id).then(() => setApproveTarget(null)) }}
-          onCancel={() => setApproveTarget(null)}
         />
       )}
 

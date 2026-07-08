@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline, DownloadOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../../../lib/supabase'
+import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
+import WheelPoster from '../../../components/WheelPoster'
+import EventQRModal from '../../../components/EventQRModal'
+import { getEventThemeStyle } from '../../../lib/eventTheme'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 
 type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected'
@@ -21,6 +25,8 @@ export function OrgEventSummary() {
   const [registrants, setRegistrants] = useState<Registration[]>([])
   const [isLoading, setIsLoading]     = useState(true)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [showPoster, setShowPoster]   = useState(false)
+  const [showQr, setShowQr]           = useState(false)
   
   const event = events.find((e) => e.id === id)
 
@@ -94,6 +100,30 @@ export function OrgEventSummary() {
 
   const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
 
+  const handleExportCsv = () => {
+    const headers = [
+      'member_name',
+      'member_email',
+      'school_or_company',
+      'status',
+      'checked_in',
+      'registered_at',
+    ]
+    const rows = filtered.map((r) => ({
+      member_name: r.member_name,
+      member_email: r.member_email,
+      school_or_company: r.school_or_company,
+      status: r.status,
+      checked_in: r.checked_in ?? false,
+      registered_at: r.registered_at,
+    }))
+    const csv = buildCsv(headers, rows)
+    const dateStamp = getPhilippineDateStamp()
+    const label = event.title ? `-${slugify(event.title)}` : ''
+    const suffix = filter !== 'all' ? `-${filter}` : ''
+    downloadCsv(`registrants-${dateStamp}${label}${suffix}.csv`, csv)
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* ── Header ── */}
@@ -122,12 +152,24 @@ export function OrgEventSummary() {
                 Event Summary
               </h1>
             </div>
-            <button
-              onClick={() => navigate(`/organizer/events/${id}/edit`)}
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
-            >
-              <PenOutline className="w-4 h-4" color="white" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {filtered.length > 0 && (
+                <button
+                  onClick={handleExportCsv}
+                  className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                             text-white text-md3-label-md font-bold active:bg-white/40 transition-colors shadow-sm shrink-0"
+                >
+                  <DownloadOutline className="w-3.5 h-3.5" color="white" />
+                  Export
+                </button>
+              )}
+              <button
+                onClick={() => navigate(`/organizer/events/${id}/edit`)}
+                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
+              >
+                <PenOutline className="w-4 h-4" color="white" />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -179,6 +221,38 @@ export function OrgEventSummary() {
               </div>
             ))}
           </div>
+        </motion.div>
+
+        {/* ── Raffle wheel & QR ── */}
+        <motion.div variants={fadeUp} className="grid grid-cols-3 gap-3 mb-6">
+          <button
+            onClick={() => window.open(`/wheel/${event.id}`, '_blank', 'noopener')}
+            className="py-4 border border-blue/30 text-blue rounded-xl
+                       hover:bg-blue/5 transition-colors flex flex-col items-center justify-center gap-1.5"
+          >
+            <ConfettiOutline className="w-5 h-5" />
+            <span className="text-md3-label-md font-bold">Raffle</span>
+          </button>
+          <button
+            onClick={() => setShowQr(true)}
+            disabled={!event.slug}
+            className="py-4 border border-blue/30 text-blue rounded-xl
+                       hover:bg-blue/5 transition-colors flex flex-col items-center justify-center gap-1.5
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <QRCodeOutline className="w-5 h-5" />
+            <span className="text-md3-label-md font-bold">QR Code</span>
+          </button>
+          <button
+            onClick={() => setShowPoster(true)}
+            disabled={!event.slug}
+            className="py-4 border border-blue/30 text-blue rounded-xl
+                       hover:bg-blue/5 transition-colors flex flex-col items-center justify-center gap-1.5
+                       disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <GalleryAddOutline className="w-5 h-5" />
+            <span className="text-md3-label-md font-bold">Poster</span>
+          </button>
         </motion.div>
 
         {/* ── Filter tabs ── */}
@@ -251,6 +325,21 @@ export function OrgEventSummary() {
           </AnimatePresence>
         )}
       </motion.div>
+
+      {/* QR poster generator + plain QR — organizer surface is non-themed, so force
+          the modals' `bg-primary` chrome to DEVCON blue (poster/QR art is hardcoded). */}
+      <AnimatePresence>
+        {showPoster && event.slug && (
+          <div style={getEventThemeStyle('devcon')}>
+            <WheelPoster event={event} onClose={() => setShowPoster(false)} />
+          </div>
+        )}
+        {showQr && event.slug && (
+          <div style={getEventThemeStyle('devcon')}>
+            <EventQRModal event={event} onClose={() => setShowQr(false)} />
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   )

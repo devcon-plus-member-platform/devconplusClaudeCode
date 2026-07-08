@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
 import { apiFetch } from '../../../lib/api'
 import { buildRegistrationApprovedEmail } from '../../../lib/emailTemplates'
+import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
 
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
@@ -416,6 +417,30 @@ export function OrgEventRegistrants() {
     } catch { return false }
   }
 
+  const handleExportCsv = () => {
+    const headers = [
+      'member_name',
+      'member_email',
+      'school_or_company',
+      'status',
+      'checked_in',
+      'registered_at',
+    ]
+    const rows = filtered.map((r) => ({
+      member_name: r.member_name,
+      member_email: r.member_email,
+      school_or_company: r.school_or_company,
+      status: r.status,
+      checked_in: r.checked_in ?? false,
+      registered_at: r.registered_at,
+    }))
+    const csv = buildCsv(headers, rows)
+    const dateStamp = getPhilippineDateStamp()
+    const label = event?.title ? `-${slugify(event.title)}` : ''
+    const suffix = filter !== 'all' ? `-${filter}` : ''
+    downloadCsv(`registrants-${dateStamp}${label}${suffix}.csv`, csv)
+  }
+
   const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
 
   const counts = {
@@ -452,16 +477,28 @@ export function OrgEventRegistrants() {
                 Attendees
               </h1>
             </div>
-            {event && (
-              <button
-                onClick={() => setShowAnnounce(true)}
-                className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
-                           text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
-              >
-                <UserSpeakOutline className="w-3.5 h-3.5" color="white" />
-                Announce
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {mainTab === 'registrants' && filtered.length > 0 && (
+                <button
+                  onClick={handleExportCsv}
+                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                             text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
+                >
+                  <DownloadOutline className="w-3.5 h-3.5" color="white" />
+                  Export
+                </button>
+              )}
+              {event && (
+                <button
+                  onClick={() => setShowAnnounce(true)}
+                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                             text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
+                >
+                  <UserSpeakOutline className="w-3.5 h-3.5" color="white" />
+                  Announce
+                </button>
+              )}
+            </div>
           </div>
           <div className="px-[76px] pb-4">
             <p className="text-white/70 text-[13px] font-proxima truncate leading-none">

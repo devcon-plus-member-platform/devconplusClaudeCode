@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { CloseCircleOutline, ConfettiOutline, CupStarOutline, GalleryAddOutline, MagniferOutline, MutedOutline, RestartOutline, ShareOutline, SoundwaveOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
+import { CloseCircleOutline, ConfettiOutline, CupStarOutline, DownloadOutline, GalleryAddOutline, MagniferOutline, MutedOutline, RestartOutline, ShareOutline, SoundwaveOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import type { Event } from '@devcon-plus/supabase'
@@ -179,6 +179,42 @@ const FILTER_LABELS: Record<PoolFilter, string> = {
 }
 
 const SPIN_TURNS = 5 // full rotations before settling
+
+// ── Winners CSV export ──────────────────────────────────────────────────────
+
+/** Quote a cell only when it contains a comma, quote, or newline (RFC 4180). */
+function escapeCsvValue(value: string | number): string {
+  const raw = String(value)
+  return /[",\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw
+}
+
+function buildCsv(headers: string[], rows: Array<Array<string | number>>): string {
+  return [headers, ...rows].map((cols) => cols.map(escapeCsvValue).join(',')).join('\n')
+}
+
+function downloadCsv(filename: string, csv: string): void {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const slugify = (value: string) =>
+  value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+/** "2026-07-04" in Philippine time — used to stamp the export filename. */
+const philippineDateStamp = () =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 
 /** Parse a textarea into a clean, de-duplicated list of names (one per line). */
 function parseManualNames(text: string): string[] {
@@ -373,6 +409,28 @@ export default function WheelPage() {
     setRemovedWinners([])
     setWinner(null)
   }, [fullPool, isSpinning])
+
+  // Export the drawn winners as a CSV, in draw order (winner #1 first). Names are
+  // whatever the wheel holds: full names for a manual list, anonymized "Juan D."
+  // for an event pool (the server never sends full surnames — by design).
+  const handleExportWinners = useCallback(() => {
+    if (removedWinners.length === 0) return
+    const isEvent = source === 'event'
+    const sourceLabel = isEvent ? selectedEventTitle || 'Event' : 'Manual list'
+    const poolLabel = isEvent ? FILTER_LABELS[filter] : ''
+    // removedWinners is most-recent-first; reverse so #1 is the first person drawn.
+    const drawOrder = [...removedWinners].reverse()
+    const csv = buildCsv(
+      ['Winner No.', 'Name', 'Event / Source', 'Pool'],
+      drawOrder.map((name, i) => [i + 1, name, sourceLabel, poolLabel]),
+    )
+    const label = isEvent ? selectedEventTitle : 'manual-list'
+    const filename = label
+      ? `raffle-winners-${philippineDateStamp()}-${slugify(label)}.csv`
+      : `raffle-winners-${philippineDateStamp()}.csv`
+    downloadCsv(filename, csv)
+    toast.success(`Exported ${drawOrder.length} winner${drawOrder.length === 1 ? '' : 's'}`)
+  }, [removedWinners, source, selectedEventTitle, filter])
 
   const handleCloseWinner = useCallback(() => setWinner(null), [])
 
@@ -672,9 +730,19 @@ export default function WheelPage() {
           {/* Drawn winners list */}
           {removedWinners.length > 0 && (
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-              <p className="mb-2 text-md3-label-md font-bold uppercase tracking-wide text-slate-500">
-                Winners drawn
-              </p>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500">
+                  Winners drawn
+                </p>
+                <button
+                  type="button"
+                  onClick={handleExportWinners}
+                  className="flex shrink-0 items-center gap-1 text-md3-label-md font-bold text-primary transition hover:opacity-80"
+                >
+                  <DownloadOutline color="rgb(var(--color-primary))" size={15} />
+                  Export CSV
+                </button>
+              </div>
               <ol className="space-y-1.5">
                 {removedWinners.map((name, i) => (
                   <li key={`${name}-${i}`} className="flex items-center gap-2 text-md3-body-md text-slate-900">
