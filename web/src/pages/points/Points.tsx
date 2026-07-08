@@ -110,7 +110,7 @@ export default function Points() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-slate-600 font-bold text-md3-body-md leading-none">
-                    {lifetimePoints.toLocaleString()} all-time XP
+                    {lifetimePoints.toLocaleString()} total earned XP
                   </span>
                   {prestigeUnlocked ? (
                     <span className="text-gold text-[10px] font-bold uppercase tracking-wider mt-1">Prestige Unlocked!</span>
@@ -200,7 +200,7 @@ export default function Points() {
                 <p className="text-md3-label-md text-slate-500 text-center">
                   Redeeming rewards deducts from your{' '}
                   <span className="font-semibold text-slate-700">spendable balance only</span>
-                  {' '}— all-time points are never reduced.
+                  {' '}— total earned points are not reduced by redemptions. All points reset every June 24 (PHT).
                 </p>
               </motion.div>
             )}
