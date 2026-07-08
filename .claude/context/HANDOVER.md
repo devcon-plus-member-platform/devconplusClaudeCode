@@ -202,7 +202,7 @@ Officer: /organizer/scan → camera → scans QR → award-points-on-scan
 | FR-04 | QR ticket generation (short-lived JWT, rate-limited) | Must Have |
 | FR-05 | QR scan → atomic check-in → points award (no double-award) | Must Have |
 | FR-06 | Points transaction log with grouped date display | Must Have |
-| FR-07 | XP Tier milestones based on `lifetime_points` (never decremented) | Must Have |
+| FR-07 | XP Tier milestones based on `lifetime_points` (not decremented day-to-day; zeroed by the annual June-24 reset) | Must Have |
 | FR-08 | Rewards catalog (all items `is_coming_soon = true` for MVP) | Must Have |
 | FR-09 | Jobs board (manually seeded — no external API) | Must Have |
 | FR-10 | Organizer upgrade request flow (rate-limited, admin review) | Must Have |
@@ -372,7 +372,7 @@ entries and redeploy all functions after a change.
 | `referrals` | Referral tracking |
 | `organizer_upgrade_requests` | In-app organizer upgrade requests for admin review |
 
-**Critical field note:** The points field on `profiles` is `spendable_points` (decremented on redemptions) and `lifetime_points` (never decremented — used for tier tracking). The legacy name `total_points` does not exist in the live DB.
+**Critical field note:** The points field on `profiles` is `spendable_points` (decremented on redemptions) and `lifetime_points` (not decremented by normal activity — used for tier tracking). The legacy name `total_points` does not exist in the live DB. **Both** balances are zeroed once a year by the annual June-24 reset (`reset_points()`, migration `20260708_reset_points_annual.sql`; pg_cron `'0 16 23 6 *'`) — see CLAUDE.md §4.
 
 ### Role-Based Access Control
 
