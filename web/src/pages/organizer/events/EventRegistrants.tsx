@@ -25,6 +25,19 @@ interface CustomFormField {
   type: CustomFieldType
   required: boolean
   options: string[]
+  allowOther?: boolean
+}
+
+// Free-text "Other" answers are stored tagged with this prefix by EventRegister.
+const OTHER_PREFIX = '__other__:'
+// Render a single stored response value, unwrapping the "Other" prefix into readable text.
+function formatResponseValue(v: unknown): string {
+  const str = String(v)
+  if (str.startsWith(OTHER_PREFIX)) {
+    const text = str.slice(OTHER_PREFIX.length).trim()
+    return text ? `${text} (Other)` : 'Other'
+  }
+  return str
 }
 
 type RegistrantWithResponses = Registration & {
@@ -186,7 +199,7 @@ function RegistrantDetailView({
                     <p className="text-[14px]">
                       {isEmpty
                         ? <span className="text-slate-300 italic">No answer</span>
-                        : <span className="text-slate-800">{Array.isArray(answer) ? (answer as unknown[]).join(', ') : String(answer)}</span>
+                        : <span className="text-slate-800">{Array.isArray(answer) ? (answer as unknown[]).map(formatResponseValue).join(', ') : formatResponseValue(answer)}</span>
                       }
                     </p>
                   </div>
