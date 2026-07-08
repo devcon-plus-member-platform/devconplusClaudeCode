@@ -17,19 +17,23 @@ interface CustomFormField {
   type: CustomFieldType
   required: boolean
   options: string[]
-  // When true, option-based fields render an extra "Other" choice that reveals a
-  // free-text input; the typed answer is stored in place of a preset option.
   allowOther?: boolean
 }
+
+// ── "Other" free-text encoding ─────────────────────────────────────────────────
+// An "Other" answer is stored in the same string / string[] response shape as a
+// preset option, tagged with this prefix (e.g. "__other__:my custom answer").
+// This keeps form_responses schema-free — no companion keys, no DB changes.
+const OTHER_PREFIX = '__other__:'
+const isOtherValue = (v: string) => v.startsWith(OTHER_PREFIX)
+const otherTextOf = (v: string) => v.slice(OTHER_PREFIX.length)
+const encodeOther = (text: string) => OTHER_PREFIX + text
 
 // ── Dynamic field renderer ────────────────────────────────────────────────────
 
 const inputCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-white text-slate-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20'
 
 const readOnlyFieldCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500'
-
-// Sentinel used only for the <select> "Other" <option> value — never stored.
-const OTHER_SELECT_VALUE = '__other__'
 
 // The typed free-text "Other" answer is stored directly as the response value
 // (a member's typed answer that is not one of the preset options), so organizers
@@ -64,184 +68,133 @@ function DynamicField({
           className={`${inputCls} resize-none`}
         />
       )
-    case 'select':
-      return <SelectField field={field} value={value as string} onChange={onChange} />
-    case 'radio':
-      return <RadioField field={field} value={value as string} onChange={onChange} />
-    case 'checkbox':
-      return <CheckboxField field={field} value={Array.isArray(value) ? value : []} onChange={onChange} />
+    case 'select': {
+      const strVal = value as string
+      const selectedOther = isOtherValue(strVal)
+      return (
+        <>
+          <select
+            // When an "Other" answer is active, keep the dropdown pinned to the Other sentinel.
+            value={selectedOther ? OTHER_PREFIX : strVal}
+            onChange={e => onChange(e.target.value === OTHER_PREFIX ? encodeOther('') : e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Select an option…</option>
+            {field.options.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+            {field.allowOther && <option value={OTHER_PREFIX}>Other…</option>}
+          </select>
+          {selectedOther && (
+            <input
+              type="text"
+              value={otherTextOf(strVal)}
+              onChange={e => onChange(encodeOther(e.target.value))}
+              placeholder="Please specify"
+              className={`${inputCls} mt-2`}
+            />
+          )}
+        </>
+      )
+    }
+    case 'radio': {
+      const strVal = value as string
+      const selectedOther = isOtherValue(strVal)
+      return (
+        <div className="space-y-2 pt-1">
+          {field.options.map(opt => (
+            <label key={opt} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                value={opt}
+                checked={!selectedOther && value === opt}
+                onChange={() => onChange(opt)}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-md3-body-md text-slate-700">{opt}</span>
+            </label>
+          ))}
+          {field.allowOther && (
+            <>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={selectedOther}
+                  onChange={() => onChange(encodeOther(''))}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-md3-body-md text-slate-700">Other…</span>
+              </label>
+              {selectedOther && (
+                <input
+                  type="text"
+                  value={otherTextOf(strVal)}
+                  onChange={e => onChange(encodeOther(e.target.value))}
+                  placeholder="Please specify"
+                  className={`${inputCls} ml-7`}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )
+    }
+    case 'checkbox': {
+      const checked = Array.isArray(value) ? value : []
+      const otherEntry = checked.find(isOtherValue)
+      const selectedOther = otherEntry !== undefined
+      return (
+        <div className="space-y-2 pt-1">
+          {field.options.map(opt => (
+            <label key={opt} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={checked.includes(opt)}
+                onChange={e => onChange(
+                  e.target.checked
+                    ? [...checked, opt]
+                    : checked.filter(v => v !== opt)
+                )}
+                className="w-4 h-4 accent-primary rounded"
+              />
+              <span className="text-md3-body-md text-slate-700">{opt}</span>
+            </label>
+          ))}
+          {field.allowOther && (
+            <>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedOther}
+                  onChange={e => onChange(
+                    e.target.checked
+                      ? [...checked, encodeOther('')]
+                      : checked.filter(v => !isOtherValue(v))
+                  )}
+                  className="w-4 h-4 accent-primary rounded"
+                />
+                <span className="text-md3-body-md text-slate-700">Other…</span>
+              </label>
+              {selectedOther && (
+                <input
+                  type="text"
+                  value={otherTextOf(otherEntry)}
+                  onChange={e => onChange([
+                    ...checked.filter(v => !isOtherValue(v)),
+                    encodeOther(e.target.value),
+                  ])}
+                  placeholder="Please specify"
+                  className={`${inputCls} ml-7`}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )
+    }
     default:
       return null
   }
-}
-
-const otherInputCls = `${inputCls} mt-2`
-
-function SelectField({
-  field,
-  value,
-  onChange,
-}: {
-  field: CustomFormField
-  value: string
-  onChange: (val: string) => void
-}) {
-  // "Other" is active when a value exists that isn't one of the preset options,
-  // or the member explicitly picked the Other entry (tracked while text is empty).
-  const [otherActive, setOtherActive] = useState(
-    !!field.allowOther && value !== '' && !field.options.includes(value)
-  )
-  const showOther = !!field.allowOther && otherActive
-  return (
-    <>
-      <select
-        value={showOther ? OTHER_SELECT_VALUE : value}
-        onChange={e => {
-          if (e.target.value === OTHER_SELECT_VALUE) {
-            setOtherActive(true)
-            onChange('')
-          } else {
-            setOtherActive(false)
-            onChange(e.target.value)
-          }
-        }}
-        className={inputCls}
-      >
-        <option value="">Select an option…</option>
-        {field.options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-        {field.allowOther && <option value={OTHER_SELECT_VALUE}>Other…</option>}
-      </select>
-      {showOther && (
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder="Type your answer"
-          className={otherInputCls}
-          autoFocus
-        />
-      )}
-    </>
-  )
-}
-
-function RadioField({
-  field,
-  value,
-  onChange,
-}: {
-  field: CustomFormField
-  value: string
-  onChange: (val: string) => void
-}) {
-  const [otherActive, setOtherActive] = useState(
-    !!field.allowOther && value !== '' && !field.options.includes(value)
-  )
-  const showOther = !!field.allowOther && otherActive
-  return (
-    <div className="space-y-2 pt-1">
-      {field.options.map(opt => (
-        <label key={opt} className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="radio"
-            value={opt}
-            checked={!showOther && value === opt}
-            onChange={() => { setOtherActive(false); onChange(opt) }}
-            className="w-4 h-4 accent-primary"
-          />
-          <span className="text-md3-body-md text-slate-700">{opt}</span>
-        </label>
-      ))}
-      {field.allowOther && (
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="radio"
-            checked={showOther}
-            onChange={() => { setOtherActive(true); onChange('') }}
-            className="w-4 h-4 accent-primary"
-          />
-          <span className="text-md3-body-md text-slate-700">Other</span>
-        </label>
-      )}
-      {showOther && (
-        <input
-          type="text"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder="Type your answer"
-          className={otherInputCls}
-          autoFocus
-        />
-      )}
-    </div>
-  )
-}
-
-function CheckboxField({
-  field,
-  value,
-  onChange,
-}: {
-  field: CustomFormField
-  value: string[]
-  onChange: (val: string[]) => void
-}) {
-  // Any selected value not in the preset options is the free-text "Other" answer.
-  const otherText = value.find(v => !field.options.includes(v)) ?? ''
-  const [otherActive, setOtherActive] = useState(!!field.allowOther && otherText !== '')
-  const showOther = !!field.allowOther && otherActive
-  const presetSelections = value.filter(v => field.options.includes(v))
-
-  const setOtherText = (text: string) => {
-    const trimmed = text.trim()
-    onChange(trimmed ? [...presetSelections, text] : presetSelections)
-  }
-
-  return (
-    <div className="space-y-2 pt-1">
-      {field.options.map(opt => (
-        <label key={opt} className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={value.includes(opt)}
-            onChange={e => onChange(
-              e.target.checked
-                ? [...value, opt]
-                : value.filter(v => v !== opt)
-            )}
-            className="w-4 h-4 accent-primary rounded"
-          />
-          <span className="text-md3-body-md text-slate-700">{opt}</span>
-        </label>
-      ))}
-      {field.allowOther && (
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOther}
-            onChange={e => {
-              setOtherActive(e.target.checked)
-              if (!e.target.checked) onChange(presetSelections)
-            }}
-            className="w-4 h-4 accent-primary rounded"
-          />
-          <span className="text-md3-body-md text-slate-700">Other</span>
-        </label>
-      )}
-      {showOther && (
-        <input
-          type="text"
-          value={otherText}
-          onChange={e => setOtherText(e.target.value)}
-          placeholder="Type your answer"
-          className={otherInputCls}
-          autoFocus
-        />
-      )}
-    </div>
-  )
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -343,7 +296,13 @@ export default function EventRegister() {
     for (const field of customSchema) {
       if (!field.required) continue
       const val = formResponses[field.id]
-      const isEmpty = !val || (Array.isArray(val) ? val.length === 0 : val.trim() === '')
+      // Treat a selected "Other" choice with blank text as unanswered.
+      const blankOther = (v: string) => isOtherValue(v) && otherTextOf(v).trim() === ''
+      const isEmpty = !val || (
+        Array.isArray(val)
+          ? val.filter(v => !blankOther(v)).length === 0
+          : val.trim() === '' || blankOther(val)
+      )
       if (isEmpty) errors[field.id] = 'This field is required'
     }
     setFieldErrors(errors)

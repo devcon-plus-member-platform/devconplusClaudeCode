@@ -57,6 +57,40 @@ interface AttendanceExportRow extends Record<string, string | number | boolean |
   school_or_company: string
 }
 
+// Custom registration form field (subset of events.custom_form_schema JSONB).
+interface CustomFormField {
+  id: string
+  label: string
+}
+
+// Free-text "Other" answers are stored tagged with this prefix by EventRegister.
+const OTHER_PREFIX = '__other__:'
+
+// Unwrap a single stored response value, turning the "Other" prefix into readable text.
+const formatResponseValue = (v: unknown): string => {
+  const str = String(v)
+  if (str.startsWith(OTHER_PREFIX)) {
+    const text = str.slice(OTHER_PREFIX.length).trim()
+    return text ? `${text} (Other)` : 'Other'
+  }
+  return str
+}
+
+// Flatten one registrant's stored answer for a field into a single CSV cell.
+const formatResponseAnswer = (answer: unknown): string => {
+  if (answer === undefined || answer === null || answer === '') return ''
+  if (Array.isArray(answer)) return answer.map(formatResponseValue).join(', ')
+  return formatResponseValue(answer)
+}
+
+const parseFormSchema = (raw: unknown): CustomFormField[] =>
+  Array.isArray(raw)
+    ? (raw as unknown[]).filter(
+        (f): f is CustomFormField =>
+          !!f && typeof f === 'object' && 'id' in f && 'label' in f,
+      )
+    : []
+
 // ── Zod schema ─────────────────────────────────────────────────────────────────
 
 const eventSchema = z
@@ -699,7 +733,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         <div className="border-t border-slate-100 pt-4 mt-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Start Date & Time</label>
+              <label className={labelClass}>Start Date & Time <span className="text-red normal-case">*</span></label>
               <input
                 {...register('event_date')}
                 type="datetime-local"
@@ -863,7 +897,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         {/* ── XP Points Value ── */}
         {!isExternal && (
           <div className="border-t border-slate-100 pt-4 mt-4">
-            <label className={labelClass}>XP Points Value</label>
+            <label className={labelClass}>XP Points Value <span className="text-red normal-case">*</span></label>
             <input
               {...register('points_value')}
               type="number"
@@ -1333,7 +1367,7 @@ export default function AdminEvents() {
 
       let query: any = supabase
         .from('event_registrations')
-        .select('id, status, checked_in, registered_at, event_id, events(title, chapters(name)), profiles(full_name, email, school_or_company)')
+        .select('id, status, checked_in, registered_at, event_id, form_responses, events(title, custom_form_schema, chapters(name)), profiles(full_name, email, school_or_company)')
         .neq('status', 'cancelled')
 
       if (eventIds && eventIds.length === 0) {
@@ -1361,29 +1395,17 @@ export default function AdminEvents() {
       const { data, error: exportErr } = await query
       if (exportErr) throw new Error(exportErr.message)
 
-      const rows: AttendanceExportRow[] = (data ?? []).map((row: {
+      const dataRows = (data ?? []) as Array<{
         id?: string
         status?: string | null
         checked_in?: boolean | null
         registered_at?: string | null
+        form_responses?: Record<string, unknown> | null
         events?: unknown
         profiles?: unknown
-      }) => {
-        const eventData = Array.isArray(row.events) ? row.events[0] : row.events
-        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
-        return {
-          registration_id: row.id,
-          status: row.status ?? '',
-          checked_in: row.checked_in ?? false,
-          registered_at: row.registered_at ?? '',
-          chapter_name: (eventData?.chapters as { name?: string } | null)?.name ?? '',
-          member_name: profile?.full_name ?? '',
-          member_email: profile?.email ?? '',
-          school_or_company: profile?.school_or_company ?? '',
-        }
-      })
+      }>
 
-      const headers = [
+      const baseHeaders = [
         'registration_id',
         'status',
         'checked_in',
@@ -1393,6 +1415,66 @@ export default function AdminEvents() {
         'member_email',
         'school_or_company',
       ]
+
+      const toBaseRow = (row: (typeof dataRows)[number]): AttendanceExportRow => {
+        const eventData = Array.isArray(row.events) ? row.events[0] : row.events
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+        return {
+          registration_id: row.id ?? '',
+          status: row.status ?? '',
+          checked_in: row.checked_in ?? false,
+          registered_at: row.registered_at ?? '',
+          chapter_name: (eventData as { chapters?: { name?: string } | null } | null)?.chapters?.name ?? '',
+          member_name: (profile as { full_name?: string } | null)?.full_name ?? '',
+          member_email: (profile as { email?: string } | null)?.email ?? '',
+          school_or_company: (profile as { school_or_company?: string } | null)?.school_or_company ?? '',
+        }
+      }
+
+      const schemaOf = (row: (typeof dataRows)[number]): CustomFormField[] => {
+        const eventData = Array.isArray(row.events) ? row.events[0] : row.events
+        return parseFormSchema((eventData as { custom_form_schema?: unknown } | null)?.custom_form_schema)
+      }
+
+      let headers: string[]
+      let rows: AttendanceExportRow[]
+
+      if (scope === 'event') {
+        // Single event → one column per custom question (header = question label).
+        const schema = dataRows.length ? schemaOf(dataRows[0]) : []
+        // De-dupe labels so headers stay unique and don't collide with base columns.
+        const used = new Set(baseHeaders)
+        const columns = schema.map((field) => {
+          const original = field.label || field.id
+          let header = original
+          let n = 2
+          while (used.has(header)) header = `${original} (${n++})`
+          used.add(header)
+          return { id: field.id, header }
+        })
+        headers = [...baseHeaders, ...columns.map((c) => c.header)]
+        rows = dataRows.map((row) => {
+          const base = toBaseRow(row)
+          const responses = row.form_responses ?? {}
+          for (const col of columns) base[col.header] = formatResponseAnswer(responses[col.id])
+          return base
+        })
+      } else {
+        // All events → schemas differ per event, so collapse answers into one column.
+        headers = [...baseHeaders, 'responses']
+        rows = dataRows.map((row) => {
+          const base = toBaseRow(row)
+          const responses = row.form_responses ?? {}
+          base.responses = schemaOf(row)
+            .map((field) => {
+              const answer = formatResponseAnswer(responses[field.id])
+              return answer ? `${field.label}: ${answer}` : null
+            })
+            .filter(Boolean)
+            .join(' | ')
+          return base
+        })
+      }
 
       const csv = buildCsv(headers, rows)
       const eventLabel = scope === 'event'

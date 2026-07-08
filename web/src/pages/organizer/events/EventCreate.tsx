@@ -343,7 +343,7 @@ export function OrgEventCreate() {
           <SectionHeader title="Event Details" />
           <div className="space-y-4">
             <div>
-              <label className={labelClass}>Event Title</label>
+              <label className={labelClass}>Event Title <span className="text-red normal-case">*</span></label>
               <input
                 {...register('title')}
                 className={inputClass}
@@ -355,7 +355,7 @@ export function OrgEventCreate() {
             </div>
 
             <div>
-              <label className={labelClass}>Description</label>
+              <label className={labelClass}>Description <span className="text-red normal-case">*</span></label>
               <Controller
                 name="description"
                 control={control}
@@ -541,7 +541,7 @@ export function OrgEventCreate() {
           <SectionHeader title="Schedule" />
           <div className="space-y-4">
             <div>
-              <label className={labelClass}>Location</label>
+              <label className={labelClass}>Location <span className="text-red normal-case">*</span></label>
               <input
                 {...register('location')}
                 className={inputClass}
@@ -554,7 +554,7 @@ export function OrgEventCreate() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Start Date & Time</label>
+                <label className={labelClass}>Start Date & Time <span className="text-red normal-case">*</span></label>
                 <input
                   {...register('event_date')}
                   type="datetime-local"
@@ -825,7 +825,7 @@ export function OrgEventCreate() {
             <SectionHeader title="Engagement" />
             <div className="space-y-4">
               <div>
-                <label className={labelClass}>Attendance XP</label>
+                <label className={labelClass}>Attendance XP <span className="text-red normal-case">*</span></label>
                 <input
                   {...register('points_value')}
                   type="number"
