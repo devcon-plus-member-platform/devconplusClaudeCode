@@ -17,7 +17,17 @@ interface CustomFormField {
   type: CustomFieldType
   required: boolean
   options: string[]
+  allowOther?: boolean
 }
+
+// ── "Other" free-text encoding ─────────────────────────────────────────────────
+// An "Other" answer is stored in the same string / string[] response shape as a
+// preset option, tagged with this prefix (e.g. "__other__:my custom answer").
+// This keeps form_responses schema-free — no companion keys, no DB changes.
+const OTHER_PREFIX = '__other__:'
+const isOtherValue = (v: string) => v.startsWith(OTHER_PREFIX)
+const otherTextOf = (v: string) => v.slice(OTHER_PREFIX.length)
+const encodeOther = (text: string) => OTHER_PREFIX + text
 
 // ── Dynamic field renderer ────────────────────────────────────────────────────
 
@@ -25,11 +35,18 @@ const inputCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-b
 
 const readOnlyFieldCls = 'w-full border border-slate-200 rounded-xl px-4 py-3 text-md3-body-md bg-slate-100 text-slate-500'
 
-function renderField(
-  field: CustomFormField,
-  value: string | string[],
-  onChange: (val: string | string[]) => void,
-) {
+// The typed free-text "Other" answer is stored directly as the response value
+// (a member's typed answer that is not one of the preset options), so organizers
+// see the plain text in the registrant export rather than a sentinel.
+function DynamicField({
+  field,
+  value,
+  onChange,
+}: {
+  field: CustomFormField
+  value: string | string[]
+  onChange: (val: string | string[]) => void
+}) {
   switch (field.type) {
     case 'text':
       return (
@@ -51,20 +68,38 @@ function renderField(
           className={`${inputCls} resize-none`}
         />
       )
-    case 'select':
+    case 'select': {
+      const strVal = value as string
+      const selectedOther = isOtherValue(strVal)
       return (
-        <select
-          value={value as string}
-          onChange={e => onChange(e.target.value)}
-          className={inputCls}
-        >
-          <option value="">Select an option…</option>
-          {field.options.map(opt => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
+        <>
+          <select
+            // When an "Other" answer is active, keep the dropdown pinned to the Other sentinel.
+            value={selectedOther ? OTHER_PREFIX : strVal}
+            onChange={e => onChange(e.target.value === OTHER_PREFIX ? encodeOther('') : e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Select an option…</option>
+            {field.options.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+            {field.allowOther && <option value={OTHER_PREFIX}>Other…</option>}
+          </select>
+          {selectedOther && (
+            <input
+              type="text"
+              value={otherTextOf(strVal)}
+              onChange={e => onChange(encodeOther(e.target.value))}
+              placeholder="Please specify"
+              className={`${inputCls} mt-2`}
+            />
+          )}
+        </>
       )
-    case 'radio':
+    }
+    case 'radio': {
+      const strVal = value as string
+      const selectedOther = isOtherValue(strVal)
       return (
         <div className="space-y-2 pt-1">
           {field.options.map(opt => (
@@ -72,17 +107,42 @@ function renderField(
               <input
                 type="radio"
                 value={opt}
-                checked={value === opt}
+                checked={!selectedOther && value === opt}
                 onChange={() => onChange(opt)}
                 className="w-4 h-4 accent-primary"
               />
               <span className="text-md3-body-md text-slate-700">{opt}</span>
             </label>
           ))}
+          {field.allowOther && (
+            <>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={selectedOther}
+                  onChange={() => onChange(encodeOther(''))}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-md3-body-md text-slate-700">Other…</span>
+              </label>
+              {selectedOther && (
+                <input
+                  type="text"
+                  value={otherTextOf(strVal)}
+                  onChange={e => onChange(encodeOther(e.target.value))}
+                  placeholder="Please specify"
+                  className={`${inputCls} ml-7`}
+                />
+              )}
+            </>
+          )}
         </div>
       )
+    }
     case 'checkbox': {
       const checked = Array.isArray(value) ? value : []
+      const otherEntry = checked.find(isOtherValue)
+      const selectedOther = otherEntry !== undefined
       return (
         <div className="space-y-2 pt-1">
           {field.options.map(opt => (
@@ -100,6 +160,35 @@ function renderField(
               <span className="text-md3-body-md text-slate-700">{opt}</span>
             </label>
           ))}
+          {field.allowOther && (
+            <>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedOther}
+                  onChange={e => onChange(
+                    e.target.checked
+                      ? [...checked, encodeOther('')]
+                      : checked.filter(v => !isOtherValue(v))
+                  )}
+                  className="w-4 h-4 accent-primary rounded"
+                />
+                <span className="text-md3-body-md text-slate-700">Other…</span>
+              </label>
+              {selectedOther && (
+                <input
+                  type="text"
+                  value={otherTextOf(otherEntry)}
+                  onChange={e => onChange([
+                    ...checked.filter(v => !isOtherValue(v)),
+                    encodeOther(e.target.value),
+                  ])}
+                  placeholder="Please specify"
+                  className={`${inputCls} ml-7`}
+                />
+              )}
+            </>
+          )}
         </div>
       )
     }
@@ -207,7 +296,13 @@ export default function EventRegister() {
     for (const field of customSchema) {
       if (!field.required) continue
       const val = formResponses[field.id]
-      const isEmpty = !val || (Array.isArray(val) ? val.length === 0 : val.trim() === '')
+      // Treat a selected "Other" choice with blank text as unanswered.
+      const blankOther = (v: string) => isOtherValue(v) && otherTextOf(v).trim() === ''
+      const isEmpty = !val || (
+        Array.isArray(val)
+          ? val.filter(v => !blankOther(v)).length === 0
+          : val.trim() === '' || blankOther(val)
+      )
       if (isEmpty) errors[field.id] = 'This field is required'
     }
     setFieldErrors(errors)
@@ -360,11 +455,11 @@ export default function EventRegister() {
                   {field.label}
                   {field.required && <span className="text-red ml-1">*</span>}
                 </label>
-                {renderField(
-                  field,
-                  formResponses[field.id] ?? (field.type === 'checkbox' ? [] : ''),
-                  val => setResponse(field.id, val),
-                )}
+                <DynamicField
+                  field={field}
+                  value={formResponses[field.id] ?? (field.type === 'checkbox' ? [] : '')}
+                  onChange={val => setResponse(field.id, val)}
+                />
                 {fieldErrors[field.id] && (
                   <p className="text-md3-label-md text-red mt-1">{fieldErrors[field.id]}</p>
                 )}

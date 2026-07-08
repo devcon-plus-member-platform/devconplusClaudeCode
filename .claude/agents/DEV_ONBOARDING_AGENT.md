@@ -215,7 +215,7 @@ id              → matches auth.users.id (Supabase auth primary key)
 username        → unique display handle, set on sign-up (added in v1.4)
 role            → 'member' | 'chapter_officer' | 'hq_admin' | 'super_admin'
 spendable_points → decrements on reward redemptions ← USE THIS, NOT total_points
-lifetime_points → never decrements (used for XP tier calculation)
+lifetime_points → not decremented by activity (XP tier calc); zeroed by the annual June-24 reset
 pending_role    → set when an in-app upgrade request is pending admin review
 pending_chapter_id → target chapter for the pending upgrade
 chapter_id      → NOT NULL — all profiles must belong to a chapter

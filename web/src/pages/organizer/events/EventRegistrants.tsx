@@ -25,6 +25,26 @@ interface CustomFormField {
   type: CustomFieldType
   required: boolean
   options: string[]
+  allowOther?: boolean
+}
+
+// Free-text "Other" answers are stored tagged with this prefix by EventRegister.
+const OTHER_PREFIX = '__other__:'
+// Render a single stored response value, unwrapping the "Other" prefix into readable text.
+function formatResponseValue(v: unknown): string {
+  const str = String(v)
+  if (str.startsWith(OTHER_PREFIX)) {
+    const text = str.slice(OTHER_PREFIX.length).trim()
+    return text ? `${text} (Other)` : 'Other'
+  }
+  return str
+}
+
+// Flatten one registrant's stored answer for a field into a single CSV cell.
+function formatResponseCell(answer: unknown): string {
+  if (answer === undefined || answer === null || answer === '') return ''
+  if (Array.isArray(answer)) return answer.map(formatResponseValue).join(', ')
+  return formatResponseValue(answer)
 }
 
 type RegistrantWithResponses = Registration & {
@@ -186,7 +206,7 @@ function RegistrantDetailView({
                     <p className="text-[14px]">
                       {isEmpty
                         ? <span className="text-slate-300 italic">No answer</span>
-                        : <span className="text-slate-800">{Array.isArray(answer) ? (answer as unknown[]).join(', ') : String(answer)}</span>
+                        : <span className="text-slate-800">{Array.isArray(answer) ? (answer as unknown[]).map(formatResponseValue).join(', ') : formatResponseValue(answer)}</span>
                       }
                     </p>
                   </div>
@@ -280,7 +300,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventRegistrants() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events } = useEventsStore()
+  const { events, fetchEvents } = useEventsStore()
 
   const event = events.find((e) => e.id === id)
   const organizerUser = useOrganizerUser()
@@ -292,24 +312,23 @@ export function OrgEventRegistrants() {
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
   const [volunteersLoading, setVolunteersLoading] = useState(false)
-  const [formSchema, setFormSchema]     = useState<CustomFormField[]>([])
   const [selectedRegistrant, setSelectedRegistrant] = useState<RegistrantWithResponses | null>(null)
 
-  // Fetch custom_form_schema for this event
+  // Custom form schema comes from the event's custom_form_schema (JSONB array),
+  // sourced from the gateway-backed events store — NOT a direct Supabase read.
+  // The gateway uses the service role and bypasses RLS, so it returns the schema
+  // for HQ events (chapter_id = null) too. The old direct PostgREST read was
+  // RLS-gated and returned nothing for null-chapter rows, which silently hid the
+  // Registration Responses section on HQ events. This mirrors EventRegister.
+  const formSchema: CustomFormField[] = Array.isArray(event?.custom_form_schema)
+    ? (event.custom_form_schema as CustomFormField[])
+    : []
+
+  // On a hard load of this URL the store may be empty; populate it so the schema
+  // (and event title) resolve.
   useEffect(() => {
-    if (!id) return
-    void (async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- custom_form_schema not yet in generated DB types
-      const { data } = await (supabase as any)
-        .from('events')
-        .select('custom_form_schema')
-        .eq('id', id)
-        .single() as { data: { custom_form_schema: unknown } | null }
-      if (Array.isArray(data?.custom_form_schema)) {
-        setFormSchema(data.custom_form_schema as CustomFormField[])
-      }
-    })()
-  }, [id])
+    if (!event && id) void fetchEvents()
+  }, [event, id, fetchEvents])
 
   // Fetch registrations with joined member profile data + form_responses
   useEffect(() => {
@@ -418,7 +437,7 @@ export function OrgEventRegistrants() {
   }
 
   const handleExportCsv = () => {
-    const headers = [
+    const baseHeaders = [
       'member_name',
       'member_email',
       'school_or_company',
@@ -426,14 +445,31 @@ export function OrgEventRegistrants() {
       'checked_in',
       'registered_at',
     ]
-    const rows = filtered.map((r) => ({
-      member_name: r.member_name,
-      member_email: r.member_email,
-      school_or_company: r.school_or_company,
-      status: r.status,
-      checked_in: r.checked_in ?? false,
-      registered_at: r.registered_at,
-    }))
+    // One column per custom registration question (header = question label).
+    // De-dupe labels so headers stay unique and don't collide with base columns.
+    const used = new Set(baseHeaders)
+    const columns = formSchema.map((field) => {
+      const original = field.label || field.id
+      let header = original
+      let n = 2
+      while (used.has(header)) header = `${original} (${n++})`
+      used.add(header)
+      return { id: field.id, header }
+    })
+    const headers = [...baseHeaders, ...columns.map((c) => c.header)]
+    const rows = filtered.map((r) => {
+      const responses = r.form_responses ?? {}
+      const row: Record<string, string | number | boolean | null | undefined> = {
+        member_name: r.member_name,
+        member_email: r.member_email,
+        school_or_company: r.school_or_company,
+        status: r.status,
+        checked_in: r.checked_in ?? false,
+        registered_at: r.registered_at,
+      }
+      for (const col of columns) row[col.header] = formatResponseCell(responses[col.id])
+      return row
+    })
     const csv = buildCsv(headers, rows)
     const dateStamp = getPhilippineDateStamp()
     const label = event?.title ? `-${slugify(event.title)}` : ''

@@ -3,7 +3,20 @@ import type { Reward, RewardRedemption } from '@devcon-plus/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
 import { useAuthStore } from './useAuthStore'
 import { usePointsStore } from './usePointsStore'
-import type { RewardFormData } from '../pages/organizer/rewards/rewardFormConstants'
+
+// Shape of a validated reward create/update payload (see AdminRewards form schema).
+export interface RewardFormData {
+  name: string
+  description?: string
+  points_cost: number
+  type: 'physical' | 'digital'
+  claim_method: 'onsite' | 'digital_delivery'
+  stock_remaining: number | null
+  max_per_user: number | null
+  is_active: boolean
+  is_coming_soon: boolean
+  deadline: string | null
+}
 
 export interface RewardRedemptionWithDetails extends RewardRedemption {
   member_name: string
@@ -19,7 +32,7 @@ export interface RewardRedemptionWithDetails extends RewardRedemption {
 interface RewardsState {
   // Member-facing: active rewards only
   rewards: Reward[]
-  // Organizer-facing: all rewards including inactive
+  // Admin-facing: all rewards including inactive (hq_admin+ endpoint)
   allRewards: Reward[]
 
   redemptions: RewardRedemption[]
@@ -27,7 +40,7 @@ interface RewardsState {
   unseenClaimCount: number
 
   isLoading: boolean      // member fetchRewards / redeemReward / loadRedemptions
-  isLoadingAll: boolean   // organizer fetchAllRewards
+  isLoadingAll: boolean   // admin fetchAllRewards
   isLoadingClaims: boolean
   error: string | null
 
@@ -69,7 +82,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
     }
   },
 
-  // ── Organizer: all rewards ───────────────────────────────────────────────
+  // ── Admin: all rewards ───────────────────────────────────────────────────
   fetchAllRewards: async () => {
     set((s) => ({ isLoadingAll: s.allRewards.length === 0, error: null }))
     try {
@@ -94,6 +107,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       max_per_user: data.max_per_user ?? null,
       is_active: data.is_active,
       is_coming_soon: data.is_coming_soon,
+      deadline: data.deadline ?? null,
       image_url: imageUrl,
     }
     await apiFetch('/api/rewards', { method: 'POST', body: JSON.stringify(payload) })
@@ -112,6 +126,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       max_per_user: data.max_per_user ?? null,
       is_active: data.is_active,
       is_coming_soon: data.is_coming_soon,
+      deadline: data.deadline ?? null,
       image_url: imageUrl,
     }
     await apiFetch(`/api/rewards/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
@@ -173,7 +188,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
     }
   },
 
-  // ── All redemptions (organizer/admin view) ───────────────────────────────
+  // ── All redemptions (admin claims view) ──────────────────────────────────
   fetchAllRedemptions: async () => {
     set({ isLoadingClaims: true, error: null })
     try {
@@ -236,6 +251,6 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
 
   // NOTE: a `reward_redemptions` realtime subscription was removed 2026-06-12 —
   // that table was never in the supabase_realtime publication, so it never fired.
-  // The organizer redemption queue stays fresh via fetchAllRedemptions() on the
-  // OrganizerLayout recovery cycle (mount + focus/online + 300 s poll).
+  // The admin claims queue stays fresh via fetchAllRedemptions() on AdminRewards
+  // mount (AdminLayout remounts pages on its recovery cycle).
 }))

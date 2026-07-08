@@ -27,6 +27,8 @@ export interface CustomFormField {
   type: CustomFieldType
   required: boolean
   options: string[]
+  /** For choice fields (select/radio/checkbox): show an "Other" choice that reveals a free-text input. */
+  allowOther?: boolean
 }
 
 // ── Zod schema ────────────────────────────────────────────────────────────────
@@ -38,6 +40,7 @@ export const TAG_MAX_LENGTH = 20
 // @MaxLength(5000) on CreateEventDto.description, so the client blocks + indicates the
 // same ceiling the backend enforces (otherwise an over-limit description 400s silently).
 export const DESCRIPTION_MAX_LENGTH = 5000
+export const DESCRIPTION_MIN_LENGTH = 30
 
 // Attendance-XP ceilings by role. Admins keep the original ceiling; chapter
 // officers are capped lower so they can't over-award points.
@@ -50,7 +53,7 @@ export function makeEventSchema(xpMax: number) {
   return z
   .object({
     title: z.string().min(3, 'Title must be at least 3 characters').max(100, 'Title must be under 100 characters'),
-    description: z.string().min(10, 'Description must be at least 10 characters').max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
+    description: z.string().min(DESCRIPTION_MIN_LENGTH, `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters`).max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
     location: z.string().min(2, 'Location is required').max(200, 'Location must be under 200 characters'),
     event_date: z.string().min(1, 'Start date is required'),
     end_date: z.string().optional(),
@@ -175,7 +178,7 @@ export function CustomFieldsBuilder({
   const addField = () => {
     setCustomFields(prev => [
       ...prev,
-      { id: Math.random().toString(36).substring(2, 11), label: '', type: 'text', required: false, options: [] },
+      { id: Math.random().toString(36).substring(2, 11), label: '', type: 'text', required: false, options: [], allowOther: false },
     ])
   }
 
@@ -235,7 +238,7 @@ export function CustomFieldsBuilder({
           <div className="flex gap-2">
             <select
               value={field.type}
-              onChange={e => updateField(field.id, { type: e.target.value as CustomFieldType, options: [] })}
+              onChange={e => updateField(field.id, { type: e.target.value as CustomFieldType, options: [], allowOther: false })}
               className={`${inputClass} flex-1`}
             >
               {FIELD_TYPE_OPTIONS.map(o => (
@@ -287,6 +290,17 @@ export function CustomFieldsBuilder({
                   <AddCircleOutline className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Allow "Other" free-text choice */}
+              <label className="flex items-center gap-1.5 text-md3-label-md text-slate-600 font-medium cursor-pointer pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={field.allowOther ?? false}
+                  onChange={e => updateField(field.id, { allowOther: e.target.checked })}
+                  className="w-3.5 h-3.5 accent-blue"
+                />
+                Add an “Other…” option (lets people type their own answer)
+              </label>
             </div>
           )}
         </div>

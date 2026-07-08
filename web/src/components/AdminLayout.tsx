@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline, ConfettiOutline, HamburgerMenuOutline, CloseCircleOutline, ClipboardListOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline, ConfettiOutline, HamburgerMenuOutline, CloseCircleOutline, ClipboardListOutline, GiftOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { path: '/admin/org-codes', label: 'Org Codes',  Icon: KeyOutline,        end: false, superOnly: false },
   { path: '/admin/chapter-officers', label: 'Chapter Officers', Icon: UserCheckOutline, end: false, superOnly: false },
   { path: '/admin/events',    label: 'Events',     Icon: CalendarOutline,    end: false, superOnly: false },
+  { path: '/admin/rewards',   label: 'Rewards',    Icon: GiftOutline,        end: false, superOnly: false },
   { path: '/admin/chapters',  label: 'Chapters',          Icon: BuildingsOutline,   end: false, superOnly: false },
   { path: '/admin/upgrades',  label: 'CMS', Icon: ShieldCheckOutline, end: false, superOnly: false },
   { path: '/admin/missions',  label: 'Missions', Icon: ClipboardListOutline, end: false, superOnly: false },

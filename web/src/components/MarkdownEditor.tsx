@@ -6,6 +6,7 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void
   error?: string
   maxLength?: number
+  minLength?: number
 }
 
 type EditorTab = 'edit' | 'preview'
@@ -15,11 +16,15 @@ export function MarkdownEditor({
   onChange,
   error,
   maxLength,
+  minLength,
 }: MarkdownEditorProps) {
   const [tab, setTab] = useState<EditorTab>('edit')
   const length = value.length
   // When no maxLength is provided the field is uncapped — never flag "over limit".
   const isOverLimit = maxLength !== undefined && length > maxLength
+  // Only nudge about the minimum once the user has started typing — an empty
+  // field shouldn't shout "under minimum" before they've begun.
+  const isUnderMin = minLength !== undefined && length > 0 && length < minLength
 
   return (
     <div>
@@ -77,6 +82,7 @@ export function MarkdownEditor({
             isOverLimit ? 'text-red font-semibold' : 'text-slate-400'
           }`}
         >
+          {isUnderMin && <span>min {minLength} · </span>}
           {maxLength !== undefined ? `${length} / ${maxLength}` : length}
         </span>
       </div>

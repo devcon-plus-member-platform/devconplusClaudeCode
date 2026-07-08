@@ -14,6 +14,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
@@ -29,6 +30,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
@@ -44,6 +46,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
@@ -59,6 +62,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
@@ -74,6 +78,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
@@ -89,6 +94,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
   {
@@ -104,6 +110,7 @@ export const REWARDS: Reward[] = [
     stock_remaining: null,
     max_per_user: null,
     financial_cost_php: null,
+    deadline: null,
     created_at: '2026-01-01T00:00:00Z',
   },
 ]

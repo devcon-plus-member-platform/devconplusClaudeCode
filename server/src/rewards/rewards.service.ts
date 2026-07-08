@@ -19,16 +19,31 @@ export class RewardsService {
 
   // ── Public catalog ────────────────────────────────────────────────────
 
-  getPublicCatalog(): Promise<Reward[]> {
+  async getPublicCatalog(): Promise<Reward[]> {
+    await this.syncExpiredRewards();
     return this.cache.getOrSet(CacheKeys.REWARDS_CATALOG, CACHE_TTL.REWARDS, () =>
       this.rewardsRepo.findActiveRewards(),
     );
   }
 
-  getAllRewards(): Promise<Reward[]> {
+  async getAllRewards(): Promise<Reward[]> {
+    await this.syncExpiredRewards();
     return this.cache.getOrSet(CacheKeys.REWARDS_ALL, CACHE_TTL.REWARDS, () =>
       this.rewardsRepo.findAllRewards(),
     );
+  }
+
+  /**
+   * Deactivate past-deadline rewards before serving the catalog. The UPDATE is
+   * cheap and idempotent (0 rows in the steady state). When it DOES flip rows,
+   * bust the cache so the very next read reflects the change — otherwise a
+   * stale cached catalog would keep showing the reward as active for up to the
+   * TTL. This makes a reward truly inactive the instant its deadline passes,
+   * independent of the deactivate_expired_rewards cron.
+   */
+  private async syncExpiredRewards(): Promise<void> {
+    const changed = await this.rewardsRepo.deactivateExpiredRewards();
+    if (changed > 0) await this.invalidateCatalog();
   }
 
   // ── Reward CRUD (hq_admin / super_admin only) ─────────────────────────

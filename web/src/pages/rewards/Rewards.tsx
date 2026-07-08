@@ -8,6 +8,7 @@ import {
   AltArrowRightOutline, MedalStarCircleBoldDuotone,
   BoltOutline, AltArrowDownOutline, UsersGroupRoundedOutline,
   FileTextOutline, CodeSquareOutline, ShareOutline, CheckCircleOutline,
+  ClockCircleOutline,
 } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Reward, RewardRedemption, MissionDifficulty, SubmissionType } from '@devcon-plus/supabase'
@@ -16,6 +17,7 @@ import { useRewardsStore } from '../../stores/useRewardsStore'
 import { useMissionsStore } from '../../stores/useMissionsStore'
 import { SkeletonRewardCard, SkeletonJobCard } from '../../components/Skeleton'
 import { staggerContainer, cardItem, slideUp, backdrop } from '../../lib/animation'
+import { formatDate } from '../../lib/dates'
 import ComingSoonModal from '../../components/ComingSoonModal'
 import ComingSoonBadge from '../../components/ComingSoonBadge'
 import { SwipeButton } from '../../components/SwipeButton'
@@ -132,6 +134,15 @@ function RedemptionModal({ reward, spendablePoints, onClose, onGoToMissions }: R
                       {reward.points_cost.toLocaleString()}
                     </p>
                   </div>
+
+                  {reward.deadline && new Date(reward.deadline).getTime() > Date.now() && (
+                    <div className="flex items-center gap-1.5 mb-4 -mt-2">
+                      <ClockCircleOutline className="size-[15px]" color="rgb(var(--color-primary))" />
+                      <p className="text-[12px] font-proxima font-semibold text-primary leading-none">
+                        Available until {formatDate.dateTime(reward.deadline)}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="h-px w-full bg-slate-200 mb-4" />
 
@@ -263,6 +274,10 @@ interface RewardCardProps {
 function RewardCard({ reward, spendablePoints, onRedeem }: RewardCardProps) {
   const canAfford = spendablePoints >= reward.points_cost
   const isOutOfStock = reward.stock_remaining !== null && reward.stock_remaining === 0
+  const deadlineLabel =
+    reward.deadline && new Date(reward.deadline).getTime() > Date.now()
+      ? formatDate.dateTime(reward.deadline)
+      : null
 
   return (
     <motion.div
@@ -280,6 +295,16 @@ function RewardCard({ reward, spendablePoints, onRedeem }: RewardCardProps) {
           />
         ) : (
           <RewardPlaceholder iconSize="size-16" />
+        )}
+
+        {/* Limited-time deadline chip */}
+        {deadlineLabel && (
+          <div className="absolute top-2 left-2 z-20 flex items-center gap-[3px] bg-white/90 backdrop-blur-sm px-[8px] py-[3px] rounded-full shadow-sm border border-primary/30">
+            <ClockCircleOutline className="size-[11px]" color="rgb(var(--color-primary))" />
+            <p className="text-[9px] font-proxima font-bold text-primary leading-none">
+              Until {deadlineLabel}
+            </p>
+          </div>
         )}
 
         {/* Locked / OOS Overlay */}

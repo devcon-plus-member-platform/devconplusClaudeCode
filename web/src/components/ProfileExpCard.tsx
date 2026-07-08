@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion'
-import { BoltOutline, MedalStarCircleBoldDuotone } from 'solar-icon-set'
+import { BoltOutline, ClockCircleOutline, MedalStarCircleBoldDuotone } from 'solar-icon-set'
 import { usePointsStore } from '../stores/usePointsStore'
+import { getPointsExpiry } from '../lib/dates'
 
 export default function ProfileExpCard() {
   const { spendablePoints, lifetimePoints, tierProgress } = usePointsStore()
+  const expiry = getPointsExpiry()
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-[24px] flex flex-col gap-5 shadow-card">
@@ -25,7 +27,7 @@ export default function ProfileExpCard() {
               <BoltOutline color="#94A3B8" size={14} />
             </div>
             <span className="font-proxima text-[14px] text-slate-500">
-              {lifetimePoints.toLocaleString()} all-time points
+              {lifetimePoints.toLocaleString()} total earned points
             </span>
           </div>
 
@@ -58,6 +60,15 @@ export default function ProfileExpCard() {
                 }}
               />
             </motion.div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <div className="shrink-0 size-[14px] flex items-center justify-center">
+              <ClockCircleOutline color="#94A3B8" size={12} />
+            </div>
+            <span className="font-proxima text-[12px] text-slate-400">
+              Valid until {expiry.label} · resets in {expiry.daysLeft} {expiry.daysLeft === 1 ? 'day' : 'days'}
+            </span>
           </div>
         </div>
       </div>

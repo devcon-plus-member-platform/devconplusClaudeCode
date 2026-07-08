@@ -42,15 +42,15 @@ const SECTIONS: Section[] = [
   },
   {
     number: '3',
-    title: 'Points+ (XP) System & One-Year Expiration',
+    title: 'Points+ (XP) System & Annual Reset',
     items: [
       {
         label: 'Non-Monetary Nature',
         text: 'Points+ (XP) are virtual tokens of community appreciation. They hold no cash value, are not legal tender, and cannot be purchased or transferred.',
       },
       {
-        label: 'Rolling Expiration',
-        text: 'All Points+ (XP) earned shall expire exactly 365 days (one year) from the date of issuance. Expired points will be automatically removed from the user\'s balance. The platform utilizes a First-In, First-Out (FIFO) redemption model; the system will automatically deduct the oldest active points first when a reward is claimed.',
+        label: 'Annual Reset (June 24)',
+        text: 'All Points+ (XP) — including both your spendable balance and total earned points — are valid until June 24 of each year. On June 24 at 12:00 AM Philippine Standard Time (UTC+8), all point balances reset to zero and a new earning period begins. Points do not carry over between periods, so members are encouraged to redeem rewards before the reset date.',
       },
       {
         label: 'Abuse Policy',

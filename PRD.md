@@ -324,7 +324,7 @@ These rules are non-negotiable. They exist because violating them has either cau
 10. **The app is mobile-first (390px viewport).** All UI must work on mobile. Desktop gets a sidebar layout.
 11. **Primary color is always `text-primary` / `bg-primary`.** Never hardcode hex values for the primary color.
 12. **All data goes through the NestJS gateway** via `apiFetch`/`publicFetch` (`web/src/lib/api.ts`). Don't add new direct `supabase.from(...)`/`supabase.rpc(...)` calls — direct `supabase-js` is legacy bridge-JWT, being retired. The `MOCK_*` exports in `web/src/types/mock/` are reference only — never import them into production components.
-13. **The `spendable_points` field (not `total_points`) is the user's current redeemable balance.** `lifetime_points` is never decremented and is used for tier tracking.
+13. **The `spendable_points` field (not `total_points`) is the user's current redeemable balance.** `lifetime_points` is never decremented by day-to-day activity (redemptions/refunds touch only `spendable_points`) and is used for tier tracking. **Exception:** the annual June-24 reset (`reset_points()`, migration `20260708_reset_points_annual.sql`) zeroes *both* balances once a year — see CLAUDE.md §4 "Annual points reset."
 
 ---
 

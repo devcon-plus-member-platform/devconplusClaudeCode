@@ -19,6 +19,12 @@ export const formatDate = {
   compact: (date: string | Date) =>
     new Date(date).toLocaleDateString(PH, { month: 'short', day: 'numeric' }),
 
+  /** "Feb 20, 2026, 1:51 AM" — deadlines / precise timestamps */
+  dateTime: (date: string | Date) =>
+    new Date(date).toLocaleString(PH, {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    }),
+
   /** "FEB" — event date-block month header */
   monthShort: (date: string | Date) =>
     new Date(date).toLocaleDateString(PH, { month: 'short' }).toUpperCase(),
@@ -26,6 +32,26 @@ export const formatDate = {
   /** "20" — event date-block day number */
   day: (date: string | Date) =>
     new Date(date).toLocaleDateString(PH, { day: 'numeric' }),
+}
+
+/** Manila is UTC+8 year-round (no DST). */
+const PH_OFFSET_MS = 8 * 3_600_000
+
+/**
+ * Points (spendable + total earned) reset every June 24 at 00:00 Philippine time.
+ * Returns the next reset date, a short display label, and whole days remaining.
+ */
+export function getPointsExpiry(now = new Date()) {
+  const phYear = new Date(now.getTime() + PH_OFFSET_MS).getUTCFullYear()
+  // June 24, 00:00 PHT expressed as a UTC instant
+  let resetYear = phYear
+  let resetUtcMs = Date.UTC(resetYear, 5, 24) - PH_OFFSET_MS
+  if (now.getTime() >= resetUtcMs) {
+    resetYear += 1
+    resetUtcMs = Date.UTC(resetYear, 5, 24) - PH_OFFSET_MS
+  }
+  const daysLeft = Math.max(0, Math.ceil((resetUtcMs - now.getTime()) / 86_400_000))
+  return { resetDate: new Date(resetUtcMs), label: `Jun 24, ${resetYear}`, daysLeft }
 }
 
 /** Returns true when the event's end time (or start time if no end) has passed. */
