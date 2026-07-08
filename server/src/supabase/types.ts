@@ -24,6 +24,7 @@ export interface Reward {
   financial_cost_php: number | null;
   is_active: boolean;
   is_coming_soon: boolean;
+  deadline: string | null;
   created_at: string;
 }
 

@@ -14,6 +14,7 @@ import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { INPUT_CLS, LABEL_CLS, SlideOver, ConfirmDelete, ToggleRow } from './cmsPrimitives'
+import { formatDate, toDatetimeLocalValue, fromDatetimeLocalValue } from '../../lib/dates'
 
 // ── Validation (mirrors the reward DTO on the gateway) ───────────────────────
 
@@ -33,6 +34,9 @@ const rewardSchema = z.object({
   ),
   is_active: z.boolean(),
   is_coming_soon: z.boolean(),
+  // ISO timestamp or null. Computed in handleSave from hasDeadline + the
+  // datetime-local input, so it's validated as an already-resolved value.
+  deadline: z.string().datetime().nullable(),
 })
 
 // ── Form state ────────────────────────────────────────────────────────────────
@@ -47,6 +51,8 @@ interface RewardFormState {
   max_per_user: string
   is_active: boolean
   is_coming_soon: boolean
+  hasDeadline: boolean
+  deadline: string // datetime-local value ('' when none)
 }
 
 const defaultRewardForm = (): RewardFormState => ({
@@ -59,6 +65,8 @@ const defaultRewardForm = (): RewardFormState => ({
   max_per_user: '',
   is_active: true,
   is_coming_soon: true,
+  hasDeadline: false,
+  deadline: '',
 })
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -235,6 +243,8 @@ export default function AdminRewards() {
       max_per_user: r.max_per_user != null ? String(r.max_per_user) : '',
       is_active: r.is_active,
       is_coming_soon: r.is_coming_soon,
+      hasDeadline: r.deadline != null,
+      deadline: toDatetimeLocalValue(r.deadline),
     })
     setCoverFile(null)
     setCoverPreview(r.image_url)
@@ -274,6 +284,23 @@ export default function AdminRewards() {
 
   const handleSave = async () => {
     setFormError(null)
+
+    // Resolve the optional deadline: only when the toggle is on. Reject an
+    // empty or already-past date so admins don't silently create a reward that
+    // is dead on arrival.
+    let deadline: string | null = null
+    if (form.hasDeadline) {
+      deadline = fromDatetimeLocalValue(form.deadline)
+      if (!deadline) {
+        setFormError('Please set a deadline date, or turn off "Has a deadline".')
+        return
+      }
+      if (new Date(deadline).getTime() <= Date.now()) {
+        setFormError('The deadline must be in the future.')
+        return
+      }
+    }
+
     const parsed = rewardSchema.safeParse({
       name: form.name.trim(),
       description: form.description.trim(),
@@ -284,6 +311,7 @@ export default function AdminRewards() {
       max_per_user: form.max_per_user,
       is_active: form.is_active,
       is_coming_soon: form.is_coming_soon,
+      deadline,
     })
     if (!parsed.success) {
       setFormError(parsed.error.issues[0]?.message ?? 'Please check the form fields.')
@@ -477,11 +505,17 @@ export default function AdminRewards() {
                             Coming Soon
                           </span>
                         )}
+                        {r.deadline && new Date(r.deadline).getTime() < Date.now() && (
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-red/10 text-red">
+                            Expired
+                          </span>
+                        )}
                       </div>
                       <p className="text-md3-label-md text-slate-400 mt-0.5">
                         {r.points_cost.toLocaleString()} pts
                         {r.stock_remaining != null && ` · ${r.stock_remaining} in stock`}
                         {r.max_per_user != null && ` · max ${r.max_per_user}/user`}
+                        {r.deadline && ` · until ${formatDate.compact(r.deadline)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -680,6 +714,26 @@ export default function AdminRewards() {
 
           <ToggleRow label="Active (visible in member catalog)" checked={form.is_active} onChange={(v) => setForm((p) => ({ ...p, is_active: v }))} />
           <ToggleRow label="Coming Soon (redemption disabled)" checked={form.is_coming_soon} onChange={(v) => setForm((p) => ({ ...p, is_coming_soon: v }))} />
+
+          <ToggleRow
+            label="Has a deadline (auto-hides after this date)"
+            checked={form.hasDeadline}
+            onChange={(v) => setForm((p) => ({ ...p, hasDeadline: v }))}
+          />
+          {form.hasDeadline && (
+            <div>
+              <label className={LABEL_CLS}>Available until</label>
+              <input
+                className={INPUT_CLS}
+                type="datetime-local"
+                value={form.deadline}
+                onChange={f('deadline')}
+              />
+              <p className="text-[10px] text-slate-400 mt-1">
+                The reward is set inactive after this date. Re-activate it manually if you extend the deadline later.
+              </p>
+            </div>
+          )}
 
           {formError && <p className="text-md3-body-md text-red">{formError}</p>}
         </SlideOver>

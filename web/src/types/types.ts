@@ -176,6 +176,7 @@ export interface Reward {
   stock_remaining: number | null
   max_per_user: number | null
   financial_cost_php: number | null
+  deadline: string | null
   created_at: string
 }
 

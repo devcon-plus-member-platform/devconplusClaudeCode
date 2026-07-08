@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -56,4 +57,12 @@ export class CreateRewardDto {
   @IsUrl({ require_protocol: true, protocols: ['https', 'http'] })
   @MaxLength(512)
   image_url?: string | null;
+
+  // Optional time limit — ISO timestamp. When set and in the past, the reward
+  // is deactivated (deactivate_expired_rewards cron + redeem_reward guard).
+  // null = no deadline (never expires).
+  @IsOptional()
+  @ValidateIf((o: CreateRewardDto) => o.deadline !== null)
+  @IsDateString()
+  deadline?: string | null;
 }

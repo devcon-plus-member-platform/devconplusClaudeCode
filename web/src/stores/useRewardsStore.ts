@@ -15,6 +15,7 @@ export interface RewardFormData {
   max_per_user: number | null
   is_active: boolean
   is_coming_soon: boolean
+  deadline: string | null
 }
 
 export interface RewardRedemptionWithDetails extends RewardRedemption {
@@ -106,6 +107,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       max_per_user: data.max_per_user ?? null,
       is_active: data.is_active,
       is_coming_soon: data.is_coming_soon,
+      deadline: data.deadline ?? null,
       image_url: imageUrl,
     }
     await apiFetch('/api/rewards', { method: 'POST', body: JSON.stringify(payload) })
@@ -124,6 +126,7 @@ export const useRewardsStore = create<RewardsState>((set, get) => ({
       max_per_user: data.max_per_user ?? null,
       is_active: data.is_active,
       is_coming_soon: data.is_coming_soon,
+      deadline: data.deadline ?? null,
       image_url: imageUrl,
     }
     await apiFetch(`/api/rewards/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
