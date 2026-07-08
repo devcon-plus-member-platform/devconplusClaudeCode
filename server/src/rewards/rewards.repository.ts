@@ -29,6 +29,25 @@ export class RewardsRepository extends BaseRepository {
 
   // ── Public catalog ────────────────────────────────────────────────────
 
+  /**
+   * Flip any past-deadline reward to is_active = false, right now, and return
+   * how many rows changed. Called on every catalog read so a reward becomes
+   * truly inactive the moment its deadline passes — no dependency on the
+   * (optional, 15-min) deactivate_expired_rewards cron. `.lt('deadline', ...)`
+   * never matches NULL deadlines, so unlimited rewards are untouched.
+   * Idempotent: returns 0 once everything is settled (the common case).
+   */
+  async deactivateExpiredRewards(): Promise<number> {
+    const { data, error } = await this.db
+      .from('rewards')
+      .update({ is_active: false } as unknown as Record<string, unknown>)
+      .lt('deadline', new Date().toISOString())
+      .eq('is_active', true)
+      .select('id');
+    if (error) throw new BadRequestException(error.message);
+    return (data as unknown[] | null)?.length ?? 0;
+  }
+
   async findActiveRewards(): Promise<Reward[]> {
     const result = await this.db
       .from('rewards')

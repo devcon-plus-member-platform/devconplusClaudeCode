@@ -19,6 +19,12 @@ export const formatDate = {
   compact: (date: string | Date) =>
     new Date(date).toLocaleDateString(PH, { month: 'short', day: 'numeric' }),
 
+  /** "Feb 20, 2026, 1:51 AM" — deadlines / precise timestamps */
+  dateTime: (date: string | Date) =>
+    new Date(date).toLocaleString(PH, {
+      month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    }),
+
   /** "FEB" — event date-block month header */
   monthShort: (date: string | Date) =>
     new Date(date).toLocaleDateString(PH, { month: 'short' }).toUpperCase(),
