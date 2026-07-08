@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { BellOutline, BoltOutline, MedalStarCircleBoldDuotone } from 'solar-icon-set'
+import { motion, AnimatePresence } from 'framer-motion'
+import { BellOutline, BoltOutline, InfoCircleOutline, MedalStarCircleBoldDuotone } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
 import { usePointsStore } from '../stores/usePointsStore'
 import { useNotificationsStore } from '../stores/useNotificationsStore'
+import { getPointsExpiry } from '../lib/dates'
 import logoMark from '../assets/logos/logo-mark.svg'
 
 // Flower-of-life / Clover pattern matching Figma branding
@@ -16,8 +17,10 @@ export default function VolunteerXpCard() {
   const { user } = useAuthStore()
   const unreadCount = useNotificationsStore((s) => s.unreadCount)
   const { spendablePoints, currentTier, tierProgress } = usePointsStore()
+  const expiry = getPointsExpiry()
   
   const [isScrolled, setIsScrolled] = useState(false)
+  const [showExpiryInfo, setShowExpiryInfo] = useState(false)
 
   useEffect(() => {
     const el = document.querySelector('[data-scroll-container]')
@@ -116,6 +119,46 @@ export default function VolunteerXpCard() {
                 <span className="font-proxima text-[14px] text-slate-500">
                   {spendablePoints.toLocaleString()} spendable points
                 </span>
+
+                {/* Expiry info — tooltip on hover (desktop) or tap (mobile) */}
+                <div className="relative flex items-center">
+                  <button
+                    type="button"
+                    aria-label="Points validity"
+                    onClick={() => setShowExpiryInfo((v) => !v)}
+                    onMouseEnter={() => setShowExpiryInfo(true)}
+                    onMouseLeave={() => setShowExpiryInfo(false)}
+                    onBlur={() => setShowExpiryInfo(false)}
+                    className="flex items-center justify-center size-[20px] rounded-full active:bg-slate-100 transition-colors"
+                  >
+                    <InfoCircleOutline color="#94A3B8" size={14} />
+                  </button>
+
+                  <AnimatePresence>
+                    {showExpiryInfo && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 4, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute -right-1 top-[26px] z-20 w-max rounded-xl bg-white/80 backdrop-blur-md ring-1 ring-slate-900/10 px-3 py-2 shadow-[0_4px_16px_rgba(15,23,42,0.10)]"
+                      >
+                        {/* Caret pointing at the icon */}
+                        <div className="absolute -top-1 right-[13px] size-2 rotate-45 rounded-[1px] bg-white/80 backdrop-blur-md" />
+
+                        <p className="font-proxima text-[9px] font-bold uppercase tracking-widest text-slate-400 leading-none">
+                          Points validity
+                        </p>
+                        <p className="mt-1 font-proxima text-[12px] leading-none text-slate-600 whitespace-nowrap">
+                          Valid until <span className="font-bold text-slate-900">{expiry.label}</span>
+                        </p>
+                        <p className="mt-1 font-proxima text-[10px] font-semibold text-primary leading-none">
+                          {expiry.daysLeft} {expiry.daysLeft === 1 ? 'day' : 'days'} left before reset
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
               <div className="relative w-full h-2 bg-black/[0.16] rounded-full overflow-hidden">
@@ -148,6 +191,7 @@ export default function VolunteerXpCard() {
                   />
                 </motion.div>
               </div>
+
             </div>
           </div>
 

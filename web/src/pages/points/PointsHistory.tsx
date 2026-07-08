@@ -143,7 +143,7 @@ export default function PointsHistory() {
               </div>
               <div className="flex flex-col justify-center translate-y-px">
                 <p className="font-proxima text-slate-500 text-[12px] leading-none mb-[6px]">
-                  All-time
+                  Total earned
                 </p>
                 <div className="flex items-baseline gap-1">
                   <p className="font-proxima font-extrabold text-[24px] text-slate-900 leading-none tracking-tight">

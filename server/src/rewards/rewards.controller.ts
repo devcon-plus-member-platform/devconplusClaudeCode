@@ -37,7 +37,7 @@ export class RewardsController {
   /** GET /api/rewards/all — full catalog including inactive rewards (hq_admin+). */
   @Get('all')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('hq_admin')
+  @Roles('hq_admin', 'super_admin')
   getAllRewards(): Promise<Reward[]> {
     return this.rewardsService.getAllRewards();
   }
@@ -47,7 +47,7 @@ export class RewardsController {
   /** POST /api/rewards — create a reward (hq_admin+). */
   @Post()
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('hq_admin')
+  @Roles('hq_admin', 'super_admin')
   createReward(@Body() dto: CreateRewardDto): Promise<Reward> {
     return this.rewardsService.createReward(dto);
   }
@@ -55,7 +55,7 @@ export class RewardsController {
   /** PATCH /api/rewards/:id — update a reward (hq_admin+). */
   @Patch(':id')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('hq_admin')
+  @Roles('hq_admin', 'super_admin')
   updateReward(
     @Param() { id }: IdParamDto,
     @Body() dto: UpdateRewardDto,
@@ -67,7 +67,7 @@ export class RewardsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('hq_admin')
+  @Roles('hq_admin', 'super_admin')
   deleteReward(@Param() { id }: IdParamDto): Promise<void> {
     return this.rewardsService.deleteReward(id);
   }
@@ -96,27 +96,27 @@ export class RewardsController {
     return this.rewardsService.getMemberRedemptions(user.profileId);
   }
 
-  // ── Organizer / admin views ───────────────────────────────────────────
+  // ── Admin claims views ────────────────────────────────────────────────
 
   /**
-   * GET /api/rewards/redemptions — all pending + resolved claims (officer+).
-   * Used by the organizer rewards management page.
+   * GET /api/rewards/redemptions — all pending + resolved claims (hq_admin+).
+   * Used by the admin rewards page (claims tab).
    */
   @Get('redemptions')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('chapter_officer')
+  @Roles('hq_admin', 'super_admin')
   getAllRedemptions(): Promise<RewardRedemptionWithDetails[]> {
     return this.rewardsService.getAllRedemptions();
   }
 
   /**
-   * POST /api/rewards/redemptions/:id/approve — mark a pending claim as claimed (officer+).
-   * organizerId comes from the token, never from the body.
+   * POST /api/rewards/redemptions/:id/approve — mark a pending claim as claimed (hq_admin+).
+   * Reviewer id comes from the token, never from the body.
    */
   @Post('redemptions/:id/approve')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('chapter_officer')
+  @Roles('hq_admin', 'super_admin')
   approveClaim(
     @CurrentUser() user: AuthenticatedUser,
     @Param() { id }: IdParamDto,
@@ -125,13 +125,13 @@ export class RewardsController {
   }
 
   /**
-   * POST /api/rewards/redemptions/:id/refund — refund a pending/claimed redemption (officer+).
+   * POST /api/rewards/redemptions/:id/refund — refund a pending/claimed redemption (hq_admin+).
    * Points are returned to the member via the refund_reward_claim RPC.
    */
   @Post('redemptions/:id/refund')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('chapter_officer')
+  @Roles('hq_admin', 'super_admin')
   refundClaim(
     @CurrentUser() user: AuthenticatedUser,
     @Param() { id }: IdParamDto,

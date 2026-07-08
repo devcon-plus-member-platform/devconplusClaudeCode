@@ -51,9 +51,6 @@ import { OrgEventDetail } from './pages/organizer/events/EventDetail'
 import { OrgEventEdit } from './pages/organizer/events/EventEdit'
 import { OrgEventRegistrants } from './pages/organizer/events/EventRegistrants'
 import { OrgEventSummary } from './pages/organizer/events/EventSummary'
-import { OrgRewardsManagement } from './pages/organizer/rewards/RewardsManagement'
-import { RewardCreate } from './pages/organizer/rewards/RewardCreate'
-import { RewardEdit } from './pages/organizer/rewards/RewardEdit'
 import { OrgProfile } from './pages/organizer/profile/Profile'
 import { OrgProfileEdit } from './pages/organizer/profile/ProfileEdit'
 import { OrgCoOrganizers } from './pages/organizer/profile/OrgCoOrganizers'
@@ -143,6 +140,10 @@ export const router = createBrowserRouter([
         lazy: () => import('./pages/admin/AdminEvents').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/admin/rewards',
+        lazy: () => import('./pages/admin/AdminRewards').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/admin/chapters',
         lazy: () => import('./pages/admin/AdminChapters').then((m) => ({ Component: m.default })),
       },
@@ -185,9 +186,9 @@ export const router = createBrowserRouter([
           return { Component: OrgQRScanner }
         },
       },
-      { path: '/organizer/rewards',                      element: <OrgRewardsManagement /> },
-      { path: '/organizer/rewards/create',               element: <RewardCreate /> },
-      { path: '/organizer/rewards/:id/edit',             element: <RewardEdit /> },
+      // Organizers see the same rewards experience as members — catalog + redemption.
+      // Reward management (add/edit/remove, claim approval) lives in /admin/rewards.
+      { path: '/organizer/rewards',                      element: <Rewards /> },
       { path: '/organizer/profile',                      element: <OrgProfile /> },
       { path: '/organizer/profile/edit',                 element: <OrgProfileEdit /> },
       { path: '/organizer/profile/co-organizers',        element: <OrgCoOrganizers /> },

@@ -291,11 +291,23 @@ CREATE TABLE point_transactions (
   source text CHECK (source IN (
     'signup', 'event_attendance', 'brown_bag',
     'speaking', 'content_like', 'content_share',
-    'volunteering', 'redemption', 'bonus'
+    'volunteering', 'redemption', 'bonus',
+    'referral',                          -- added 20260318_rewards_engine
+    'reset'                              -- added 20260708_reset_points_annual (annual June-24 reset rows)
   )),
   created_at timestamptz DEFAULT now()
 );
 ```
+
+> **Annual points reset (June 24, PHT).** Both `spendable_points` and `lifetime_points` reset to 0 for
+> every profile once a year, at **June 24 00:00 Philippine time** (= June 23 16:00 UTC). Implemented as the
+> `reset_points(p_user_id uuid DEFAULT NULL)` SECURITY DEFINER function (service_role-only) in migration
+> `20260708_reset_points_annual.sql` — `NULL` resets all profiles, a uuid resets just one. It writes one
+> `source='reset'` ledger row per member (both pre-reset balances captured in the description) for audit
+> + undo. Scheduled via **pg_cron**: `cron.schedule('annual-points-reset', '0 16 23 6 *', $$SELECT reset_points()$$)`.
+> The migration ships only the function/constraint/grant; the cron schedule is a manual go-live step.
+> ⚠️ Because tiers/Prestige/theme-unlock all derive from `lifetime_points` (`web/src/lib/tiers.ts`,
+> threshold 3000), the reset also drops every member to Novice each year.
 
 ### `rewards`
 ```sql
@@ -557,9 +569,7 @@ CREATE POLICY "Users view own points" ON point_transactions
 /organizer/events/:id/registrants    → OrgEventRegistrants
 /organizer/events/:id/summary        → OrgEventSummary
 /organizer/scan                      → OrgQRScanner (lazy-loaded — pulls in @zxing)
-/organizer/rewards                   → OrgRewardsManagement
-/organizer/rewards/create            → RewardCreate
-/organizer/rewards/:id/edit          → RewardEdit
+/organizer/rewards                   → Rewards (same member-style catalog/redemption view — management moved to /admin/rewards)
 /organizer/profile                   → OrgProfile
 /organizer/profile/edit              → OrgProfileEdit
 /organizer/profile/co-organizers     → OrgCoOrganizers
@@ -573,6 +583,7 @@ CREATE POLICY "Users view own points" ON point_transactions
 /admin/org-codes                     → AdminOrgCodes (code generation + management)
 /admin/chapter-officers              → AdminChapterOfficers (officer email assignments)
 /admin/events                        → AdminEvents (all events across chapters)
+/admin/rewards                       → AdminRewards (catalog add/edit/remove + claim approve/refund)
 /admin/chapters                      → AdminChapters (chapter management)
 /admin/upgrades                      → AdminCMS (upgrade review + missions — labeled "CMS" in sidebar)
 /admin/officer-resources             → AdminOfficerResources (officer resource library)
@@ -671,6 +682,12 @@ Officer sees: "✓ Juan dela Cruz — 200 pts awarded"
 | Share content + link submit | 10–25 | `content_share` |
 | Volunteer at chapter | 100–500 | `volunteering` |
 | Redeem reward | negative | `redemption` |
+| Annual reset (June 24 PHT) | zeroes balances | `reset` |
+
+> **Points expiry:** all Points+ (spendable + total earned) are **valid until June 24** and reset annually
+> — see the "Annual points reset" note under `point_transactions` in Section 4. The UI surfaces this as a
+> "Valid until Jun 24, YYYY" label (dashboard tooltip + profile card) via `getPointsExpiry()` in
+> `web/src/lib/dates.ts`; the Terms/Privacy copy ("Annual Reset (June 24)") matches.
 
 ### Points History Display Format (match nmblr+ exactly)
 ```
@@ -1165,6 +1182,13 @@ cd server && npm run build   # compile NestJS to dist/
 ---
 
 ## 17. CURRENT BUILD STATUS (as of June 21, 2026)
+
+> **July 2026 — most recent:**
+> - [x] **Annual points reset (June 24, PHT)** — `reset_points(uuid DEFAULT NULL)` fn + `'reset'` ledger
+>       source in `20260708_reset_points_annual.sql`; scheduled via pg_cron `'0 16 23 6 *'` (all users).
+>       Zeroes both `spendable_points` + `lifetime_points` (drops everyone to Novice). UI "Valid until
+>       Jun 24" labels via `getPointsExpiry()`; Terms/Privacy updated to "Annual Reset (June 24)".
+>       See the "Annual points reset" note in Section 4.
 
 > **June 2026 — major changes since MVP 1.7 (most recent first):**
 > - [x] **Auth migrated to Firebase** (Google OAuth + email/password). Supabase Auth cut

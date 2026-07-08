@@ -959,6 +959,7 @@ export type Database = {
         Row: {
           claim_method: string | null
           created_at: string | null
+          deadline: string | null
           description: string | null
           financial_cost_php: number | null
           id: string
@@ -974,6 +975,7 @@ export type Database = {
         Insert: {
           claim_method?: string | null
           created_at?: string | null
+          deadline?: string | null
           description?: string | null
           financial_cost_php?: number | null
           id?: string
@@ -989,6 +991,7 @@ export type Database = {
         Update: {
           claim_method?: string | null
           created_at?: string | null
+          deadline?: string | null
           description?: string | null
           financial_cost_php?: number | null
           id?: string

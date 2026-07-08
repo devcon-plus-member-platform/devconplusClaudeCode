@@ -13,6 +13,7 @@ import { toDatetimeLocalValue, fromDatetimeLocalValue } from '../../lib/dates'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import CoverImageUpload from '../../components/CoverImageUpload'
+import { DESCRIPTION_MIN_LENGTH, DESCRIPTION_MAX_LENGTH } from '../organizer/events/eventFormConstants'
 
 // ── Custom form field types ────────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ const eventSchema = z
   .object({
     chapter_id: z.string().min(1, 'Chapter is required'),
     title: z.string().min(3, 'Title must be at least 3 characters'),
-    description: z.string().min(10, 'Description must be at least 10 characters'),
+    description: z.string().min(DESCRIPTION_MIN_LENGTH, `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters`).max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
     location: z.string().min(2, 'Location is required'),
     event_date: z.string().min(1, 'Start date is required'),
     end_date: z.string().optional(),
@@ -366,6 +367,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
   const isFree = watch('is_free')
   const isExternal = watch('is_external')
+  const descriptionLength = (watch('description') ?? '').length
   const [urlIsTba, setUrlIsTba] = useState<boolean>(() => {
     const existing = normalizeExternalUrl(event?.external_registration_url)
     return existing === ''
@@ -533,6 +535,18 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               className={`${inputClass} resize-none`}
               placeholder="What is this event about?"
             />
+            <div className="flex justify-end mt-1">
+              <span
+                className={`text-md3-label-sm font-mono ${
+                  descriptionLength > DESCRIPTION_MAX_LENGTH ? 'text-red font-semibold' : 'text-slate-400'
+                }`}
+              >
+                {descriptionLength > 0 && descriptionLength < DESCRIPTION_MIN_LENGTH && (
+                  <span>min {DESCRIPTION_MIN_LENGTH} · </span>
+                )}
+                {descriptionLength} / {DESCRIPTION_MAX_LENGTH}
+              </span>
+            </div>
             {errors.description && (
               <p className="text-md3-label-md text-red mt-1">{errors.description.message}</p>
             )}

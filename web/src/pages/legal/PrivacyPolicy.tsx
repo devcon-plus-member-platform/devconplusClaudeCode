@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
     intro: 'Your data is processed to:',
     items: [
       { text: 'Manage your member profile and Chapter-specific engagement based on your Nearby Chapter selection.' },
-      { text: 'Enforce the 365-day Points+ expiration through timestamp tracking.' },
+      { text: 'Administer the annual Points+ reset (every June 24, Philippine time) through transaction timestamp tracking.' },
       { text: 'Deliver push notifications and service updates.' },
       { text: 'Optimize platform performance via monitoring and technical analysis.' },
     ],
@@ -75,7 +75,7 @@ const SECTIONS: Section[] = [
       },
       {
         label: 'Retention',
-        text: 'Active data is kept for the duration of your membership. Points transaction history is purged 365 days after issuance.',
+        text: 'Active data is kept for the duration of your membership. Points balances reset every June 24 (Philippine time); transaction records may be retained for audit and dispute-resolution purposes.',
       },
       {
         label: 'Account Deletion',
