@@ -27,6 +27,8 @@ export interface CustomFormField {
   type: CustomFieldType
   required: boolean
   options: string[]
+  /** For choice fields (select/radio/checkbox): show an "Other" choice that reveals a free-text input. */
+  allowOther?: boolean
 }
 
 // ── Zod schema ────────────────────────────────────────────────────────────────
@@ -176,7 +178,7 @@ export function CustomFieldsBuilder({
   const addField = () => {
     setCustomFields(prev => [
       ...prev,
-      { id: Math.random().toString(36).substring(2, 11), label: '', type: 'text', required: false, options: [] },
+      { id: Math.random().toString(36).substring(2, 11), label: '', type: 'text', required: false, options: [], allowOther: false },
     ])
   }
 
@@ -236,7 +238,7 @@ export function CustomFieldsBuilder({
           <div className="flex gap-2">
             <select
               value={field.type}
-              onChange={e => updateField(field.id, { type: e.target.value as CustomFieldType, options: [] })}
+              onChange={e => updateField(field.id, { type: e.target.value as CustomFieldType, options: [], allowOther: false })}
               className={`${inputClass} flex-1`}
             >
               {FIELD_TYPE_OPTIONS.map(o => (
@@ -288,6 +290,17 @@ export function CustomFieldsBuilder({
                   <AddCircleOutline className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Allow "Other" free-text choice */}
+              <label className="flex items-center gap-1.5 text-md3-label-md text-slate-600 font-medium cursor-pointer pt-0.5">
+                <input
+                  type="checkbox"
+                  checked={field.allowOther ?? false}
+                  onChange={e => updateField(field.id, { allowOther: e.target.checked })}
+                  className="w-3.5 h-3.5 accent-blue"
+                />
+                Add an “Other…” option (lets people type their own answer)
+              </label>
             </div>
           )}
         </div>
