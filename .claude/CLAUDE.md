@@ -557,9 +557,7 @@ CREATE POLICY "Users view own points" ON point_transactions
 /organizer/events/:id/registrants    → OrgEventRegistrants
 /organizer/events/:id/summary        → OrgEventSummary
 /organizer/scan                      → OrgQRScanner (lazy-loaded — pulls in @zxing)
-/organizer/rewards                   → OrgRewardsManagement
-/organizer/rewards/create            → RewardCreate
-/organizer/rewards/:id/edit          → RewardEdit
+/organizer/rewards                   → Rewards (same member-style catalog/redemption view — management moved to /admin/rewards)
 /organizer/profile                   → OrgProfile
 /organizer/profile/edit              → OrgProfileEdit
 /organizer/profile/co-organizers     → OrgCoOrganizers
@@ -573,6 +571,7 @@ CREATE POLICY "Users view own points" ON point_transactions
 /admin/org-codes                     → AdminOrgCodes (code generation + management)
 /admin/chapter-officers              → AdminChapterOfficers (officer email assignments)
 /admin/events                        → AdminEvents (all events across chapters)
+/admin/rewards                       → AdminRewards (catalog add/edit/remove + claim approve/refund)
 /admin/chapters                      → AdminChapters (chapter management)
 /admin/upgrades                      → AdminCMS (upgrade review + missions — labeled "CMS" in sidebar)
 /admin/officer-resources             → AdminOfficerResources (officer resource library)

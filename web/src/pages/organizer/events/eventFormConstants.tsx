@@ -38,6 +38,7 @@ export const TAG_MAX_LENGTH = 20
 // @MaxLength(5000) on CreateEventDto.description, so the client blocks + indicates the
 // same ceiling the backend enforces (otherwise an over-limit description 400s silently).
 export const DESCRIPTION_MAX_LENGTH = 5000
+export const DESCRIPTION_MIN_LENGTH = 30
 
 // Attendance-XP ceilings by role. Admins keep the original ceiling; chapter
 // officers are capped lower so they can't over-award points.
@@ -50,7 +51,7 @@ export function makeEventSchema(xpMax: number) {
   return z
   .object({
     title: z.string().min(3, 'Title must be at least 3 characters').max(100, 'Title must be under 100 characters'),
-    description: z.string().min(10, 'Description must be at least 10 characters').max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
+    description: z.string().min(DESCRIPTION_MIN_LENGTH, `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters`).max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
     location: z.string().min(2, 'Location is required').max(200, 'Location must be under 200 characters'),
     event_date: z.string().min(1, 'Start date is required'),
     end_date: z.string().optional(),

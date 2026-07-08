@@ -6,6 +6,7 @@ import type { SolarIcon } from '../lib/icons'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useEventsStore } from '../stores/useEventsStore'
 import { useRewardsStore } from '../stores/useRewardsStore'
+import { usePointsStore } from '../stores/usePointsStore'
 import { useOrgVolunteerStore } from '../stores/useOrgVolunteerStore'
 import { supabase } from '../lib/supabase'
 import DesktopGuard from './DesktopGuard'
@@ -35,8 +36,10 @@ export default function OrganizerLayout() {
   const navigate = useNavigate()
   const scrollRef = useRef<HTMLDivElement>(null)
   const fetchEvents = useEventsStore((s) => s.fetchEvents)
-  const fetchAllRewards = useRewardsStore((s) => s.fetchAllRewards)
-  const fetchAllRedemptions = useRewardsStore((s) => s.fetchAllRedemptions)
+  // Rewards management moved to /admin/rewards — organizers get the member-style
+  // rewards page, so recover the public catalog + the officer's own points instead.
+  const fetchRewards = useRewardsStore((s) => s.fetchRewards)
+  const loadTotalPoints = usePointsStore((s) => s.loadTotalPoints)
   const loadOrgVolunteerApps = useOrgVolunteerStore((s) => s.loadApplications)
 
   useEffect(() => {
@@ -69,8 +72,8 @@ export default function OrganizerLayout() {
     const recover = () => {
       void supabase.auth.getSession()
       void fetchEvents()
-      void fetchAllRewards()
-      void fetchAllRedemptions()
+      void fetchRewards()
+      void loadTotalPoints()
       if (user?.chapter_id) void loadOrgVolunteerApps(user.chapter_id)
     }
     recoverRef.current = recover
