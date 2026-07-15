@@ -13,6 +13,7 @@ import EventCard from '../../components/EventCard'
 import FeaturedBadge from '../../components/FeaturedBadge'
 import JobCard from '../../components/JobCard'
 import VolunteerXpCard from '../../components/VolunteerXpCard'
+import VolunteerFormModal from '../../components/VolunteerFormModal'
 import {
   SkeletonEventCard,
   SkeletonXPRow,
@@ -45,6 +46,7 @@ export default function Dashboard() {
   const [attendeeCounts, setAttendeeCounts] = useState<Record<string, number>>({})
   const [attendeeDetails, setAttendeeDetails] = useState<Record<string, { avatar_url: string | null; full_name: string }[]>>({})
   const [activeTab, setActiveTab] = useState<'updates' | 'featured'>('updates')
+  const [showVolunteerForm, setShowVolunteerForm] = useState(false)
 
   const bannersLengthRef = useRef(1)
 
@@ -231,7 +233,7 @@ useEffect(() => {
               {/* Volunteer Card */}
               <motion.button
                 variants={cardItem}
-                onClick={() => navigate('/events')}
+                onClick={() => setShowVolunteerForm(true)}
                 className="bg-[rgba(115,178,9,0.15)] border border-[rgba(70,144,17,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(25,39,0,0.1)] w-full py-4"
                 whileTap={{ scale: 0.95 }}
               >
@@ -695,6 +697,8 @@ useEffect(() => {
           </div>
         </section>
       </motion.main>
+
+      <VolunteerFormModal open={showVolunteerForm} onClose={() => setShowVolunteerForm(false)} />
     </div>
   )
 }
