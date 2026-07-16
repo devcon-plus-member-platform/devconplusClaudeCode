@@ -54,6 +54,17 @@ export class AdminRepository extends BaseRepository {
     if (error) throw new BadRequestException(error.message);
   }
 
+  /** Look up a profile's current role by id (for role-escalation authorization checks). */
+  async findRoleById(profileId: string): Promise<ProfileRole | null> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('role')
+      .eq('id', profileId)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.role as ProfileRole | null) ?? null;
+  }
+
   /** Look up a profile's Firebase auth_uid by profile id (for cache invalidation). */
   async getAuthUidById(profileId: string): Promise<string | null> {
     const { data, error } = await this.db

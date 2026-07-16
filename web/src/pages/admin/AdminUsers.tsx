@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
 import { ROLE_DISPLAY_NAMES } from '../../lib/constants'
+import { useAuthStore } from '../../stores/useAuthStore'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
@@ -46,6 +47,11 @@ function getUserInitials(fullName: string): string {
 }
 
 export default function AdminUsers() {
+  const currentUser = useAuthStore((s) => s.user)
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+  // Only a super_admin may grant or modify super_admin status (backend-enforced too).
+  const assignableRoles = isSuperAdmin ? ROLES : ROLES.filter((r) => r !== 'super_admin')
+
   const [users, setUsers] = useState<Profile[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -270,20 +276,21 @@ export default function AdminUsers() {
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <select
                       value={u.role}
+                      disabled={u.role === 'super_admin' && !isSuperAdmin}
                       onChange={(e) => {
                         const role = e.target.value as UserRole
                         if (role !== u.role) setPendingRole({ user: u, role })
                       }}
-                      className="text-md3-label-md border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue"
+                      className="text-md3-label-md border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {ROLES.map((r) => (
+                      {(assignableRoles.includes(u.role) ? assignableRoles : [u.role, ...assignableRoles]).map((r) => (
                         <option key={r} value={r}>{r}</option>
                       ))}
                     </select>
                   </td>
                   <td className="px-4 py-3 text-slate-700 font-semibold">{(u.spendable_points ?? 0).toLocaleString()}</td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    {confirmDeleteId === u.id ? (
+                    {!isSuperAdmin ? null : confirmDeleteId === u.id ? (
                       <div className="flex items-center justify-end gap-2">
                         <span className="text-md3-label-md text-slate-500">Sure?</span>
                         <button
@@ -449,27 +456,33 @@ export default function AdminUsers() {
                   <label className="text-md3-label-md text-slate-500 mb-1 block">Change Role</label>
                   <select
                     value={selectedUser.role ?? 'member'}
+                    disabled={selectedUser.role === 'super_admin' && !isSuperAdmin}
                     onChange={(e) => {
                       const role = e.target.value as UserRole
                       if (role !== (selectedUser.role ?? 'member')) setPendingRole({ user: selectedUser, role })
                     }}
-                    className="w-full text-md3-body-md border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue"
+                    className="w-full text-md3-body-md border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {ROLES.map((r) => (
+                    {(assignableRoles.includes(selectedUser.role ?? 'member')
+                      ? assignableRoles
+                      : [selectedUser.role ?? 'member', ...assignableRoles]
+                    ).map((r) => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>
                 </div>
 
-                <button
-                  onClick={() => {
-                    setConfirmDeleteId(selectedUser.id)
-                    setSelectedUser(null)
-                  }}
-                  className="w-full mt-2 px-4 py-2.5 rounded-xl text-md3-body-md font-semibold bg-red/10 text-red hover:bg-red hover:text-white transition-colors"
-                >
-                  Delete User
-                </button>
+                {isSuperAdmin && (
+                  <button
+                    onClick={() => {
+                      setConfirmDeleteId(selectedUser.id)
+                      setSelectedUser(null)
+                    }}
+                    className="w-full mt-2 px-4 py-2.5 rounded-xl text-md3-body-md font-semibold bg-red/10 text-red hover:bg-red hover:text-white transition-colors"
+                  >
+                    Delete User
+                  </button>
+                )}
               </div>
             </motion.div>
           </>

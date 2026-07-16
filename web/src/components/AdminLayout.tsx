@@ -9,7 +9,6 @@ import logoHorizontal from '../assets/logos/logo-horizontal.svg'
 const NAV_ITEMS = [
   { path: '/admin',           label: 'Dashboard', Icon: WidgetOutline, end: true,  superOnly: false },
   { path: '/admin/users',     label: 'Users',      Icon: UsersGroupRoundedOutline,           end: false, superOnly: false },
-  { path: '/admin/org-codes', label: 'Org Codes',  Icon: KeyOutline,        end: false, superOnly: false },
   { path: '/admin/chapter-officers', label: 'Chapter Officers', Icon: UserCheckOutline, end: false, superOnly: false },
   { path: '/admin/events',    label: 'Events',     Icon: CalendarOutline,    end: false, superOnly: false },
   { path: '/admin/rewards',   label: 'Rewards',    Icon: GiftOutline,        end: false, superOnly: false },
@@ -17,6 +16,7 @@ const NAV_ITEMS = [
   { path: '/admin/upgrades',  label: 'CMS', Icon: ShieldCheckOutline, end: false, superOnly: false },
   { path: '/admin/missions',  label: 'Missions', Icon: ClipboardListOutline, end: false, superOnly: false },
   { path: '/admin/officer-resources', label: 'Officer Resources', Icon: NotebookOutline, end: false, superOnly: false },
+  { path: '/admin/org-codes', label: 'Org Codes',  Icon: KeyOutline,        end: false, superOnly: false },
   { path: '/admin/kiosk',     label: 'Kiosk',      Icon: ScannerOutline,        end: false, superOnly: true  },
 ]
 
@@ -100,35 +100,38 @@ export default function AdminLayout() {
 
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {visibleNavItems.map(({ path, label, Icon, end }) => (
-          <NavLink
-            key={path}
-            to={path}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium transition-colors ${
-                isActive
-                  ? 'bg-white/20 text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              }`
-            }
-          >
-            <Icon className="w-4 h-4 shrink-0" />
-            {label}
-          </NavLink>
-        ))}
+          <div key={path}>
+            <NavLink
+              to={path}
+              end={end}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium transition-colors ${
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              {label}
+            </NavLink>
 
-        {/* Public raffle wheel — opens in a new tab (lives outside the admin panel) */}
-        <a
-          href="/wheel"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={onNavigate}
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
-        >
-          <ConfettiOutline className="w-4 h-4 shrink-0" />
-          Raffle Wheel
-        </a>
+            {path === '/admin/events' && (
+              /* Public raffle wheel — opens in a new tab (lives outside the admin panel) */
+              <a
+                href="/wheel"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onNavigate}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+              >
+                <ConfettiOutline className="w-4 h-4 shrink-0" />
+                Raffle Wheel
+              </a>
+            )}
+          </div>
+        ))}
       </nav>
 
       <div className="px-4 py-4 border-t border-white/10">

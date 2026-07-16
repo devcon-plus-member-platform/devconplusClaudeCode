@@ -2,7 +2,7 @@
 // Deploy: supabase functions deploy delete-user
 //
 // Permanently deletes a Supabase Auth user (and cascades to profiles).
-// Only callable by super_admin or hq_admin.
+// Only callable by super_admin.
 //
 // Input:  { user_id: string }
 // Output: { success: true } | { success: false, error: string }
@@ -59,15 +59,14 @@ Deno.serve(async (req: Request) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // 2. Confirm caller is super_admin or hq_admin
+    // 2. Confirm caller is super_admin
     const { data: callerProfile, error: callerErr } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', callerId)
       .single()
 
-    const allowedRoles = ['super_admin', 'hq_admin']
-    if (callerErr || !callerProfile || !allowedRoles.includes(callerProfile.role ?? '')) {
+    if (callerErr || !callerProfile || callerProfile.role !== 'super_admin') {
       logger.warn('delete_user_forbidden', { caller_id: callerId, role: callerProfile?.role })
       return new Response(
         JSON.stringify({ success: false, error: 'Forbidden: admin access required.' }),
