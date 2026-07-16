@@ -23,6 +23,7 @@ function makeService() {
     getUserTransactions:  jest.fn().mockResolvedValue([]),
     updateUserRole:       jest.fn().mockResolvedValue(undefined),
     getAnalytics:         jest.fn().mockResolvedValue(mockAnalytics),
+    getEventCreators:     jest.fn().mockResolvedValue([]),
   };
 }
 
@@ -61,5 +62,10 @@ describe('AdminController', () => {
     const result = await controller.getAnalytics();
     expect(service.getAnalytics).toHaveBeenCalled();
     expect(result).toEqual(mockAnalytics);
+  });
+
+  it('getEventCreators — delegates to service', async () => {
+    await controller.getEventCreators();
+    expect(service.getEventCreators).toHaveBeenCalled();
   });
 });

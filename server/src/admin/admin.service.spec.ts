@@ -18,6 +18,7 @@ function makeRepo() {
     getAuthUidById:        jest.fn().mockResolvedValue('fb-user-uuid'),
     getAnalytics:          jest.fn().mockResolvedValue(mockAnalytics),
     findChapterName:       jest.fn().mockResolvedValue('Manila'),
+    findEventCreators:     jest.fn().mockResolvedValue([]),
   } as unknown as jest.Mocked<AdminRepository>;
 }
 
@@ -115,6 +116,11 @@ describe('AdminService', () => {
     const result = await service.getAnalytics();
     expect(result).toEqual(mockAnalytics);
     expect(repo.getAnalytics).toHaveBeenCalled();
+  });
+
+  it('getEventCreators — delegates to repo', async () => {
+    await service.getEventCreators();
+    expect(repo.findEventCreators).toHaveBeenCalled();
   });
 
   it('inviteOfficer — emails a normalised, chapter-scoped sign-up invite', async () => {

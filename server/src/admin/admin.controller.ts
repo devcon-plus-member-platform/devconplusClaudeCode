@@ -47,6 +47,12 @@ export class AdminController {
     return this.service.getAnalytics();
   }
 
+  /** GET /api/admin/events/creators — hq_admin+: id → full_name for officers/admins, to label events.created_by */
+  @Get('events/creators')
+  getEventCreators() {
+    return this.service.getEventCreators();
+  }
+
   /** POST /api/admin/officers/assign — hq_admin+: assign officer email + send invite */
   @Post('officers/assign')
   @HttpCode(HttpStatus.OK)

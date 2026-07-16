@@ -25,6 +25,24 @@ export class AdminRepository extends BaseRepository {
     return this.unwrap(result as { data: Profile[] | null; error: { message: string } | null });
   }
 
+  /**
+   * Only officers/admins can create events (see the "Officers create events" RLS
+   * policy), so this is a small, bounded set — safe to fetch in full for an
+   * id → name lookup, unlike findAllUsers().
+   */
+  async findEventCreators(): Promise<Array<{ id: string; full_name: string }>> {
+    const result = await this.db
+      .from('profiles')
+      .select('id, full_name')
+      .in('role', ['chapter_officer', 'hq_admin', 'super_admin']);
+    return this.unwrap(
+      result as {
+        data: Array<{ id: string; full_name: string }> | null;
+        error: { message: string } | null;
+      },
+    );
+  }
+
   async findUserTransactions(userId: string, limit = 5): Promise<PointTransaction[]> {
     const result = await this.db
       .from('point_transactions')

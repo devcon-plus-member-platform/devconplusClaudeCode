@@ -23,6 +23,10 @@ export class AdminService {
     return this.repo.findUserTransactions(userId);
   }
 
+  getEventCreators(): Promise<Array<{ id: string; full_name: string }>> {
+    return this.repo.findEventCreators();
+  }
+
   async updateUserRole(userId: string, role: ProfileRole, actorRole: ProfileRole): Promise<void> {
     // Only a super_admin may grant super_admin, or change the role of an existing
     // super_admin — otherwise an hq_admin could self-escalate or demote a peer.

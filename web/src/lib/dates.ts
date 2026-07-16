@@ -54,10 +54,24 @@ export function getPointsExpiry(now = new Date()) {
   return { resetDate: new Date(resetUtcMs), label: `Jun 24, ${resetYear}`, daysLeft }
 }
 
+type EventDates = Pick<Event, 'event_date' | 'end_date'>
+
 /** Returns true when the event's end time (or start time if no end) has passed. */
-export function isEventArchived(event: Event, now = new Date()): boolean {
+export function isEventArchived(event: EventDates, now = new Date()): boolean {
   const cutoff = event.end_date ?? event.event_date
   return cutoff ? new Date(cutoff) < now : false
+}
+
+/**
+ * The stored `events.status` column is set once at creation and never flips as
+ * time passes (no cron/trigger updates it). Derive the real lifecycle state
+ * from dates instead, so a badge/sort/filter doesn't show every event as
+ * "Upcoming" forever.
+ */
+export function computeEventStatus(event: EventDates, now = new Date()): 'upcoming' | 'ongoing' | 'past' {
+  if (isEventArchived(event, now)) return 'past'
+  if (event.event_date && new Date(event.event_date) <= now) return 'ongoing'
+  return 'upcoming'
 }
 
 /**
