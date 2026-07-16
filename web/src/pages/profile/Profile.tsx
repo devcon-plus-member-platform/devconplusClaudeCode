@@ -8,6 +8,8 @@ import { useThemeStore, PROGRAM_THEMES } from '../../stores/useThemeStore'
 import { ROLE_DISPLAY_NAMES } from '../../lib/constants'
 import ComingSoonModal from '../../components/ComingSoonModal'
 import ComingSoonBadge from '../../components/ComingSoonBadge'
+import NewBadge from '../../components/NewBadge'
+import GoogleFormModal from '../../components/GoogleFormModal'
 import ProfileExpCard from '../../components/ProfileExpCard'
 import { useInterestsStore } from '../../stores/useInterestsStore'
 
@@ -24,6 +26,9 @@ const MENU_ITEMS: { label: string; path: string }[] = [
   { label: 'Privacy & Security',   path: '/profile/privacy'       },
 ]
 
+const CONTRIBUTOR_FORM_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSdrJjskrZOemQY7myzXeqPj3wA5qS9j2QkvoU6tsZqgQ6pRQA/viewform'
+
 // Flower-of-life pattern matching Rewards/Dashboard/Events
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
 const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
@@ -35,6 +40,7 @@ export default function Profile() {
   const { themeId, setTheme, isLocked } = useThemeStore()
   const { options, fetchOptions } = useInterestsStore()
   const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showContributeForm, setShowContributeForm] = useState(false)
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null)
   const [canInstall, setCanInstall] = useState(false)
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent)
@@ -271,6 +277,16 @@ export default function Profile() {
               <AltArrowRightOutline className="w-4 h-4" color="#CBD5E1" />
             </button>
           ))}
+          <button
+            onClick={() => setShowContributeForm(true)}
+            className="w-full px-4 py-4 flex items-center justify-between text-left border-t border-slate-100 hover:bg-slate-50 transition-colors"
+          >
+            <span className="flex items-center gap-2 text-md3-body-md font-semibold text-slate-900">
+              Contribute to DEVCON+
+              <NewBadge />
+            </span>
+            <AltArrowRightOutline className="w-4 h-4" color="#CBD5E1" />
+          </button>
           {!isInStandaloneMode && (canInstall || isIos) && (
             <button
               onClick={canInstall ? handleAddToHomeScreen : undefined}
@@ -327,6 +343,13 @@ export default function Profile() {
       {showHelpModal && (
         <ComingSoonModal feature="Help & Support" onClose={() => setShowHelpModal(false)} />
       )}
+
+      <GoogleFormModal
+        open={showContributeForm}
+        onClose={() => setShowContributeForm(false)}
+        title="Contribute to DEVCON+"
+        formUrl={CONTRIBUTOR_FORM_URL}
+      />
     </div>
   )
 }
