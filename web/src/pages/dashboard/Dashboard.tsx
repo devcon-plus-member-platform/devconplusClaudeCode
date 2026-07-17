@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, HandHeartOutline, StarOutline } from 'solar-icon-set'
+import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, CalendarOutline, GraphDownOutline, GraphUpOutline, HandHeartOutline, StarOutline } from 'solar-icon-set'
 import { motion, useMotionValue } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
@@ -86,7 +86,8 @@ export default function Dashboard() {
 
   // Featured Stories — shuffled whenever a fresh fetch lands, so re-mounting
   // the dashboard (e.g. navigating away and back) surfaces a fresh order.
-  const stories = useMemo(() => shuffleStories(rawStories), [rawStories])
+  // Capped to 5 so the dashboard preview stays short — full list lives elsewhere.
+  const stories = useMemo(() => shuffleStories(rawStories).slice(0, 5), [rawStories])
   const [storyIdx, setStoryIdx] = useState(0)
   const storySliderViewportRef = useRef<HTMLDivElement>(null)
   const [storySlideW, setStorySlideW] = useState(0)
@@ -139,14 +140,6 @@ export default function Dashboard() {
     const t = setInterval(() => setBannerIdx((i) => (i + 1) % Math.max(bannersLengthRef.current, 1)), 4000)
     return () => clearInterval(t)
   }, [])
-
-  // Auto-advance the featured stories carousel — each story (video or article)
-  // gets 8s before the next shuffled story rotates in.
-  useEffect(() => {
-    if (stories.length <= 1) return
-    const t = setInterval(() => setStoryIdx((i) => (i + 1) % stories.length), 8000)
-    return () => clearInterval(t)
-  }, [stories.length])
 
   useEffect(() => {
     const el = storySliderViewportRef.current
@@ -360,9 +353,11 @@ useEffect(() => {
                   ) : (
                     'fallbackColor' in b && b.fallbackColor && (
                       <div
-                        className="absolute inset-0"
+                        className="absolute inset-0 flex items-center justify-center"
                         style={{ background: `linear-gradient(135deg, ${b.fallbackColor.primary}, ${b.fallbackColor.dark})` }}
-                      />
+                      >
+                        <CalendarOutline className="w-20 h-20" color="rgba(255,255,255,0.2)" />
+                      </div>
                     )
                   )}
                   <div className={`absolute inset-0 ${b.image ? 'bg-black/50' : 'bg-black/10'}`} />
@@ -654,7 +649,7 @@ useEffect(() => {
             <div>
               <div
                 ref={storySliderViewportRef}
-                className="relative h-[220px] rounded-2xl overflow-hidden bg-slate-900"
+                className="relative h-[220px] w-full md:h-auto md:w-full md:aspect-video rounded-2xl overflow-hidden bg-slate-900"
               >
                 <motion.div
                   className="flex h-full cursor-grab active:cursor-grabbing"
@@ -769,11 +764,15 @@ useEffect(() => {
                     className={`flex items-center gap-3 px-4 py-3 ${i < recentTxns.length - 1 ? 'border-b border-slate-100' : ''}`}
                   >
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-md3-label-md font-bold ${
-                        tx.amount > 0 ? 'bg-green/10 text-green' : 'bg-red/10 text-red'
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        tx.amount > 0 ? 'bg-green/10' : 'bg-red/10'
                       }`}
                     >
-                      {tx.amount > 0 ? '+' : '−'}
+                      {tx.amount > 0 ? (
+                        <GraphUpOutline width={16} height={16} color="#21C45D" />
+                      ) : (
+                        <GraphDownOutline width={16} height={16} color="#EF4444" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-md3-body-md font-medium text-slate-800 truncate">{tx.description}</p>
