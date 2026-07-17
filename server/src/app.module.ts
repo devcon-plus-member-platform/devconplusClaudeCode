@@ -22,6 +22,7 @@ import { PointsModule } from './points/points.module';
 import { MissionsModule } from './missions/missions.module';
 import { InterestsModule } from './interests/interests.module';
 import { NewsModule } from './news/news.module';
+import { FeaturedStoriesModule } from './featured-stories/featured-stories.module';
 import { ChaptersModule } from './chapters/chapters.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { JobsModule } from './jobs/jobs.module';
@@ -67,6 +68,7 @@ import { RequestLoggingInterceptor } from './common/interceptors/request-logging
     MissionsModule,
     InterestsModule,
     NewsModule,
+    FeaturedStoriesModule,
     ChaptersModule,
     ReferralsModule,
     JobsModule,

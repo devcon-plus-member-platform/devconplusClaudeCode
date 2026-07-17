@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, CalendarOutline, StarOutline, BuildingsOutline, AddCircleOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, CalendarOutline, StarOutline, BuildingsOutline, AddCircleOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import {
   AreaChart,
   Area,
@@ -13,7 +13,12 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { apiFetch } from '../../lib/api'
+import { apiFetch, publicFetch } from '../../lib/api'
+import type { Event } from '@devcon-plus/supabase'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/Pagination'
+import { EventStatusBadge } from '../../components/EventStatusBadge'
+import { formatDate, computeEventStatus } from '../../lib/dates'
 
 interface KpiData {
   totalMembers: number
@@ -27,6 +32,28 @@ interface ChapterStat { chapter: string; members: number; xp: number }
 interface AttendanceRow { event: string; attendance: number }
 
 type ChapterMetric = 'members' | 'xp'
+type RecentEventsFilter = 'devcon' | 'featured' | 'all'
+type RecentEventsSortColumn = 'title' | 'chapter' | 'eventDate' | 'created' | 'status'
+type SortDir = 'asc' | 'desc'
+
+const RECENT_EVENTS_FILTERS: { id: RecentEventsFilter; label: string }[] = [
+  { id: 'devcon', label: 'DEVCON' },
+  { id: 'featured', label: 'Community Featured' },
+  { id: 'all', label: 'All' },
+]
+
+// Same classification rules as the member-facing EventsList chip filter —
+// keep in sync with web/src/pages/events/EventsList.tsx.
+function matchesRecentEventsFilter(event: Event, filter: RecentEventsFilter): boolean {
+  switch (filter) {
+    case 'devcon':
+      return !event.is_external && (!event.devcon_category || event.devcon_category === 'devcon')
+    case 'featured':
+      return !!event.is_featured || (!!event.is_external && event.visibility === 'public')
+    default:
+      return true
+  }
+}
 
 const KPI_SKELETON = { totalMembers: 0, totalEvents: 0, xpDistributed: 0, activeChapters: 0 }
 
@@ -42,6 +69,13 @@ export default function AdminDashboard() {
   const [attendanceTrend, setAttendanceTrend] = useState<AttendanceRow[]>([])
   const [chapterMetric, setChapterMetric] = useState<ChapterMetric>('members')
   const [isLoading, setIsLoading] = useState(true)
+
+  const [recentEvents, setRecentEvents] = useState<Event[]>([])
+  const [chapterNames, setChapterNames] = useState<Record<string, string>>({})
+  const [recentEventsFilter, setRecentEventsFilter] = useState<RecentEventsFilter>('devcon')
+  const [isRecentEventsLoading, setIsRecentEventsLoading] = useState(true)
+  const [recentEventsSortColumn, setRecentEventsSortColumn] = useState<RecentEventsSortColumn | null>(null)
+  const [recentEventsSortDir, setRecentEventsSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
     const load = async () => {
@@ -68,6 +102,67 @@ export default function AdminDashboard() {
     }
     void load()
   }, [])
+
+  useEffect(() => {
+    const loadRecentEvents = async () => {
+      setIsRecentEventsLoading(true)
+      try {
+        const [eventRows, chapterRows] = await Promise.all([
+          publicFetch<Event[]>('/api/events'),
+          publicFetch<{ id: string; name: string }[]>('/api/chapters'),
+        ])
+        setRecentEvents(eventRows)
+        setChapterNames(Object.fromEntries(chapterRows.map((c) => [c.id, c.name])))
+      } finally {
+        setIsRecentEventsLoading(false)
+      }
+    }
+    void loadRecentEvents()
+  }, [])
+
+  const recentEventsChapterLabel = (event: Event): string =>
+    event.chapter_id === null ? 'HQ — All Chapters' : (chapterNames[event.chapter_id ?? ''] ?? '—')
+
+  const filteredRecentEvents = useMemo(() => {
+    const matched = recentEvents.filter((e) => matchesRecentEventsFilter(e, recentEventsFilter))
+    return [...matched].sort((a, b) => {
+      if (recentEventsSortColumn === null) {
+        return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+      }
+      const dir = recentEventsSortDir === 'asc' ? 1 : -1
+      switch (recentEventsSortColumn) {
+        case 'title': return a.title.localeCompare(b.title) * dir
+        case 'chapter': return recentEventsChapterLabel(a).localeCompare(recentEventsChapterLabel(b)) * dir
+        case 'eventDate': return (new Date(a.event_date ?? 0).getTime() - new Date(b.event_date ?? 0).getTime()) * dir
+        case 'created': return (new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()) * dir
+        case 'status': return computeEventStatus(a).localeCompare(computeEventStatus(b)) * dir
+        default: return 0
+      }
+    })
+  }, [recentEvents, recentEventsFilter, recentEventsSortColumn, recentEventsSortDir, chapterNames])
+
+  const { pageItems: recentEventsPage, ...recentEventsPagination } = usePagination(filteredRecentEvents, 10)
+
+  // Click cycles a column: asc → desc → back to default (newest created first).
+  const handleRecentEventsSort = (col: RecentEventsSortColumn) => {
+    recentEventsPagination.setPage(1)
+    if (recentEventsSortColumn !== col) {
+      setRecentEventsSortColumn(col)
+      setRecentEventsSortDir('asc')
+    } else if (recentEventsSortDir === 'asc') {
+      setRecentEventsSortDir('desc')
+    } else {
+      setRecentEventsSortColumn(null)
+      setRecentEventsSortDir('asc')
+    }
+  }
+
+  const recentEventsSortIcon = (col: RecentEventsSortColumn) => {
+    if (recentEventsSortColumn !== col) return null
+    return recentEventsSortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
 
   // "Top Chapters" chart: every chapter, ranked by the toggled metric.
   const topChapters = [...chapterStats].sort((a, b) => b[chapterMetric] - a[chapterMetric])
@@ -216,6 +311,88 @@ export default function AdminDashboard() {
             </LineChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      {/* Row 5 — Recent Events (toggle: DEVCON / Community Featured / All) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card mt-4 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-4">
+          <p className="text-md3-body-lg font-bold text-slate-900">Recent Events</p>
+          <div className="flex gap-1.5 shrink-0">
+            {RECENT_EVENTS_FILTERS.map(({ id, label }) => {
+              const active = recentEventsFilter === id
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setRecentEventsFilter(id)
+                    recentEventsPagination.setPage(1)
+                  }}
+                  className={`px-3.5 py-1.5 rounded-full border text-md3-label-md font-semibold transition-colors ${
+                    active
+                      ? 'bg-blue text-white border-blue shadow-sm'
+                      : 'bg-white text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {isRecentEventsLoading ? (
+          <div className="h-[200px] flex items-center justify-center text-slate-400 text-md3-body-md">Loading…</div>
+        ) : recentEventsPage.length === 0 ? (
+          <div className="h-[200px] flex items-center justify-center text-slate-400 text-md3-body-md">No events found</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-t border-slate-100 text-md3-label-md text-slate-500">
+                  <th className="px-5 py-2.5 font-semibold">
+                    <button type="button" onClick={() => handleRecentEventsSort('title')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">
+                      Event {recentEventsSortIcon('title')}
+                    </button>
+                  </th>
+                  <th className="px-5 py-2.5 font-semibold">
+                    <button type="button" onClick={() => handleRecentEventsSort('chapter')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">
+                      Chapter {recentEventsSortIcon('chapter')}
+                    </button>
+                  </th>
+                  <th className="px-5 py-2.5 font-semibold">
+                    <button type="button" onClick={() => handleRecentEventsSort('eventDate')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">
+                      Event Date {recentEventsSortIcon('eventDate')}
+                    </button>
+                  </th>
+                  <th className="px-5 py-2.5 font-semibold">
+                    <button type="button" onClick={() => handleRecentEventsSort('created')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">
+                      Created {recentEventsSortIcon('created')}
+                    </button>
+                  </th>
+                  <th className="px-5 py-2.5 font-semibold">
+                    <button type="button" onClick={() => handleRecentEventsSort('status')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">
+                      Status {recentEventsSortIcon('status')}
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentEventsPage.map((event) => (
+                  <tr key={event.id} className="border-t border-slate-100">
+                    <td className="px-5 py-3 text-md3-body-md font-semibold text-slate-900 max-w-[240px] truncate">{event.title}</td>
+                    <td className="px-5 py-3 text-md3-body-md text-slate-500">{recentEventsChapterLabel(event)}</td>
+                    <td className="px-5 py-3 text-md3-body-md text-slate-500">{event.event_date ? formatDate.short(event.event_date) : '—'}</td>
+                    <td className="px-5 py-3 text-md3-body-md text-slate-500">{event.created_at ? formatDate.short(event.created_at) : '—'}</td>
+                    <td className="px-5 py-3"><EventStatusBadge status={computeEventStatus(event)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <Pagination controller={recentEventsPagination} itemLabel="event" className="border-t border-slate-100" />
       </div>
     </div>
   )

@@ -26,17 +26,31 @@ export class AdminController {
     return this.service.getUserTransactions(id);
   }
 
-  /** PATCH /api/admin/users/:id/role — hq_admin+: admin_update_user_role RPC */
+  /**
+   * PATCH /api/admin/users/:id/role — hq_admin+: admin_update_user_role RPC.
+   * Granting or modifying super_admin status is restricted to super_admin callers
+   * (enforced in AdminService.updateUserRole).
+   */
   @Patch('users/:id/role')
   @HttpCode(HttpStatus.OK)
-  updateUserRole(@Param() { id }: IdParamDto, @Body() dto: UpdateRoleDto) {
-    return this.service.updateUserRole(id, dto.role);
+  updateUserRole(
+    @Param() { id }: IdParamDto,
+    @Body() dto: UpdateRoleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.updateUserRole(id, dto.role, user.profile.role);
   }
 
   /** GET /api/admin/analytics — hq_admin+: all 5 analytics RPCs + member/event counts */
   @Get('analytics')
   getAnalytics() {
     return this.service.getAnalytics();
+  }
+
+  /** GET /api/admin/events/creators — hq_admin+: id → full_name for officers/admins, to label events.created_by */
+  @Get('events/creators')
+  getEventCreators() {
+    return this.service.getEventCreators();
   }
 
   /** POST /api/admin/officers/assign — hq_admin+: assign officer email + send invite */

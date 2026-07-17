@@ -1,10 +1,16 @@
 import { Test } from '@nestjs/testing';
-import { AuthGuard } from '../auth/auth.guard';
+import { AuthenticatedUser, AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 const USER_ID = 'user-uuid-001';
+
+const mockCaller = {
+  firebaseUid: 'firebase-uid-caller',
+  profileId: 'caller-uuid-001',
+  profile: { role: 'hq_admin' },
+} as AuthenticatedUser;
 
 const mockAnalytics = {
   totalMembers: 42, totalEvents: 10, xpDistributed: 5000, activeChapters: 3,
@@ -17,6 +23,7 @@ function makeService() {
     getUserTransactions:  jest.fn().mockResolvedValue([]),
     updateUserRole:       jest.fn().mockResolvedValue(undefined),
     getAnalytics:         jest.fn().mockResolvedValue(mockAnalytics),
+    getEventCreators:     jest.fn().mockResolvedValue([]),
   };
 }
 
@@ -46,14 +53,19 @@ describe('AdminController', () => {
     expect(service.getUserTransactions).toHaveBeenCalledWith(USER_ID);
   });
 
-  it('updateUserRole — passes id param and role from body (IDOR: userId from param only)', async () => {
-    await controller.updateUserRole({ id: USER_ID }, { role: 'chapter_officer' });
-    expect(service.updateUserRole).toHaveBeenCalledWith(USER_ID, 'chapter_officer');
+  it('updateUserRole — passes id param, role from body, and caller role (IDOR: userId from param only)', async () => {
+    await controller.updateUserRole({ id: USER_ID }, { role: 'chapter_officer' }, mockCaller);
+    expect(service.updateUserRole).toHaveBeenCalledWith(USER_ID, 'chapter_officer', 'hq_admin');
   });
 
   it('getAnalytics — returns merged analytics response', async () => {
     const result = await controller.getAnalytics();
     expect(service.getAnalytics).toHaveBeenCalled();
     expect(result).toEqual(mockAnalytics);
+  });
+
+  it('getEventCreators — delegates to service', async () => {
+    await controller.getEventCreators();
+    expect(service.getEventCreators).toHaveBeenCalled();
   });
 });

@@ -7,8 +7,17 @@ import type { Chapter, Region } from '@devcon-plus/supabase'
 
 const REGIONS: Region[] = ['Luzon', 'Visayas', 'Mindanao']
 
-interface ChapterXpRow {
+interface ChapterStatsRow {
+  chapter_id: string
   chapter: string
+  members: number
+  events: number
+  xp: number
+}
+
+interface ChapterStats {
+  members: number
+  events: number
   xp: number
 }
 
@@ -43,24 +52,24 @@ export default function AdminChapters() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const [xpLookup, setXpLookup] = useState<Record<string, number>>({})
+  const [statsLookup, setStatsLookup] = useState<Record<string, ChapterStats>>({})
 
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
       setError(null)
       try {
-        const [chapterRows, xpRows] = await Promise.all([
+        const [chapterRows, statsRows] = await Promise.all([
           publicFetch<Chapter[]>('/api/chapters'),
-          apiFetch<ChapterXpRow[]>('/api/chapters/xp'),
+          apiFetch<ChapterStatsRow[]>('/api/chapters/stats'),
         ])
 
         setChapters(chapterRows)
-        const lookup: Record<string, number> = {}
-        xpRows.forEach(({ chapter, xp }) => {
-          lookup[chapter] = xp
+        const lookup: Record<string, ChapterStats> = {}
+        statsRows.forEach(({ chapter_id, members, events, xp }) => {
+          lookup[chapter_id] = { members, events, xp }
         })
-        setXpLookup(lookup)
+        setStatsLookup(lookup)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load chapters')
       } finally {
@@ -195,9 +204,10 @@ export default function AdminChapters() {
               </thead>
               <tbody>
                 {pageItems.map((chapter) => {
-                  const xp = xpLookup[chapter.name] ?? 0
-                  const memberCount = Math.floor(xp / 80)
-                  const eventCount = Math.floor(xp / 35000)
+                  const stats = statsLookup[chapter.id]
+                  const memberCount = stats?.members ?? 0
+                  const eventCount = stats?.events ?? 0
+                  const xp = stats?.xp ?? 0
                   const isEditing = editingId === chapter.id
 
                   return (

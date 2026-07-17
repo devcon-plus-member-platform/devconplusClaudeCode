@@ -1,18 +1,20 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, HandHeartOutline, StarOutline } from 'solar-icon-set'
-import { motion, AnimatePresence, useMotionValue } from 'framer-motion'
+import { motion, useMotionValue } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useJobsStore } from '../../stores/useJobsStore'
 import { usePointsStore } from '../../stores/usePointsStore'
 import { useMissionsStore } from '../../stores/useMissionsStore'
+import { useFeaturedStoriesStore } from '../../stores/useFeaturedStoriesStore'
 import { supabase } from '../../lib/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import EventCard from '../../components/EventCard'
 import FeaturedBadge from '../../components/FeaturedBadge'
 import JobCard from '../../components/JobCard'
 import VolunteerXpCard from '../../components/VolunteerXpCard'
+import VolunteerFormModal from '../../components/VolunteerFormModal'
 import {
   SkeletonEventCard,
   SkeletonXPRow,
@@ -29,6 +31,31 @@ const WELCOME_BANNER = {
   image: '/photos/devcon-summit-group.jpg',
 } as const
 
+// Featured events without a cover image get a plain rotating brand-color
+// background instead of a stock community photo — using a real chapter photo
+// on an event we didn't shoot makes it look like our own, at that event's expense.
+const BANNER_FALLBACK_COLORS = [
+  { primary: '#1152D4', dark: '#0D42AA' }, // DEVCON blue
+  { primary: '#BE185D', dark: '#9D174D' }, // She is DEVCON
+  { primary: '#059669', dark: '#047857' }, // DEVCON Kids
+  { primary: '#D97706', dark: '#B45309' }, // Campus
+  { primary: '#7C3AED', dark: '#6D28D9' }, // DEVCON Purple
+] as const
+
+const bannerFallbackColorFor = (id: string) => {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
+  return BANNER_FALLBACK_COLORS[hash % BANNER_FALLBACK_COLORS.length]
+}
+
+function shuffleStories<T>(items: T[]): T[] {
+  const arr = [...items]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -38,13 +65,14 @@ export default function Dashboard() {
   const { transactions, loadTotalPoints, loadTransactions, isLoading: pointsLoading } = usePointsStore()
   const { missions, participants, submissions, fetchAll: fetchMissions, startMission, isLoading: missionsLoading } = useMissionsStore()
   const { chapters: allChapters, fetchChapters } = useChaptersStore()
+  const { stories: rawStories, fetchStories: fetchFeaturedStories } = useFeaturedStoriesStore()
   const [regionChapterIds, setRegionChapterIds] = useState<Set<string>>(new Set())
   const [bannerIdx, setBannerIdx] = useState(0)
   const [isScrolled, setIsScrolled] = useState(false)
   const [isStartingMission, setIsStartingMission] = useState<Record<string, boolean>>({})
   const [attendeeCounts, setAttendeeCounts] = useState<Record<string, number>>({})
   const [attendeeDetails, setAttendeeDetails] = useState<Record<string, { avatar_url: string | null; full_name: string }[]>>({})
-  const [activeTab, setActiveTab] = useState<'updates' | 'featured'>('updates')
+  const [showVolunteerForm, setShowVolunteerForm] = useState(false)
 
   const bannersLengthRef = useRef(1)
 
@@ -56,12 +84,20 @@ export default function Dashboard() {
   const sliderViewportRef = useRef<HTMLDivElement>(null)
   const [slideW, setSlideW] = useState(0)
 
+  // Featured Stories — shuffled whenever a fresh fetch lands, so re-mounting
+  // the dashboard (e.g. navigating away and back) surfaces a fresh order.
+  const stories = useMemo(() => shuffleStories(rawStories), [rawStories])
+  const [storyIdx, setStoryIdx] = useState(0)
+  const storySliderViewportRef = useRef<HTMLDivElement>(null)
+  const [storySlideW, setStorySlideW] = useState(0)
+
   useEffect(() => {
     void fetchEvents()
     void fetchJobs()
     void loadTotalPoints()
     void loadTransactions(4) // dashboard only renders the last 4 (see recentTxns)
     void fetchMissions()
+    void fetchFeaturedStories()
 
     // Fetch approved registration counts and some profiles for all events
     supabase
@@ -104,6 +140,24 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [])
 
+  // Auto-advance the featured stories carousel — each story (video or article)
+  // gets 8s before the next shuffled story rotates in.
+  useEffect(() => {
+    if (stories.length <= 1) return
+    const t = setInterval(() => setStoryIdx((i) => (i + 1) % stories.length), 8000)
+    return () => clearInterval(t)
+  }, [stories.length])
+
+  useEffect(() => {
+    const el = storySliderViewportRef.current
+    if (!el) return
+    const update = () => setStorySlideW(el.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   // Track the slider viewport width (and keep it in sync on resize) so the
   // draggable track can snap to exact pixel offsets per slide.
   useEffect(() => {
@@ -131,37 +185,38 @@ useEffect(() => {
     .filter((e) => e.status === 'upcoming' && !isEventArchived(e))
     .sort((a, b) => new Date(a.event_date ?? 0).getTime() - new Date(b.event_date ?? 0).getTime())
 
-  // Featured (external) events are surfaced in the banner first — ALL of them,
-  // then regular upcoming events fill the remaining slots.
-  const featuredUpcoming = upcomingByDate.filter((e) => e.is_external)
-  const regularUpcoming = upcomingByDate.filter((e) => !e.is_external)
+  // DEVCON-organized (in-platform) events are surfaced in the banner first —
+  // ALL of them, then external/partner events fill the remaining slots.
+  const devconOrganizedUpcoming = upcomingByDate.filter((e) => !e.is_external)
+  const externalUpcoming = upcomingByDate.filter((e) => e.is_external)
 
   const toBanner = (e: typeof upcomingByDate[number]) => ({
     title: e.title,
     sub:   e.location ?? 'DEVCON Philippines',
     date:  e.event_date ? formatDate.compact(e.event_date) : undefined,
     cta:   e.is_external ? 'Learn More' : 'Register Now',
-    image: e.cover_image_url ?? '/photos/devcon-certificate-ceremony.jpg',
+    image: e.cover_image_url,
+    fallbackColor: e.cover_image_url ? null : bannerFallbackColorFor(e.id),
     isExternal: e.is_external === true,
     onClick: () => navigate(`/events/${e.slug}`),
   })
 
   const banners = [
     { ...WELCOME_BANNER, onClick: () => navigate('/news/welcome') },
-    ...featuredUpcoming.map(toBanner),
-    ...regularUpcoming.slice(0, 2).map(toBanner),
+    ...devconOrganizedUpcoming.map(toBanner),
+    ...externalUpcoming.slice(0, 2).map(toBanner),
   ]
 
   bannersLengthRef.current = banners.length
   const safeIdx = bannerIdx % Math.max(banners.length, 1)
   const userChapterId = user?.chapter_id ?? null
-  const nearbyEvents = events
-    .filter((e) => {
-      if (e.status !== 'upcoming' || isEventArchived(e)) return false
-      if (e.is_chapter_locked && e.chapter_id !== userChapterId) return false
-      if (regionChapterIds.size > 0 && e.chapter_id && !regionChapterIds.has(e.chapter_id)) return false
-      return true
-    })
+  const nearbyEventFilter = (e: typeof events[number]) => {
+    if (e.is_chapter_locked && e.chapter_id !== userChapterId) return false
+    if (regionChapterIds.size > 0 && e.chapter_id && !regionChapterIds.has(e.chapter_id)) return false
+    return true
+  }
+  const upcomingNearby = events
+    .filter((e) => e.status === 'upcoming' && !isEventArchived(e) && nearbyEventFilter(e))
     .sort((a, b) => {
       const aOwn = a.chapter_id === userChapterId ? 0 : 1
       const bOwn = b.chapter_id === userChapterId ? 0 : 1
@@ -169,6 +224,19 @@ useEffect(() => {
       return new Date(a.event_date ?? 0).getTime() - new Date(b.event_date ?? 0).getTime()
     })
     .slice(0, 3)
+
+  // Sparser chapters/regions (mostly outside Manila) can go stretches with zero
+  // upcoming events — shuffle in recent past events instead of leaving the
+  // section blank, so those members still see something happening nearby.
+  const recentNearby = upcomingNearby.length > 0 ? [] : events
+    .filter((e) => isEventArchived(e) && nearbyEventFilter(e))
+    .sort((a, b) => new Date(b.event_date ?? 0).getTime() - new Date(a.event_date ?? 0).getTime())
+    .slice(0, 10)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3)
+
+  const nearbyEvents = upcomingNearby.length > 0 ? upcomingNearby : recentNearby
+  const isShowingRecentFallback = upcomingNearby.length === 0 && recentNearby.length > 0
   const recentTxns = transactions.slice(0, 4)
 
   // Only single-winner bounties disappear once claimed; multi-participant missions stay open.
@@ -231,7 +299,7 @@ useEffect(() => {
               {/* Volunteer Card */}
               <motion.button
                 variants={cardItem}
-                onClick={() => navigate('/events')}
+                onClick={() => setShowVolunteerForm(true)}
                 className="bg-[rgba(115,178,9,0.15)] border border-[rgba(70,144,17,0.1)] flex flex-col gap-2 items-center justify-center rounded-[16px] shadow-[0px_0px_8px_0px_rgba(25,39,0,0.1)] w-full py-4"
                 whileTap={{ scale: 0.95 }}
               >
@@ -282,13 +350,22 @@ useEffect(() => {
             >
               {banners.map((b, i) => (
                 <div key={i} className="relative w-full shrink-0 h-full">
-                  <img
-                    src={b.image}
-                    alt=""
-                    draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-                  />
-                  <div className="absolute inset-0 bg-black/50" />
+                  {b.image ? (
+                    <img
+                      src={b.image}
+                      alt=""
+                      draggable={false}
+                      className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                    />
+                  ) : (
+                    'fallbackColor' in b && b.fallbackColor && (
+                      <div
+                        className="absolute inset-0"
+                        style={{ background: `linear-gradient(135deg, ${b.fallbackColor.primary}, ${b.fallbackColor.dark})` }}
+                      />
+                    )
+                  )}
+                  <div className={`absolute inset-0 ${b.image ? 'bg-black/50' : 'bg-black/10'}`} />
 
                   {/* Featured badge — top-right of the banner */}
                   {'isExternal' in b && b.isExternal && (
@@ -350,11 +427,11 @@ useEffect(() => {
 
         {/* Events For You */}
         <section>
-          <div className="flex items-center justify-between mb-3">
+          <div className={`flex items-center justify-between ${isShowingRecentFallback ? 'mb-1' : 'mb-3'}`}>
             <p className="font-proxima font-bold text-[18px] text-black">
               Events Near You
             </p>
-            <button 
+            <button
               onClick={() => navigate('/events')}
               className="flex gap-1 items-center"
             >
@@ -364,6 +441,11 @@ useEffect(() => {
               <AltArrowRightOutline className="w-3 h-3" color="#64748B" />
             </button>
           </div>
+          {isShowingRecentFallback && (
+            <p className="text-md3-label-md text-slate-400 mb-2">
+              No upcoming events nearby right now — here's what's been happening.
+            </p>
+          )}
           {eventsLoading && nearbyEvents.length === 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1, 2, 3].map((i) => <SkeletonEventCard key={i} />)}
@@ -552,85 +634,99 @@ useEffect(() => {
           )}
         </section>
 
-        {/* Switcher: Updates / Featured */}
-        <section className="flex flex-col gap-4">
-          <div className="inline-flex self-start items-center gap-2">
-            <button
-              onClick={() => setActiveTab('updates')}
-              className={`flex items-center justify-center px-5 py-1.5 rounded-full border transition-all duration-300 ${
-                activeTab === 'updates' ? 'bg-primary text-white font-semibold border-primary shadow-sm' : 'bg-white text-slate-700 font-medium border-slate-200'
-              }`}
-            >
-              <span className="font-proxima text-[16px]">
-                Updates
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('featured')}
-              className={`flex items-center justify-center px-5 py-1.5 rounded-full border transition-all duration-300 ${
-                activeTab === 'featured' ? 'bg-primary text-white font-semibold border-primary shadow-sm' : 'bg-white text-slate-700 font-medium border-slate-200'
-              }`}
-            >
-              <span className="font-proxima text-[16px]">
-                Featured
-              </span>
-            </button>
+        {/* Featured Stories — shuffled carousel of video/article stories */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-proxima font-bold text-[18px] text-black">Featured Stories</p>
           </div>
 
-          <AnimatePresence mode="wait">
-            {activeTab === 'updates' ? (
-              <motion.button
-                key="updates"
-                onClick={() => navigate('/news/welcome')}
-                className="w-full h-[220px] bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] overflow-hidden text-left flex flex-col"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                whileTap={{ scale: 0.98 }}
+          {stories.length === 0 ? (
+            <div className="w-full bg-white rounded-2xl shadow-card p-8 flex flex-col items-center justify-center text-center border border-dashed border-slate-200">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                <StarOutline className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="font-bold text-slate-900 mb-1">Featured Stories Coming Soon!</h3>
+              <p className="text-md3-body-md text-slate-500 max-w-[240px]">
+                We're lining up the best DEVCON stories for you. Check back soon!
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div
+                ref={storySliderViewportRef}
+                className="relative h-[220px] rounded-2xl overflow-hidden bg-slate-900"
               >
-                <img
-                  src="/photos/devcon-summit-group.jpg"
-                  alt="DEVCON Summit"
-                  className="w-full h-[100px] object-cover shrink-0"
-                />
-                <div className="p-4 flex flex-col flex-1 justify-center gap-1">
-                  <p className="font-proxima font-bold text-[18px] text-black leading-tight line-clamp-1">
-                    Welcome to DEVCON+ — Your Tech Community Hub
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-proxima text-slate-400 text-[10px] uppercase tracking-wider">
-                      April 10, 2026
-                    </p>
-                    <div className="w-1 h-1 bg-slate-300 rounded-full shrink-0" />
-                    <p className="font-proxima text-slate-400 text-[10px] uppercase tracking-wider">
-                      By DEVCON Philippines
-                    </p>
-                  </div>
-                  <p className="font-proxima text-slate-500 text-[11px] leading-relaxed line-clamp-2 mt-1">
-                    Register for chapter events, earn Points+ for every activity, browse exclusive opportunities, and redeem rewards — all in one place. Your gateway to the DEVCON ecosystem is now live.
-                  </p>
-                </div>
-              </motion.button>
-            ) : (
-              <motion.div
-                key="featured"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="w-full bg-white rounded-2xl shadow-card p-8 flex flex-col items-center justify-center text-center border border-dashed border-slate-200"
-              >
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                  <StarOutline className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="font-bold text-slate-900 mb-1">Featured Articles Coming Soon!</h3>
-                <p className="text-md3-body-md text-slate-500 max-w-[240px]">
-                  We're still "debugging" the best stories for you. Please stay "tuned" — it's going to be "code-tastic"!
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <motion.div
+                  className="flex h-full cursor-grab active:cursor-grabbing"
+                  drag="x"
+                  dragConstraints={{ left: -(stories.length - 1) * storySlideW, right: 0 }}
+                  dragElastic={0.18}
+                  dragMomentum={false}
+                  onDragEnd={(_, info) => {
+                    if (storySlideW === 0) return
+                    const dragged  = -info.offset.x / storySlideW
+                    const velBoost = -info.velocity.x / (storySlideW * 4)
+                    const target   = Math.round((storyIdx % Math.max(stories.length, 1)) + dragged + velBoost)
+                    setStoryIdx(Math.max(0, Math.min(stories.length - 1, target)))
+                  }}
+                  animate={{ x: -(storyIdx % Math.max(stories.length, 1)) * storySlideW }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 32 }}
+                >
+                  {stories.map((story, i) => {
+                    const isActive = i === storyIdx % Math.max(stories.length, 1)
+                    return (
+                      <div
+                        key={story.id}
+                        className="relative w-full shrink-0 h-full"
+                        onClick={() => {
+                          if (story.type === 'article' && story.article_url) navigate(story.article_url)
+                          else window.open(`https://www.youtube.com/watch?v=${story.youtube_id}`, '_blank', 'noopener,noreferrer')
+                        }}
+                      >
+                        {isActive ? (
+                          <iframe
+                            className="absolute inset-0 w-full h-full pointer-events-none"
+                            src={`https://www.youtube.com/embed/${story.youtube_id}?autoplay=1&mute=1&loop=1&playlist=${story.youtube_id}&controls=0&playsinline=1&modestbranding=1&rel=0`}
+                            title={story.title}
+                            allow="autoplay; encrypted-media"
+                            frameBorder={0}
+                          />
+                        ) : (
+                          <img
+                            src={`https://img.youtube.com/vi/${story.youtube_id}/hqdefault.jpg`}
+                            alt=""
+                            draggable={false}
+                            className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
+                          <p className="font-proxima font-bold text-md3-body-lg text-white leading-snug line-clamp-2">
+                            {story.title}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </motion.div>
+              </div>
+              <div className="flex justify-center gap-1.5 mt-2.5">
+                {stories.map((_, i) => (
+                  <motion.button
+                    key={i}
+                    aria-label={`Go to story ${i + 1}`}
+                    onClick={() => setStoryIdx(i)}
+                    animate={{
+                      width:           i === storyIdx % Math.max(stories.length, 1) ? 16 : 6,
+                      backgroundColor: i === storyIdx % Math.max(stories.length, 1) ? 'rgb(var(--color-primary-dark))' : '#CBD5E1',
+                    }}
+                    transition={{ duration: 0.25 }}
+                    className="h-1.5 rounded-full"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Points History */}
@@ -695,6 +791,8 @@ useEffect(() => {
           </div>
         </section>
       </motion.main>
+
+      <VolunteerFormModal open={showVolunteerForm} onClose={() => setShowVolunteerForm(false)} />
     </div>
   )
 }

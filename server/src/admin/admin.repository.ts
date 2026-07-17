@@ -25,6 +25,24 @@ export class AdminRepository extends BaseRepository {
     return this.unwrap(result as { data: Profile[] | null; error: { message: string } | null });
   }
 
+  /**
+   * Only officers/admins can create events (see the "Officers create events" RLS
+   * policy), so this is a small, bounded set — safe to fetch in full for an
+   * id → name lookup, unlike findAllUsers().
+   */
+  async findEventCreators(): Promise<Array<{ id: string; full_name: string }>> {
+    const result = await this.db
+      .from('profiles')
+      .select('id, full_name')
+      .in('role', ['chapter_officer', 'hq_admin', 'super_admin']);
+    return this.unwrap(
+      result as {
+        data: Array<{ id: string; full_name: string }> | null;
+        error: { message: string } | null;
+      },
+    );
+  }
+
   async findUserTransactions(userId: string, limit = 5): Promise<PointTransaction[]> {
     const result = await this.db
       .from('point_transactions')
@@ -52,6 +70,17 @@ export class AdminRepository extends BaseRepository {
       p_chapter_id: chapterId,
     } as never);
     if (error) throw new BadRequestException(error.message);
+  }
+
+  /** Look up a profile's current role by id (for role-escalation authorization checks). */
+  async findRoleById(profileId: string): Promise<ProfileRole | null> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('role')
+      .eq('id', profileId)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.role as ProfileRole | null) ?? null;
   }
 
   /** Look up a profile's Firebase auth_uid by profile id (for cache invalidation). */
