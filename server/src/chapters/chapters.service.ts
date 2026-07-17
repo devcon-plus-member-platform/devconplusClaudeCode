@@ -2,15 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
-import { ChaptersRepository } from './chapters.repository';
+import { ChaptersRepository, type ChapterStatsRow } from './chapters.repository';
 import type { Chapter } from '../supabase/types';
 import type { CreateChapterDto } from './dto/create-chapter.dto';
 import type { UpdateChapterDto } from './dto/update-chapter.dto';
-
-interface ChapterXpRow {
-  chapter: string;
-  xp: number;
-}
 
 @Injectable()
 export class ChaptersService {
@@ -25,9 +20,9 @@ export class ChaptersService {
     );
   }
 
-  // NOT cached: the per-chapter XP aggregate changes on every point award.
-  getXpByChapter(): Promise<ChapterXpRow[]> {
-    return this.repo.getXpByChapter();
+  // NOT cached: member/event/XP counts change on every signup, event, or point award.
+  getStatsByChapter(): Promise<ChapterStatsRow[]> {
+    return this.repo.getStatsByChapter();
   }
 
   async create(dto: CreateChapterDto, _user: AuthenticatedUser): Promise<Chapter> {

@@ -260,6 +260,16 @@ export interface Job {
   posted_at: string | null;
 }
 
+export interface FeaturedStory {
+  id: string;
+  type: string;
+  youtube_id: string;
+  title: string;
+  article_url: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Event {
   id: string;
   title: string;
