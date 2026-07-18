@@ -69,9 +69,9 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
         </div>
       </header>
 
-      <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
+      <div className="px-4 pt-4 pb-28">
         {isLoading && notifications.length === 0 ? (
-          <div aria-busy="true" aria-label="Loading notifications">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start" aria-busy="true" aria-label="Loading notifications">
             {Array.from({ length: 4 }).map((_, i) => (
               <SkeletonNotificationCard key={i} />
             ))}
@@ -91,7 +91,7 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="flex flex-col"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start"
           >
             <AnimatePresence mode="popLayout">
               {notifications.map((n) => (
@@ -99,7 +99,7 @@ export default function NotificationsInbox({ isOrganizer = false }: Notification
                   key={n.id}
                   variants={cardItem}
                   exit={{ x: 40, opacity: 0, transition: { duration: 0.2 } }}
-                  className="relative bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 mb-3 overflow-hidden"
+                  className="relative bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] p-4 overflow-hidden"
                 >
                   <motion.button
                     onClick={() => dismiss(n.id)}

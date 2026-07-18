@@ -164,14 +164,18 @@ export default function Dashboard() {
   }, [])
 
 useEffect(() => {
-    const el = document.querySelector('[data-scroll-container]') as HTMLElement
-    if (!el) return
-    const handler = () => {
-      scrollYMV.set(el.scrollTop)
-      setIsScrolled(el.scrollTop > 50)
+    // MemberLayout renders BOTH the mobile and desktop scroll containers at
+    // once (toggled via CSS, not conditional rendering) — listen on all of
+    // them so whichever one is actually visible/scrolling drives this state.
+    const containers = document.querySelectorAll<HTMLElement>('[data-scroll-container]')
+    if (containers.length === 0) return
+    const handler = (e: Event) => {
+      const target = e.currentTarget as HTMLElement
+      scrollYMV.set(target.scrollTop)
+      setIsScrolled(target.scrollTop > 50)
     }
-    el.addEventListener('scroll', handler, { passive: true })
-    return () => el.removeEventListener('scroll', handler)
+    containers.forEach((el) => el.addEventListener('scroll', handler, { passive: true }))
+    return () => containers.forEach((el) => el.removeEventListener('scroll', handler))
   }, [scrollYMV])
 
   const upcomingByDate = events
@@ -252,7 +256,7 @@ useEffect(() => {
 
       {/* ── Main Content Area ── */}
       <motion.main 
-        className="relative z-10 flex flex-col gap-6 px-4 pb-4 md:max-w-4xl md:mx-auto"
+        className="relative z-10 flex flex-col gap-6 px-4 pb-4"
         initial={false}
         animate={{
           paddingTop: isScrolled ? 80 : 16 // pt-20 when scrolled for clearance, pt-4 when unscrolled for tight gap
@@ -500,14 +504,14 @@ useEffect(() => {
           </div>
 
           {jobsLoading && jobs.length === 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1, 2].map((i) => (
                 <SkeletonJobCard key={i} />
               ))}
             </div>
           ) : (
             <motion.div
-              className="flex flex-col gap-3"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start"
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
@@ -536,7 +540,7 @@ useEffect(() => {
           </div>
 
           {missionsLoading && unclaimedMissions.length === 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1, 2].map((i) => (
                 <SkeletonMissionCard key={i} />
               ))}
@@ -566,7 +570,7 @@ useEffect(() => {
               </button>
             </motion.div>
           ) : (
-            <motion.div className="flex flex-col gap-3" variants={staggerContainer} initial="hidden" animate="visible">
+            <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start" variants={staggerContainer} initial="hidden" animate="visible">
               {unclaimedMissions.slice(0, 2).map((mission) => {
                 const isJoined   = participants.some(p => p.mission_id === mission.id)
                 const mySubmission = submissions.find(s => s.mission_id === mission.id)

@@ -103,9 +103,9 @@ export function OrgEventDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="relative min-h-screen bg-slate-50">
       {/* Floating back + edit buttons (Sticky/Fixed) */}
-      <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 pt-12 pointer-events-none">
+      <div className="fixed md:absolute top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 pt-12 pointer-events-none">
         <button
           onClick={() => navigate(-1)}
           className="w-10 h-10 rounded-full bg-black/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-black/40 transition-colors shadow-lg pointer-events-auto"
@@ -163,7 +163,7 @@ export function OrgEventDetail() {
       </header>
 
       <motion.div
-        className="p-4"
+        className="p-4 md:max-w-4xl md:mx-auto"
         variants={staggerContainer}
         initial="hidden"
         animate="visible"

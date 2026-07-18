@@ -101,7 +101,7 @@ function RedemptionModal({ reward, spendablePoints, onClose, onGoToMissions }: R
             onClick={sheetState === 'loading' ? undefined : handleClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[24px] overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[24px] overflow-hidden md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
             variants={slideUp}
             initial="hidden"
             animate="visible"
@@ -384,7 +384,7 @@ function ClaimReceiptSheet({ redemption, reward, onClose }: ClaimReceiptSheetPro
             onClick={handleClose}
           />
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[24px] overflow-hidden"
+            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[24px] overflow-hidden md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
             variants={slideUp}
             initial="hidden"
             animate="visible"
@@ -475,7 +475,7 @@ function ClaimReceiptsTab({ onSelectReceipt }: ClaimReceiptsTabProps) {
 
   return (
     <motion.div
-      className="grid grid-cols-1 gap-[10px]"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[10px] md:items-start"
       variants={staggerContainer}
       initial="hidden"
       animate="visible"
@@ -653,7 +653,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
 
   if (isLoading) {
     return (
-      <div className="space-y-3 pt-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start pt-2">
         {Array.from({ length: 4 }).map((_, i) => <SkeletonJobCard key={i} />)}
       </div>
     )
@@ -694,7 +694,7 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
       variants={staggerContainer}
       initial="hidden"
       animate="visible"
-      className="space-y-3 pt-2 pb-4"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start pt-2 pb-4"
     >
       {filteredMissions.map((mission) => {
         const diff = DIFF_CONFIG[mission.difficulty] ?? DIFF_CONFIG.easy
@@ -1105,7 +1105,7 @@ export default function Rewards() {
 
         {/* ── Segmented Toggle: Missions / Redeem ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="inline-flex w-full gap-2 max-w-4xl mx-auto">
+          <div className="flex w-full gap-2">
             {(['redeem', 'missions'] as const).map((t) => (
               <button
                 key={t}
@@ -1124,7 +1124,7 @@ export default function Rewards() {
 
         {/* ── Filter Chips (dynamic) ── */}
         <div className="pb-2 px-4 pointer-events-auto">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar max-w-4xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
             {mainTab === 'missions' ? (
               MISSION_FILTERS.map((f) => (
                 <button
@@ -1160,13 +1160,13 @@ export default function Rewards() {
       </header>
 
       {/* ── Content ── */}
-      <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
+      <div className="px-4 pt-4 pb-28">
         {mainTab === 'missions' ? (
           <MissionsFeed missionFilter={missionFilter} userId={user?.id} initialExpandId={initialExpandId} />
         ) : activeTab === 'redeem' ? (
           <>
             {isLoading ? (
-              <div className="grid grid-cols-2 gap-x-[6px] gap-y-[10px]">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-[6px] gap-y-[10px]">
                 {[1, 2, 3, 4].map((i) => <SkeletonRewardCard key={i} />)}
               </div>
             ) : rewards.length === 0 ? (
@@ -1177,7 +1177,7 @@ export default function Rewards() {
               </div>
             ) : (
               <motion.div
-                className="grid grid-cols-2 gap-x-[6px] gap-y-[10px]"
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-[6px] gap-y-[10px]"
                 variants={staggerContainer}
                 initial="hidden"
                 animate="visible"
