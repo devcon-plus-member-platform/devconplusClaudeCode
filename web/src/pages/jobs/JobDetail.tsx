@@ -77,7 +77,7 @@ export default function JobDetail() {
       </header>
 
       {/* ── Company identity card ── */}
-      <div className="px-4 pt-4 mb-2 flex items-center gap-3">
+      <div className="px-4 pt-4 mb-2 flex items-center gap-3 md:max-w-4xl md:mx-auto">
         {job.logo_url && logoStatus !== 'error' ? (
           <div className="w-14 h-14 shrink-0">
             <img
@@ -101,7 +101,7 @@ export default function JobDetail() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4 pb-24">
+      <div className="p-4 space-y-4 pb-24 md:max-w-4xl md:mx-auto">
         {/* Meta chips */}
         <div className="flex flex-wrap gap-2">
           <span className="text-md3-label-md bg-primary/10 text-primary font-semibold px-3 py-1 rounded-full">

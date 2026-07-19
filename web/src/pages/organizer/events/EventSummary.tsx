@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline, DownloadOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../../../lib/supabase'
+import { apiFetch } from '../../../lib/api'
 import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
@@ -39,33 +39,19 @@ export function OrgEventSummary() {
     if (events.length === 0) void fetchEvents()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch registrants — re-runs if id or event title changes
+  // Fetch registrants — re-runs if id or event title changes.
+  // Goes through the gateway (service-role — bypasses RLS), matching
+  // EventRegistrants.tsx. A direct Supabase read here was RLS-gated: chapter
+  // officers have no policy granting them read access to other members'
+  // profiles, so the joined name/email/school always came back blank.
   useEffect(() => {
     if (!id) return
     setIsLoading(true)
-    supabase
-      .from('event_registrations')
-      .select('id, status, registered_at, checked_in, profiles(full_name, email, school_or_company)')
-      .eq('event_id', id)
-      .neq('status', 'cancelled')
-      .then(({ data }) => {
-        const mapped: Registration[] = (data ?? []).map((row) => {
-          const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
-          const p = profile as { full_name?: string; email?: string; school_or_company?: string } | null
-          return {
-            id:                row.id,
-            member_name:       p?.full_name ?? 'Unknown',
-            member_email:      p?.email ?? '',
-            school_or_company: p?.school_or_company ?? '',
-            event_title:       event?.title ?? '',
-            registered_at:     row.registered_at ?? '',
-            status:            row.status as Registration['status'],
-            checked_in:        (row.checked_in as boolean | null) ?? false,
-          }
-        })
-        setRegistrants(mapped)
-        setIsLoading(false)
+    apiFetch<Registration[]>(`/api/registrations/event/${id}`)
+      .then((data) => {
+        setRegistrants(data.map((r) => ({ ...r, event_title: event?.title ?? '' })))
       })
+      .finally(() => setIsLoading(false))
   }, [id, event?.title]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Not-found fallback — but wait for the events store to finish loading first,

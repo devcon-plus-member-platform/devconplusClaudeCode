@@ -141,7 +141,7 @@ export default function JobsList() {
       {/* ── Content ── */}
       <div className="flex-1">
         {isLoading && (
-          <div className="space-y-3 px-4 pt-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start px-4 pt-5">
             {Array.from({ length: 5 }).map((_, i) => <SkeletonJobCard key={i} />)}
           </div>
         )}
@@ -173,7 +173,7 @@ export default function JobsList() {
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
-            className="space-y-3 px-4 pt-5 pb-24"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start px-4 pt-5 pb-24"
           >
             {filteredJobs.map(job => {
               const isExpanded = expandedId === job.id

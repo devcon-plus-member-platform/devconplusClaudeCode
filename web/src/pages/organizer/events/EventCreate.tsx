@@ -333,7 +333,7 @@ export function OrgEventCreate() {
       <motion.form
         noValidate
         onSubmit={handleSubmit(onSubmit)}
-        className="p-4 space-y-5"
+        className="p-4 space-y-5 md:max-w-2xl md:mx-auto"
         variants={staggerContainer}
         initial="hidden"
         animate="visible"

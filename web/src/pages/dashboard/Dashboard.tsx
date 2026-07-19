@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, HandHeartOutline, StarOutline } from 'solar-icon-set'
+import { AltArrowRightOutline, Bag2Outline, CalendarMarkOutline, CalendarOutline, GraphDownOutline, GraphUpOutline, HandHeartOutline, StarOutline } from 'solar-icon-set'
 import { motion, useMotionValue } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
@@ -86,7 +86,8 @@ export default function Dashboard() {
 
   // Featured Stories — shuffled whenever a fresh fetch lands, so re-mounting
   // the dashboard (e.g. navigating away and back) surfaces a fresh order.
-  const stories = useMemo(() => shuffleStories(rawStories), [rawStories])
+  // Capped to 5 so the dashboard preview stays short — full list lives elsewhere.
+  const stories = useMemo(() => shuffleStories(rawStories).slice(0, 5), [rawStories])
   const [storyIdx, setStoryIdx] = useState(0)
   const storySliderViewportRef = useRef<HTMLDivElement>(null)
   const [storySlideW, setStorySlideW] = useState(0)
@@ -140,14 +141,6 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [])
 
-  // Auto-advance the featured stories carousel — each story (video or article)
-  // gets 8s before the next shuffled story rotates in.
-  useEffect(() => {
-    if (stories.length <= 1) return
-    const t = setInterval(() => setStoryIdx((i) => (i + 1) % stories.length), 8000)
-    return () => clearInterval(t)
-  }, [stories.length])
-
   useEffect(() => {
     const el = storySliderViewportRef.current
     if (!el) return
@@ -171,14 +164,18 @@ export default function Dashboard() {
   }, [])
 
 useEffect(() => {
-    const el = document.querySelector('[data-scroll-container]') as HTMLElement
-    if (!el) return
-    const handler = () => {
-      scrollYMV.set(el.scrollTop)
-      setIsScrolled(el.scrollTop > 50)
+    // MemberLayout renders BOTH the mobile and desktop scroll containers at
+    // once (toggled via CSS, not conditional rendering) — listen on all of
+    // them so whichever one is actually visible/scrolling drives this state.
+    const containers = document.querySelectorAll<HTMLElement>('[data-scroll-container]')
+    if (containers.length === 0) return
+    const handler = (e: Event) => {
+      const target = e.currentTarget as HTMLElement
+      scrollYMV.set(target.scrollTop)
+      setIsScrolled(target.scrollTop > 50)
     }
-    el.addEventListener('scroll', handler, { passive: true })
-    return () => el.removeEventListener('scroll', handler)
+    containers.forEach((el) => el.addEventListener('scroll', handler, { passive: true }))
+    return () => containers.forEach((el) => el.removeEventListener('scroll', handler))
   }, [scrollYMV])
 
   const upcomingByDate = events
@@ -259,7 +256,7 @@ useEffect(() => {
 
       {/* ── Main Content Area ── */}
       <motion.main 
-        className="relative z-10 flex flex-col gap-6 px-4 pb-4 md:max-w-4xl md:mx-auto"
+        className="relative z-10 flex flex-col gap-6 px-4 pb-4"
         initial={false}
         animate={{
           paddingTop: isScrolled ? 80 : 16 // pt-20 when scrolled for clearance, pt-4 when unscrolled for tight gap
@@ -360,9 +357,11 @@ useEffect(() => {
                   ) : (
                     'fallbackColor' in b && b.fallbackColor && (
                       <div
-                        className="absolute inset-0"
+                        className="absolute inset-0 flex items-center justify-center"
                         style={{ background: `linear-gradient(135deg, ${b.fallbackColor.primary}, ${b.fallbackColor.dark})` }}
-                      />
+                      >
+                        <CalendarOutline className="w-20 h-20" color="rgba(255,255,255,0.2)" />
+                      </div>
                     )
                   )}
                   <div className={`absolute inset-0 ${b.image ? 'bg-black/50' : 'bg-black/10'}`} />
@@ -505,14 +504,14 @@ useEffect(() => {
           </div>
 
           {jobsLoading && jobs.length === 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1, 2].map((i) => (
                 <SkeletonJobCard key={i} />
               ))}
             </div>
           ) : (
             <motion.div
-              className="flex flex-col gap-3"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start"
               variants={staggerContainer}
               initial="hidden"
               animate="visible"
@@ -541,7 +540,7 @@ useEffect(() => {
           </div>
 
           {missionsLoading && unclaimedMissions.length === 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {[1, 2].map((i) => (
                 <SkeletonMissionCard key={i} />
               ))}
@@ -571,7 +570,7 @@ useEffect(() => {
               </button>
             </motion.div>
           ) : (
-            <motion.div className="flex flex-col gap-3" variants={staggerContainer} initial="hidden" animate="visible">
+            <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start" variants={staggerContainer} initial="hidden" animate="visible">
               {unclaimedMissions.slice(0, 2).map((mission) => {
                 const isJoined   = participants.some(p => p.mission_id === mission.id)
                 const mySubmission = submissions.find(s => s.mission_id === mission.id)
@@ -654,7 +653,7 @@ useEffect(() => {
             <div>
               <div
                 ref={storySliderViewportRef}
-                className="relative h-[220px] rounded-2xl overflow-hidden bg-slate-900"
+                className="relative h-[220px] w-full md:h-auto md:w-full md:aspect-video rounded-2xl overflow-hidden bg-slate-900"
               >
                 <motion.div
                   className="flex h-full cursor-grab active:cursor-grabbing"
@@ -769,11 +768,15 @@ useEffect(() => {
                     className={`flex items-center gap-3 px-4 py-3 ${i < recentTxns.length - 1 ? 'border-b border-slate-100' : ''}`}
                   >
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-md3-label-md font-bold ${
-                        tx.amount > 0 ? 'bg-green/10 text-green' : 'bg-red/10 text-red'
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        tx.amount > 0 ? 'bg-green/10' : 'bg-red/10'
                       }`}
                     >
-                      {tx.amount > 0 ? '+' : '−'}
+                      {tx.amount > 0 ? (
+                        <GraphUpOutline width={16} height={16} color="#21C45D" />
+                      ) : (
+                        <GraphDownOutline width={16} height={16} color="#EF4444" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-md3-body-md font-medium text-slate-800 truncate">{tx.description}</p>

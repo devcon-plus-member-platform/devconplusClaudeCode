@@ -23,13 +23,16 @@ export default function VolunteerXpCard() {
   const [showExpiryInfo, setShowExpiryInfo] = useState(false)
 
   useEffect(() => {
-    const el = document.querySelector('[data-scroll-container]')
-    if (!el) return
-    const handleScroll = () => {
-      setIsScrolled(el.scrollTop > 50)
+    // MemberLayout renders BOTH the mobile and desktop scroll containers at
+    // once (toggled via CSS, not conditional rendering) — listen on all of
+    // them so whichever one is actually visible/scrolling drives this state.
+    const containers = document.querySelectorAll<HTMLElement>('[data-scroll-container]')
+    if (containers.length === 0) return
+    const handleScroll = (e: Event) => {
+      setIsScrolled((e.currentTarget as HTMLElement).scrollTop > 50)
     }
-    el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
+    containers.forEach((el) => el.addEventListener('scroll', handleScroll, { passive: true }))
+    return () => containers.forEach((el) => el.removeEventListener('scroll', handleScroll))
   }, [])
 
   const firstName = user?.full_name?.split(' ')[0] ?? 'Member'

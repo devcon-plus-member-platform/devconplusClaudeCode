@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard, AuthenticatedUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { AdminService } from './admin.service';
+import { ExportAttendanceQueryDto } from './dto/export-attendance-query.dto';
 import { InviteOfficerDto } from './dto/invite-officer.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
@@ -51,6 +52,12 @@ export class AdminController {
   @Get('events/creators')
   getEventCreators() {
     return this.service.getEventCreators();
+  }
+
+  /** GET /api/admin/attendance/export — hq_admin+: raw joined registrations for the attendance CSV export (service-role, bypasses RLS) */
+  @Get('attendance/export')
+  exportAttendance(@Query() query: ExportAttendanceQueryDto) {
+    return this.service.exportAttendance(query);
   }
 
   /** POST /api/admin/officers/assign — hq_admin+: assign officer email + send invite */

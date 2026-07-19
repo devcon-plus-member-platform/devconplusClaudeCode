@@ -160,7 +160,7 @@ export default function PointsHistory() {
 
         {/* ── Tabs Wrapper ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar max-w-4xl mx-auto">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
             {FILTER_CHIPS.map((chip) => (
               <button
                 key={chip.id}
@@ -179,12 +179,12 @@ export default function PointsHistory() {
       </header>
 
       {/* ── Transaction list ───────────────────────────────────── */}
-      <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
+      <div className="px-4 pt-4 pb-28">
         {isLoading ? (
-          <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 md:items-start">
             <SkeletonTransactionGroup rows={3} />
             <SkeletonTransactionGroup rows={2} />
-          </>
+          </div>
         ) : groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -196,19 +196,21 @@ export default function PointsHistory() {
             </p>
           </div>
         ) : (
-          groups.map(([date, txs]) => (
-            <div key={date} className="mb-6">
-              <p className="font-proxima text-slate-500 text-[10px] uppercase tracking-wider mb-2 font-bold px-1">{date}</p>
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] px-4">
-                {txs.map((tx) => (
-                  <TransactionRow
-                    key={tx.id}
-                    tx={tx}
-                  />
-                ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 md:items-start">
+            {groups.map(([date, txs]) => (
+              <div key={date} className="mb-6">
+                <p className="font-proxima text-slate-500 text-[10px] uppercase tracking-wider mb-2 font-bold px-1">{date}</p>
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] px-4">
+                  {txs.map((tx) => (
+                    <TransactionRow
+                      key={tx.id}
+                      tx={tx}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
 
         {groups.length > 0 && (

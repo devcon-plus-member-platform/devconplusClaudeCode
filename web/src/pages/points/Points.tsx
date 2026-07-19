@@ -158,11 +158,11 @@ export default function Points() {
       </header>
 
       {/* ── Scrollable body ───────────────────────────────────── */}
-      <div className="px-4 pt-4 pb-24 md:max-w-4xl md:mx-auto">
+      <div className="px-4 pt-4 pb-24">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            className="space-y-3"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start"
             variants={staggerContainer}
             initial="hidden"
             animate="visible"

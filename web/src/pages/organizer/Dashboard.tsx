@@ -288,7 +288,7 @@ export function OrgDashboard() {
               exit="exit"
             >
               {isLoading ? (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start">
                   {[1, 2].map((i) => (
                     <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 animate-pulse">
                       <div className="flex gap-3">
@@ -310,22 +310,19 @@ export function OrgDashboard() {
                   <p className="text-md3-body-md text-slate-400 mt-1">No pending registrations right now.</p>
                 </div>
               ) : (
-                <motion.div
-                  className="space-y-3"
-                  variants={staggerContainer}
-                  initial="hidden"
-                  animate="visible"
-                >
+                <motion.div variants={staggerContainer} initial="hidden" animate="visible">
                   <p className="text-md3-body-md text-slate-500 mb-2">
                     {pendingRegistrations.length} registration{pendingRegistrations.length !== 1 ? 's' : ''} awaiting approval
                   </p>
-                  {registrations.map((reg) => (
-                    <motion.div key={reg.id} variants={cardItem}>
-                      <ApprovalCard
-                        registration={reg}
-                      />
-                    </motion.div>
-                  ))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start">
+                    {registrations.map((reg) => (
+                      <motion.div key={reg.id} variants={cardItem}>
+                        <ApprovalCard
+                          registration={reg}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </motion.div>
@@ -345,7 +342,7 @@ export function OrgDashboard() {
                 </div>
               )}
               {volunteerLoading ? (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start">
                   {[1, 2].map((i) => (
                     <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 animate-pulse">
                       <div className="flex gap-3">
@@ -368,27 +365,24 @@ export function OrgDashboard() {
                   <p className="text-md3-body-md text-slate-400 mt-1">Applications will appear here when members apply.</p>
                 </div>
               ) : (
-                <motion.div
-                  className="space-y-3"
-                  variants={staggerContainer}
-                  initial="hidden"
-                  animate="visible"
-                >
+                <motion.div variants={staggerContainer} initial="hidden" animate="visible">
                   {pendingVolunteers.length > 0 && (
                     <p className="text-md3-body-md text-slate-500 mb-2">
                       {pendingVolunteers.length} application{pendingVolunteers.length !== 1 ? 's' : ''} awaiting review
                     </p>
                   )}
-                  {volunteerApps.map((app) => (
-                    <motion.div key={app.id} variants={cardItem}>
-                      <VolunteerApprovalCard
-                        application={app}
-                        onApprove={(id) => void approveApplication(id)}
-                        onReject={(id) => void rejectApplication(id)}
-                        onRevert={(id) => void revertApplication(id)}
-                      />
-                    </motion.div>
-                  ))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start">
+                    {volunteerApps.map((app) => (
+                      <motion.div key={app.id} variants={cardItem}>
+                        <VolunteerApprovalCard
+                          application={app}
+                          onApprove={(id) => void approveApplication(id)}
+                          onReject={(id) => void rejectApplication(id)}
+                          onRevert={(id) => void revertApplication(id)}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </motion.div>

@@ -244,7 +244,7 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
 
           {/* Sheet */}
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 bg-slate-50 rounded-t-3xl max-h-[90dvh] flex flex-col shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-50 bg-slate-50 rounded-t-3xl max-h-[90dvh] flex flex-col shadow-2xl md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-lg md:rounded-3xl"
             variants={slideUp}
             initial="hidden"
             animate="visible"
