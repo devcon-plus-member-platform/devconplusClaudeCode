@@ -1273,14 +1273,6 @@ export default function AdminEvents() {
     void load()
   }, [])
 
-  const applyAttendanceStatusFilter = (query: any, status: AttendanceFilter) => {
-    const filterable = query as { eq: (column: string, value: string | boolean) => any }
-    if (status === 'checked_in') return filterable.eq('checked_in', true)
-    if (status === 'not_checked_in') return filterable.eq('checked_in', false)
-    if (status !== 'all') return filterable.eq('status', status)
-    return query
-  }
-
   const openExportDialog = (kind: ExportKind) => {
     setExportError(null)
     setEventSearch('')
@@ -1371,19 +1363,8 @@ export default function AdminEvents() {
     setExportError(null)
     setExportLoading(true)
     try {
-      let eventIds: string[] | null = null
-      if (scope === 'event' && eventId) eventIds = [eventId]
-
-      let query: any = supabase
-        .from('event_registrations')
-        .select('id, status, checked_in, registered_at, event_id, form_responses, events(title, custom_form_schema, chapters(name)), profiles(full_name, email, school_or_company)')
-        .neq('status', 'cancelled')
-
-      if (eventIds && eventIds.length === 0) {
-        const eventLabel = scope === 'event'
-          ? events.find((event) => event.id === eventId)?.title
-          : undefined
-        const emptyFilename = buildExportFilename('attendance', eventLabel)
+      if (scope === 'event' && !eventId) {
+        const emptyFilename = buildExportFilename('attendance', undefined)
         downloadCsv(emptyFilename, buildCsv([
           'registration_id',
           'status',
@@ -1398,13 +1379,13 @@ export default function AdminEvents() {
         return
       }
 
-      if (eventIds) query = query.in('event_id', eventIds)
-      query = applyAttendanceStatusFilter(query, attendanceStatus ?? 'all') as any
-
-      const { data, error: exportErr } = await query
-      if (exportErr) throw new Error(exportErr.message)
-
-      const dataRows = (data ?? []) as Array<{
+      // Goes through the gateway (service-role — bypasses RLS), not a direct
+      // Supabase read. Chapter officers/admins have no RLS policy granting
+      // read access to other members' `profiles` rows, so the direct read
+      // used to come back with the joined name/email/school blank.
+      const params = new URLSearchParams({ scope, status: attendanceStatus ?? 'all' })
+      if (scope === 'event' && eventId) params.set('eventId', eventId)
+      const result = await apiFetch<Array<{
         id?: string
         status?: string | null
         checked_in?: boolean | null
@@ -1412,7 +1393,8 @@ export default function AdminEvents() {
         form_responses?: Record<string, unknown> | null
         events?: unknown
         profiles?: unknown
-      }>
+      }> | null>(`/api/admin/attendance/export?${params}`)
+      const dataRows = result ?? []
 
       const baseHeaders = [
         'registration_id',
@@ -1814,8 +1796,10 @@ export default function AdminEvents() {
                           onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
                           className={inputClass}
                         >
-                          {filteredEventOptions.length === 0 && (
+                          {filteredEventOptions.length === 0 ? (
                             <option value="">No matching events</option>
+                          ) : (
+                            <option value="">Select an event…</option>
                           )}
                           {filteredEventOptions.map((event) => (
                             <option key={event.id} value={event.id}>{getEventOptionLabel(event)}</option>

@@ -4,7 +4,8 @@ import { AppCacheService } from '../cache/app-cache.service';
 import { CacheKeys } from '../cache/cache-keys';
 import { EmailService } from '../email/email.service';
 import type { AdminAnalytics, PointTransaction, Profile, ProfileRole } from '../supabase/types';
-import { AdminRepository } from './admin.repository';
+import { AdminRepository, type AttendanceExportRow } from './admin.repository';
+import type { ExportAttendanceQueryDto } from './dto/export-attendance-query.dto';
 
 @Injectable()
 export class AdminService {
@@ -46,6 +47,14 @@ export class AdminService {
 
   getAnalytics(): Promise<AdminAnalytics> {
     return this.repo.getAnalytics();
+  }
+
+  exportAttendance(query: ExportAttendanceQueryDto): Promise<AttendanceExportRow[]> {
+    return this.repo.findAttendanceExport({
+      scope: query.scope ?? 'all',
+      eventId: query.eventId,
+      status: query.status ?? 'all',
+    });
   }
 
   /**
