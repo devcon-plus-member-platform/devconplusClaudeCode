@@ -72,6 +72,7 @@ export default function Dashboard() {
   const [isStartingMission, setIsStartingMission] = useState<Record<string, boolean>>({})
   const [attendeeCounts, setAttendeeCounts] = useState<Record<string, number>>({})
   const [attendeeDetails, setAttendeeDetails] = useState<Record<string, { avatar_url: string | null; full_name: string }[]>>({})
+  const [activeTab, setActiveTab] = useState<'updates' | 'featured'>('updates')
   const [showVolunteerForm, setShowVolunteerForm] = useState(false)
 
   const bannersLengthRef = useRef(1)
