@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CacheKeys } from '../cache/cache-keys';
 import { EmailService } from '../email/email.service';
 import type { AdminAnalytics, PointTransaction, Profile, ProfileRole } from '../supabase/types';
-import { AdminRepository } from './admin.repository';
+import { AdminRepository, type AttendanceExportRow } from './admin.repository';
+import type { ExportAttendanceQueryDto } from './dto/export-attendance-query.dto';
 
 @Injectable()
 export class AdminService {
@@ -23,7 +24,19 @@ export class AdminService {
     return this.repo.findUserTransactions(userId);
   }
 
-  async updateUserRole(userId: string, role: ProfileRole): Promise<void> {
+  getEventCreators(): Promise<Array<{ id: string; full_name: string }>> {
+    return this.repo.findEventCreators();
+  }
+
+  async updateUserRole(userId: string, role: ProfileRole, actorRole: ProfileRole): Promise<void> {
+    // Only a super_admin may grant super_admin, or change the role of an existing
+    // super_admin — otherwise an hq_admin could self-escalate or demote a peer.
+    if (actorRole !== 'super_admin') {
+      const currentRole = await this.repo.findRoleById(userId);
+      if (role === 'super_admin' || currentRole === 'super_admin') {
+        throw new ForbiddenException('Only a super_admin can grant or modify super_admin status.');
+      }
+    }
     await this.repo.updateUserRole(userId, role);
     // Cross-user invalidation: the TARGET user's AuthGuard cache holds their old
     // role — bust it so their next request reflects the new permissions, rather
@@ -34,6 +47,14 @@ export class AdminService {
 
   getAnalytics(): Promise<AdminAnalytics> {
     return this.repo.getAnalytics();
+  }
+
+  exportAttendance(query: ExportAttendanceQueryDto): Promise<AttendanceExportRow[]> {
+    return this.repo.findAttendanceExport({
+      scope: query.scope ?? 'all',
+      eventId: query.eventId,
+      status: query.status ?? 'all',
+    });
   }
 
   /**

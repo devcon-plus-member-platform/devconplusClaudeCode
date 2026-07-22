@@ -9,6 +9,26 @@ import type {
   ProfileRole,
 } from '../supabase/types';
 
+/** Raw shape returned by findAttendanceExport — mirrors the joined Postgrest response 1:1. */
+export interface AttendanceExportRow {
+  id?: string;
+  status?: string | null;
+  checked_in?: boolean | null;
+  registered_at?: string | null;
+  event_id?: string;
+  form_responses?: Record<string, unknown> | null;
+  events?: {
+    title?: string;
+    custom_form_schema?: unknown;
+    chapters?: { name?: string } | null;
+  } | null;
+  profiles?: {
+    full_name?: string;
+    email?: string;
+    school_or_company?: string;
+  } | null;
+}
+
 @Injectable()
 export class AdminRepository extends BaseRepository {
   constructor(supabase: SupabaseService) {
@@ -23,6 +43,24 @@ export class AdminRepository extends BaseRepository {
       .select('*')
       .order('created_at', { ascending: false });
     return this.unwrap(result as { data: Profile[] | null; error: { message: string } | null });
+  }
+
+  /**
+   * Only officers/admins can create events (see the "Officers create events" RLS
+   * policy), so this is a small, bounded set — safe to fetch in full for an
+   * id → name lookup, unlike findAllUsers().
+   */
+  async findEventCreators(): Promise<Array<{ id: string; full_name: string }>> {
+    const result = await this.db
+      .from('profiles')
+      .select('id, full_name')
+      .in('role', ['chapter_officer', 'hq_admin', 'super_admin']);
+    return this.unwrap(
+      result as {
+        data: Array<{ id: string; full_name: string }> | null;
+        error: { message: string } | null;
+      },
+    );
   }
 
   async findUserTransactions(userId: string, limit = 5): Promise<PointTransaction[]> {
@@ -54,6 +92,17 @@ export class AdminRepository extends BaseRepository {
     if (error) throw new BadRequestException(error.message);
   }
 
+  /** Look up a profile's current role by id (for role-escalation authorization checks). */
+  async findRoleById(profileId: string): Promise<ProfileRole | null> {
+    const { data, error } = await this.db
+      .from('profiles')
+      .select('role')
+      .eq('id', profileId)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.role as ProfileRole | null) ?? null;
+  }
+
   /** Look up a profile's Firebase auth_uid by profile id (for cache invalidation). */
   async getAuthUidById(profileId: string): Promise<string | null> {
     const { data, error } = await this.db
@@ -74,6 +123,43 @@ export class AdminRepository extends BaseRepository {
       .maybeSingle();
     if (error) return null;
     return (data?.name as string | null) ?? null;
+  }
+
+  /**
+   * Raw registrations joined with event/chapter/profile info, for the admin
+   * attendance CSV export. Service-role — bypasses RLS. Replaces a direct
+   * browser-side Supabase read: chapter_officer/hq_admin callers have no RLS
+   * policy granting them read access to other members' `profiles` rows, so
+   * that read silently came back with the joined profile blank for anyone
+   * but the row owner or (via `is_admin()`) an admin — inconsistent with who
+   * the frontend actually shows the export button to.
+   */
+  async findAttendanceExport(params: {
+    scope: 'all' | 'event';
+    eventId?: string;
+    status?: 'all' | 'approved' | 'pending' | 'rejected' | 'checked_in' | 'not_checked_in';
+  }): Promise<AttendanceExportRow[]> {
+    const { scope, eventId, status } = params;
+    if (scope === 'event' && !eventId) return [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (this.db as any)
+      .from('event_registrations')
+      .select(
+        'id, status, checked_in, registered_at, event_id, form_responses, ' +
+        'events(title, custom_form_schema, chapters(name)), ' +
+        'profiles(full_name, email, school_or_company)',
+      )
+      .neq('status', 'cancelled');
+
+    if (scope === 'event' && eventId) query = query.eq('event_id', eventId);
+    if (status === 'checked_in') query = query.eq('checked_in', true);
+    else if (status === 'not_checked_in') query = query.eq('checked_in', false);
+    else if (status && status !== 'all') query = query.eq('status', status);
+
+    const { data, error } = await query;
+    if (error) throw new BadRequestException((error as { message: string }).message);
+    return (data ?? []) as AttendanceExportRow[];
   }
 
   // ── Analytics ─────────────────────────────────────────────────────────────

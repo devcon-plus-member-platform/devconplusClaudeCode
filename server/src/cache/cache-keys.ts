@@ -12,6 +12,7 @@
  *   EVENTS_LIST          GET /events               EventsService create/update/delete
  *   JOBS_ACTIVE/ALL      GET /jobs, /jobs/all      JobsService create/update/delete
  *   NEWS_LIST/newsItem   GET /news, /news/:id      NewsService create/update/delete
+ *   FEATURED_STORIES_*   GET /featured-stories(/admin) FeaturedStoriesService create/update/delete
  *   CHAPTERS_LIST        GET /chapters             ChaptersService create/update/delete
  *   REWARDS_CATALOG/ALL  GET /rewards, /rewards/all RewardsService create/update/delete
  *                                                  + redeem/refund (rewards.stock_remaining)
@@ -29,6 +30,7 @@ export const CACHE_TTL = {
   EVENTS: 60,
   JOBS: 120,
   NEWS: 120,
+  FEATURED_STORIES: 120,
   REWARDS: 120,
   MISSIONS: 120,
   CHAPTERS: 600,
@@ -44,6 +46,8 @@ export const CacheKeys = {
   JOBS_ALL: 'jobs:list:all',
   NEWS_LIST: 'news:list',
   newsItem: (id: string): string => `news:item:${id}`,
+  FEATURED_STORIES_ACTIVE: 'featured-stories:list:active',
+  FEATURED_STORIES_ALL: 'featured-stories:list:all',
   CHAPTERS_LIST: 'chapters:list',
   REWARDS_CATALOG: 'rewards:catalog',
   REWARDS_ALL: 'rewards:all',

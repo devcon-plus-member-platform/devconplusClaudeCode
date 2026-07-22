@@ -216,6 +216,18 @@ export interface NewsPost {
   created_at: string
 }
 
+export type FeaturedStoryType = 'article' | 'video'
+
+export interface FeaturedStory {
+  id: string
+  type: FeaturedStoryType
+  youtube_id: string
+  title: string
+  article_url: string | null
+  is_active: boolean
+  created_at: string
+}
+
 export interface Program {
   id: string
   name: string

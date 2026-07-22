@@ -60,6 +60,8 @@ declare module 'solar-icon-set' {
   export const FlipHorizontalOutline: SolarIcon
   export const GalleryAddOutline: SolarIcon
   export const GiftOutline: SolarIcon
+  export const GraphDownOutline: SolarIcon
+  export const GraphUpOutline: SolarIcon
   export const HamburgerMenuOutline: SolarIcon
   export const HandHeartOutline: SolarIcon
   export const HeartOutline: SolarIcon

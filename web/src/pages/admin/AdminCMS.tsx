@@ -6,14 +6,14 @@ import AdminUpgradeRequests from './AdminUpgradeRequests'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import { INPUT_CLS, LABEL_CLS, SlideOver, ToggleRow, ConfirmDelete } from './cmsPrimitives'
-import type { Job, NewsPost, XpTier } from '@devcon-plus/supabase'
+import type { FeaturedStory, FeaturedStoryType, Job, NewsPost, XpTier } from '@devcon-plus/supabase'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
 // Rewards management moved to its own /admin/rewards page (catalog + claims).
-const TABS = ['Upgrade Requests', 'Jobs', 'Articles', 'XP Tiers'] as const
+const TABS = ['Upgrade Requests', 'Jobs', 'Articles', 'Featured Stories', 'XP Tiers'] as const
 type Tab = typeof TABS[number]
 
 // Shared sort direction for all sortable tables in this file.
@@ -674,6 +674,316 @@ function ArticlesTab() {
   )
 }
 
+// ── Tab 4: Featured Stories ───────────────────────────────────────────────
+
+interface FeaturedStoryForm {
+  type: FeaturedStoryType
+  youtube_input: string // raw pasted URL or bare ID; parsed to youtube_id on save
+  title: string
+  article_url: string
+  is_active: boolean
+}
+
+const defaultFeaturedStoryForm = (): FeaturedStoryForm => ({
+  type: 'video',
+  youtube_input: '',
+  title: '',
+  article_url: '',
+  is_active: true,
+})
+
+// Accepts a bare video ID or a full YouTube URL (watch/shorts/youtu.be/embed) and
+// returns just the video ID, so admins can paste whichever they have on hand.
+function extractYoutubeId(input: string): string {
+  const trimmed = input.trim()
+  const match = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{6,})/)
+  return match ? match[1] : trimmed
+}
+
+type FeaturedStorySortColumn = 'title' | 'type' | 'is_active'
+
+function FeaturedStoriesTab() {
+  const [rows, setRows] = useState<FeaturedStory[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [slideOver, setSlideOver] = useState<'create' | 'edit' | null>(null)
+  const [editingItem, setEditingItem] = useState<FeaturedStory | null>(null)
+  const [form, setForm] = useState<FeaturedStoryForm>(defaultFeaturedStoryForm())
+  const [saving, setSaving] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [storySearch, setStorySearch] = useState('')
+  const [storySortColumn, setStorySortColumn] = useState<FeaturedStorySortColumn | null>(null)
+  const [storySortDir, setStorySortDir] = useState<SortDir>('asc')
+
+  // Filter by title/type, then sort. With no active column the list stays
+  // newest-first (most recently added on top).
+  const visibleStories = useMemo(() => {
+    const q = storySearch.trim().toLowerCase()
+    const matched = q
+      ? rows.filter((s) =>
+          s.title.toLowerCase().includes(q) ||
+          s.youtube_id.toLowerCase().includes(q),
+        )
+      : rows
+    return [...matched].sort((a, b) => {
+      if (storySortColumn === null) return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      const dir = storySortDir === 'asc' ? 1 : -1
+      switch (storySortColumn) {
+        case 'title': return a.title.localeCompare(b.title) * dir
+        case 'type': return a.type.localeCompare(b.type) * dir
+        case 'is_active': return ((a.is_active ? 1 : 0) - (b.is_active ? 1 : 0)) * dir
+        default: return 0
+      }
+    })
+  }, [rows, storySearch, storySortColumn, storySortDir])
+
+  const { pageItems, ...pagination } = usePagination(visibleStories, 10)
+
+  const handleStorySort = (col: FeaturedStorySortColumn) => {
+    pagination.setPage(1)
+    if (storySortColumn !== col) {
+      setStorySortColumn(col)
+      setStorySortDir('asc')
+    } else if (storySortDir === 'asc') {
+      setStorySortDir('desc')
+    } else {
+      setStorySortColumn(null)
+      setStorySortDir('asc')
+    }
+  }
+
+  const storySortIcon = (col: FeaturedStorySortColumn) => {
+    if (storySortColumn !== col) return null
+    return storySortDir === 'asc'
+      ? <AltArrowUpOutline color="#1152D4" width={14} height={14} />
+      : <AltArrowDownOutline color="#1152D4" width={14} height={14} />
+  }
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await apiFetch<FeaturedStory[]>('/api/featured-stories/admin')
+      setRows(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load featured stories')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { void load() }, [])
+
+  const openCreate = () => {
+    setEditingItem(null)
+    setForm(defaultFeaturedStoryForm())
+    setSlideOver('create')
+  }
+
+  const openEdit = (s: FeaturedStory) => {
+    setEditingItem(s)
+    setForm({
+      type: s.type,
+      youtube_input: s.youtube_id,
+      title: s.title,
+      article_url: s.article_url ?? '',
+      is_active: s.is_active,
+    })
+    setSlideOver('edit')
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    const payload = {
+      type: form.type,
+      youtube_id: extractYoutubeId(form.youtube_input),
+      title: form.title.trim(),
+      article_url: form.type === 'article' ? (form.article_url.trim() || null) : null,
+      is_active: form.is_active,
+    }
+    try {
+      if (slideOver === 'create') {
+        await apiFetch('/api/featured-stories', { method: 'POST', body: JSON.stringify(payload) })
+      } else if (editingItem) {
+        await apiFetch(`/api/featured-stories/${editingItem.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      }
+      setSlideOver(null)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await apiFetch<void>(`/api/featured-stories/${id}`, { method: 'DELETE' })
+      setRows((prev) => prev.filter((s) => s.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed')
+    }
+    setConfirmDeleteId(null)
+  }
+
+  const f = (key: keyof FeaturedStoryForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, [key]: e.target.value }))
+
+  return (
+    <div className="p-4 md:p-8 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-md3-title-lg font-bold text-slate-900">Featured Stories</h2>
+          <p className="text-md3-body-md text-slate-500 mt-0.5">
+            Manage the Home dashboard carousel — videos autoplay muted and loop; order is shuffled every visit.
+          </p>
+        </div>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark transition-colors"
+        >
+          <AddCircleOutline className="w-4 h-4" />
+          <span className="hidden sm:inline">Add Story</span>
+        </button>
+      </div>
+
+      {error && (
+        <p className="text-red text-md3-label-md bg-red/5 border border-red/20 rounded-lg px-3 py-2 mb-4">{error}</p>
+      )}
+
+      {loading ? (
+        <p className="text-slate-400 text-md3-body-md">Loading…</p>
+      ) : (
+        <>
+        <div className="relative mb-4 shrink-0">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by title or YouTube ID…"
+            value={storySearch}
+            onChange={(e) => { setStorySearch(e.target.value); pagination.setPage(1) }}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </div>
+        <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
+          <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[640px] text-md3-body-md">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-100 bg-slate-50">
+                <th className="sticky left-0 z-20 bg-slate-50 border-r border-slate-100 text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  Thumbnail
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleStorySort('title')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Title {storySortIcon('title')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleStorySort('type')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Type {storySortIcon('type')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleStorySort('is_active')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Active {storySortIcon('is_active')}</button>
+                </th>
+                <th className="px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((s) => (
+                <tr key={s.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                  <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3">
+                    <img
+                      src={`https://img.youtube.com/vi/${s.youtube_id}/default.jpg`}
+                      alt=""
+                      className="w-16 h-9 object-cover rounded-md bg-slate-100"
+                    />
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-slate-900 max-w-xs truncate">{s.title}</td>
+                  <td className="px-4 py-3 text-slate-600 text-md3-label-md capitalize">{s.type}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${s.is_active ? 'bg-green/10 text-green' : 'bg-slate-100 text-slate-400'}`}>
+                      {s.is_active ? 'Yes' : 'No'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center gap-2 justify-end">
+                      <button onClick={() => openEdit(s)} className="p-1.5 text-slate-400 hover:text-blue transition-colors">
+                        <PenOutline className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(s.id)} className="p-1.5 text-slate-400 hover:text-red transition-colors">
+                        <TrashBinTrashOutline className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {visibleStories.length === 0 && (
+            <p className="text-center py-10 text-slate-400 text-md3-body-md">
+              {storySearch.trim() ? `No stories match "${storySearch.trim()}".` : 'No featured stories yet — add a YouTube link to get started.'}
+            </p>
+          )}
+          </div>
+          <Pagination controller={pagination} itemLabel="story" className="border-t border-slate-100 shrink-0" />
+        </div>
+        </>
+      )}
+
+      {slideOver && (
+        <SlideOver
+          title={`${slideOver === 'create' ? 'Create' : 'Edit'} Featured Story`}
+          onClose={() => setSlideOver(null)}
+          onSubmit={() => void handleSave()}
+          saving={saving}
+          submitLabel={slideOver === 'create' ? 'Create Story' : 'Save Changes'}
+        >
+          <div>
+            <label className={LABEL_CLS}>Type</label>
+            <select
+              className={INPUT_CLS}
+              value={form.type}
+              onChange={(e) => setForm((p) => ({ ...p, type: e.target.value as FeaturedStoryType }))}
+            >
+              <option value="video">Video — opens YouTube on tap</option>
+              <option value="article">Article — video preview, taps into an in-app article</option>
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLS}>YouTube Link or Video ID</label>
+            <input className={INPUT_CLS} value={form.youtube_input} onChange={f('youtube_input')} placeholder="https://youtu.be/dQw4w9WgXcQ" required />
+            <p className="text-[11px] text-slate-400 mt-1">Paste the full YouTube URL (watch, shorts, or youtu.be) — the video ID is extracted automatically. Plays autoloop, muted, and autoplay in the shuffled carousel.</p>
+          </div>
+          {form.youtube_input.trim() && (
+            <img
+              src={`https://img.youtube.com/vi/${extractYoutubeId(form.youtube_input)}/hqdefault.jpg`}
+              alt="Video thumbnail preview"
+              className="w-full rounded-xl bg-slate-100 aspect-video object-cover"
+            />
+          )}
+          <div>
+            <label className={LABEL_CLS}>Title</label>
+            <input className={INPUT_CLS} value={form.title} onChange={f('title')} placeholder="e.g. DEVCON Summit 2026 Highlights" required />
+          </div>
+          {form.type === 'article' && (
+            <div>
+              <label className={LABEL_CLS}>Article Destination</label>
+              <input className={INPUT_CLS} value={form.article_url} onChange={f('article_url')} placeholder="/news/welcome" />
+              <p className="text-[11px] text-slate-400 mt-1">In-app path (e.g. /news/welcome) to navigate to on tap.</p>
+            </div>
+          )}
+          <ToggleRow label="Active" checked={form.is_active} onChange={(v) => setForm((p) => ({ ...p, is_active: v }))} />
+        </SlideOver>
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmDelete
+          label="featured story"
+          onConfirm={() => void handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Tab 5: XP Tiers ───────────────────────────────────────────────────────
 
 interface XpTierForm {
@@ -1009,6 +1319,7 @@ export default function AdminCMS() {
         {activeTab === 'Upgrade Requests' && <UpgradeRequestsTab />}
         {activeTab === 'Jobs' && <JobsTab />}
         {activeTab === 'Articles' && <ArticlesTab />}
+        {activeTab === 'Featured Stories' && <FeaturedStoriesTab />}
         {activeTab === 'XP Tiers' && <XpTiersTab />}
       </div>
     </div>

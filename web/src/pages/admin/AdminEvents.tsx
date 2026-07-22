@@ -9,10 +9,11 @@ import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
-import { toDatetimeLocalValue, fromDatetimeLocalValue } from '../../lib/dates'
+import { formatDate, toDatetimeLocalValue, fromDatetimeLocalValue, computeEventStatus } from '../../lib/dates'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import CoverImageUpload from '../../components/CoverImageUpload'
+import { EventStatusBadge } from '../../components/EventStatusBadge'
 import { DESCRIPTION_MIN_LENGTH, DESCRIPTION_MAX_LENGTH } from '../organizer/events/eventFormConstants'
 
 // ── Custom form field types ────────────────────────────────────────────────────
@@ -191,7 +192,7 @@ const attachChapterName = (
 
 // ── Sort ───────────────────────────────────────────────────────────────────────
 
-type SortColumn = 'title' | 'chapter' | 'date' | 'xp' | 'status'
+type SortColumn = 'title' | 'chapter' | 'date' | 'created' | 'creator' | 'xp' | 'status'
 type SortDir = 'asc' | 'desc'
 
 // Default ordering: newest first by event date, falling back to created_at.
@@ -837,14 +838,14 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                     </button>
                     <button
                       type="button"
-                      onClick={() => field.onChange(false)}
-                      className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                        !field.value
-                          ? 'bg-blue text-white border-blue'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                      }`}
+                      disabled
+                      title="Coming soon"
+                      className="flex-1 py-2 rounded-xl text-md3-label-md font-semibold border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed flex items-center justify-center gap-1.5"
                     >
                       Paid
+                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-amber/15 text-amber">
+                        Soon
+                      </span>
                     </button>
                   </>
                 )}
@@ -1111,12 +1112,15 @@ export default function AdminEvents() {
   const [events, setEvents] = useState<EventWithChapter[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<EventWithChapter | null>(null)
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [slideOver, setSlideOver] = useState<{ mode: 'create' | 'edit'; event?: EventWithChapter } | null>(null)
   const [createdEvent, setCreatedEvent] = useState<EventWithChapter | null>(null)
   const [shareCopiedId, setShareCopiedId] = useState<string | null>(null)
   const { chapters, fetchChapters } = useChaptersStore()
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({})
+  const creatorLabel = (event: EventWithChapter): string => creatorNames[event.created_by ?? ''] ?? '—'
   const [exportDialog, setExportDialog] = useState<ExportDialogState | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportLoading, setExportLoading] = useState(false)
@@ -1156,7 +1160,8 @@ export default function AdminEvents() {
           chapterLabel(e).toLowerCase().includes(q) ||
           (e.location ?? '').toLowerCase().includes(q) ||
           (e.category ?? '').toLowerCase().includes(q) ||
-          (e.status ?? '').toLowerCase().includes(q),
+          computeEventStatus(e).includes(q) ||
+          creatorLabel(e).toLowerCase().includes(q),
         )
       : base
     return [...matched].sort((a, b) => {
@@ -1166,12 +1171,14 @@ export default function AdminEvents() {
         case 'title': return a.title.localeCompare(b.title) * dir
         case 'chapter': return chapterLabel(a).localeCompare(chapterLabel(b)) * dir
         case 'date': return (eventTime(a.event_date) - eventTime(b.event_date)) * dir
+        case 'created': return (eventTime(a.created_at) - eventTime(b.created_at)) * dir
+        case 'creator': return creatorLabel(a).localeCompare(creatorLabel(b)) * dir
         case 'xp': return (a.points_value - b.points_value) * dir
-        case 'status': return (a.status ?? '').localeCompare(b.status ?? '') * dir
+        case 'status': return computeEventStatus(a).localeCompare(computeEventStatus(b)) * dir
         default: return 0
       }
     })
-  }, [events, search, sortColumn, sortDir, eventTab])
+  }, [events, search, sortColumn, sortDir, eventTab, creatorNames])
 
   const { pageItems, ...pagination } = usePagination(visibleEvents, 10)
 
@@ -1250,11 +1257,13 @@ export default function AdminEvents() {
       try {
         await fetchChapters()
 
-        const [eventRows, chapterRows] = await Promise.all([
+        const [eventRows, chapterRows, creatorRows] = await Promise.all([
           publicFetch<Event[]>('/api/events'),
           publicFetch<{ id: string; name: string }[]>('/api/chapters'),
+          apiFetch<{ id: string; full_name: string }[]>('/api/admin/events/creators'),
         ])
         setEvents(eventRows.map((event) => attachChapterName(event, chapterRows)))
+        setCreatorNames(Object.fromEntries(creatorRows.map((c) => [c.id, c.full_name])))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load events')
       } finally {
@@ -1263,14 +1272,6 @@ export default function AdminEvents() {
     }
     void load()
   }, [])
-
-  const applyAttendanceStatusFilter = (query: any, status: AttendanceFilter) => {
-    const filterable = query as { eq: (column: string, value: string | boolean) => any }
-    if (status === 'checked_in') return filterable.eq('checked_in', true)
-    if (status === 'not_checked_in') return filterable.eq('checked_in', false)
-    if (status !== 'all') return filterable.eq('status', status)
-    return query
-  }
 
   const openExportDialog = (kind: ExportKind) => {
     setExportError(null)
@@ -1299,7 +1300,7 @@ export default function AdminEvents() {
     try {
       let query = supabase
         .from('events')
-        .select('end_date, location, category, visibility, status, is_free, ticket_price_php, capacity, points_value, requires_approval, is_external, external_registration_url, created_at, chapters(name)')
+        .select('event_date, end_date, location, category, visibility, is_free, ticket_price_php, capacity, points_value, requires_approval, is_external, external_registration_url, created_at, chapters(name)')
         .order('event_date', { ascending: false })
 
       if (scope === 'event' && eventId) query = query.eq('id', eventId)
@@ -1313,7 +1314,7 @@ export default function AdminEvents() {
         location: event.location ?? '',
         category: event.category ?? '',
         visibility: event.visibility ?? '',
-        status: event.status ?? '',
+        status: computeEventStatus(event),
         is_free: event.is_free ?? true,
         ticket_price_php: event.ticket_price_php ?? 0,
         capacity: event.capacity ?? '',
@@ -1362,19 +1363,8 @@ export default function AdminEvents() {
     setExportError(null)
     setExportLoading(true)
     try {
-      let eventIds: string[] | null = null
-      if (scope === 'event' && eventId) eventIds = [eventId]
-
-      let query: any = supabase
-        .from('event_registrations')
-        .select('id, status, checked_in, registered_at, event_id, form_responses, events(title, custom_form_schema, chapters(name)), profiles(full_name, email, school_or_company)')
-        .neq('status', 'cancelled')
-
-      if (eventIds && eventIds.length === 0) {
-        const eventLabel = scope === 'event'
-          ? events.find((event) => event.id === eventId)?.title
-          : undefined
-        const emptyFilename = buildExportFilename('attendance', eventLabel)
+      if (scope === 'event' && !eventId) {
+        const emptyFilename = buildExportFilename('attendance', undefined)
         downloadCsv(emptyFilename, buildCsv([
           'registration_id',
           'status',
@@ -1389,13 +1379,13 @@ export default function AdminEvents() {
         return
       }
 
-      if (eventIds) query = query.in('event_id', eventIds)
-      query = applyAttendanceStatusFilter(query, attendanceStatus ?? 'all') as any
-
-      const { data, error: exportErr } = await query
-      if (exportErr) throw new Error(exportErr.message)
-
-      const dataRows = (data ?? []) as Array<{
+      // Goes through the gateway (service-role — bypasses RLS), not a direct
+      // Supabase read. Chapter officers/admins have no RLS policy granting
+      // read access to other members' `profiles` rows, so the direct read
+      // used to come back with the joined name/email/school blank.
+      const params = new URLSearchParams({ scope, status: attendanceStatus ?? 'all' })
+      if (scope === 'event' && eventId) params.set('eventId', eventId)
+      const result = await apiFetch<Array<{
         id?: string
         status?: string | null
         checked_in?: boolean | null
@@ -1403,7 +1393,8 @@ export default function AdminEvents() {
         form_responses?: Record<string, unknown> | null
         events?: unknown
         profiles?: unknown
-      }>
+      }> | null>(`/api/admin/attendance/export?${params}`)
+      const dataRows = result ?? []
 
       const baseHeaders = [
         'registration_id',
@@ -1495,11 +1486,12 @@ export default function AdminEvents() {
     try {
       await apiFetch(`/api/events/${id}`, { method: 'DELETE' })
       setEvents((prev) => prev.filter((e) => e.id !== id))
+      setDeleteTarget(null)
+      setDeleteConfirmInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
     } finally {
       setDeletingId(null)
-      setConfirmDeleteId(null)
     }
   }
 
@@ -1591,6 +1583,12 @@ export default function AdminEvents() {
                   <button type="button" onClick={() => handleSort('date')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Date {sortIcon('date')}</button>
                 </th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('created')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Created {sortIcon('created')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('creator')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">Created By {sortIcon('creator')}</button>
+                </th>
+                <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
                   <button type="button" onClick={() => handleSort('xp')} className="flex items-center gap-1 hover:text-slate-700 transition-colors">XP {sortIcon('xp')}</button>
                 </th>
                 <th className="text-left px-4 py-3 text-md3-label-md font-bold text-slate-500 uppercase tracking-wider">
@@ -1622,6 +1620,12 @@ export default function AdminEvents() {
                       ? new Date(event.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                       : 'TBA'}
                   </td>
+                  <td className="px-4 py-3 text-slate-500 text-md3-label-md whitespace-nowrap">
+                    {event.created_at ? formatDate.short(event.created_at) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600 text-md3-label-md whitespace-nowrap">
+                    {creatorLabel(event)}
+                  </td>
                   <td className="px-4 py-3">
                     {event.is_external ? (
                       <span className="inline-flex items-center text-md3-label-md font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
@@ -1635,70 +1639,45 @@ export default function AdminEvents() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      event.status === 'upcoming' ? 'bg-blue/10 text-blue'
-                      : event.status === 'ongoing' ? 'bg-green/10 text-green'
-                      : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      {event.status}
-                    </span>
+                    <EventStatusBadge status={computeEventStatus(event)} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {confirmDeleteId === event.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-md3-label-md text-slate-500">Sure?</span>
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="text-md3-label-md px-2 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => void handleDelete(event.id)}
-                          disabled={deletingId === event.id}
-                          className="text-md3-label-md px-2 py-1 rounded-lg bg-red text-white disabled:opacity-50"
-                        >
-                          {deletingId === event.id ? '…' : 'Delete'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => void shareEvent(event)}
-                          title={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
-                          aria-label={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
-                        >
-                          {shareCopiedId === event.id
-                            ? <CheckCircleOutline className="w-4 h-4" color="#21C45D" />
-                            : <ShareOutline className="w-4 h-4" />}
-                        </button>
-                        <button
-                          onClick={() => window.open(`/wheel/${event.id}`, '_blank', 'noopener')}
-                          title="Open raffle wheel"
-                          aria-label="Open raffle wheel"
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors"
-                        >
-                          <ConfettiOutline className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setSlideOver({ mode: 'edit', event })}
-                          title="Edit event"
-                          aria-label="Edit event"
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
-                        >
-                          <PenOutline className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteId(event.id)}
-                          title="Delete event"
-                          aria-label="Delete event"
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                        >
-                          <TrashBinTrashOutline className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => void shareEvent(event)}
+                        title={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
+                        aria-label={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
+                      >
+                        {shareCopiedId === event.id
+                          ? <CheckCircleOutline className="w-4 h-4" color="#21C45D" />
+                          : <ShareOutline className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => window.open(`/wheel/${event.id}`, '_blank', 'noopener')}
+                        title="Open raffle wheel"
+                        aria-label="Open raffle wheel"
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors"
+                      >
+                        <ConfettiOutline className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setSlideOver({ mode: 'edit', event })}
+                        title="Edit event"
+                        aria-label="Edit event"
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-blue/10 hover:text-blue transition-colors"
+                      >
+                        <PenOutline className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => { setDeleteTarget(event); setDeleteConfirmInput('') }}
+                        title="Delete event"
+                        aria-label="Delete event"
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
+                      >
+                        <TrashBinTrashOutline className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1817,8 +1796,10 @@ export default function AdminEvents() {
                           onChange={(event) => setExportDialog((prev) => prev ? { ...prev, eventId: event.target.value } : prev)}
                           className={inputClass}
                         >
-                          {filteredEventOptions.length === 0 && (
+                          {filteredEventOptions.length === 0 ? (
                             <option value="">No matching events</option>
+                          ) : (
+                            <option value="">Select an event…</option>
                           )}
                           {filteredEventOptions.map((event) => (
                             <option key={event.id} value={event.id}>{getEventOptionLabel(event)}</option>
@@ -2021,6 +2002,79 @@ export default function AdminEvents() {
               >
                 Done
               </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Delete-confirmation modal */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { if (deletingId !== deleteTarget.id) { setDeleteTarget(null); setDeleteConfirmInput('') } }}
+              className="fixed inset-0 bg-black/40 z-[60]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 360 }}
+              className="fixed inset-0 z-[61] flex items-center justify-center p-4"
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+                className="w-[90vw] max-w-sm bg-white rounded-3xl shadow-2xl p-6"
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 rounded-full bg-red/10 flex items-center justify-center mb-3">
+                    <TrashBinTrashOutline color="#EF4444" width={28} height={28} />
+                  </div>
+                  <h2 className="text-md3-headline-sm font-bold text-slate-900">Delete this event?</h2>
+                  <p className="text-md3-body-md text-slate-500 mt-1">
+                    You will permanently lose <span className="font-semibold text-slate-700">{deleteTarget.title}</span>{' '}
+                    and all of its registrations, QR tickets, volunteer applications, and announcements. This cannot be undone.
+                  </p>
+                </div>
+
+                <div className="mt-5">
+                  <label className="block text-md3-label-md font-semibold text-slate-500 mb-1.5">
+                    Type <span className="font-bold text-slate-700">{deleteTarget.title}</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmInput}
+                    onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                    placeholder={deleteTarget.title}
+                    autoFocus
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-red/30"
+                  />
+                </div>
+
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteTarget(null); setDeleteConfirmInput('') }}
+                    disabled={deletingId === deleteTarget.id}
+                    className="flex-1 py-3 text-md3-label-lg font-bold text-slate-600 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete(deleteTarget.id)}
+                    disabled={deleteConfirmInput !== deleteTarget.title || deletingId === deleteTarget.id}
+                    className="flex-1 py-3 text-md3-label-lg font-bold text-white rounded-xl bg-red hover:bg-red/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deletingId === deleteTarget.id ? 'Deleting…' : 'Delete event'}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>

@@ -114,13 +114,13 @@ export default function EventDetail() {
 
   return (
     <motion.div
-      className="min-h-screen bg-slate-50"
+      className="relative min-h-screen bg-slate-50"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
     >
       {/* Floating back + share buttons */}
-      <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 pt-12 pointer-events-none">
+      <div className="fixed md:absolute top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 pt-12 pointer-events-none">
         <button
           onClick={() => navigate(-1)}
           className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-white/40 transition-colors shadow-lg pointer-events-auto"
@@ -155,7 +155,7 @@ export default function EventDetail() {
 
       {/* ── Header ── */}
       <header
-        className="relative z-50 h-60 bg-slate-200 overflow-hidden"
+        className="relative z-50 h-96 md:h-[28rem] bg-slate-200 overflow-hidden"
         style={{ clipPath: 'ellipse(100% 100% at 50% 0%)' }}
       >
         {event.cover_image_url ? (
@@ -168,7 +168,7 @@ export default function EventDetail() {
         )}
       </header>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 md:max-w-4xl md:mx-auto">
         <div>
           <p className="text-md3-label-md text-slate-400 mb-1">{dateStr}</p>
           <h1 className="text-md3-title-lg font-bold text-slate-900">{event.title}</h1>
@@ -334,11 +334,10 @@ export default function EventDetail() {
               initial="hidden"
               animate="visible"
               exit="hidden"
-              className="fixed bottom-0 left-0 right-0 z-[80] bg-white rounded-t-3xl overflow-hidden"
-              style={{ height: '88dvh' }}
+              className="fixed bottom-0 left-0 right-0 z-[80] bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl"
             >
               {/* Sheet header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
                 <div>
                   <p className="text-md3-label-md font-bold text-slate-900">Apply as Future Volunteer</p>
                   <p className="text-md3-label-sm text-slate-400">DEVCON Philippines</p>
@@ -355,8 +354,7 @@ export default function EventDetail() {
               <iframe
                 src={VOLUNTEER_FORM_URL}
                 title="Apply as Future Volunteer"
-                className="w-full h-full border-0"
-                style={{ height: 'calc(88dvh - 57px)' }}
+                className="w-full flex-1 border-0"
               />
             </motion.div>
           </>

@@ -155,7 +155,7 @@ export function OrgEventManagement() {
             )}
 
             {/* Remaining upcoming events */}
-            <motion.div className="space-y-3" variants={staggerContainer} initial="hidden" animate="visible">
+            <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start" variants={staggerContainer} initial="hidden" animate="visible">
               {upcomingEvents
                 .filter((e) => e.id !== currentEvent?.id)
                 .map((event) => (
@@ -177,7 +177,7 @@ export function OrgEventManagement() {
                 Past Events
               </p>
             </div>
-            <motion.div className="space-y-3" variants={staggerContainer} initial="hidden" animate="visible">
+            <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:items-start" variants={staggerContainer} initial="hidden" animate="visible">
               {pastEvents.map((event) => (
                 <EventRow
                   key={event.id}

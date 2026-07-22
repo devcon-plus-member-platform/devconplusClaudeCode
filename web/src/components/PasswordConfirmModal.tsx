@@ -60,7 +60,7 @@ export default function PasswordConfirmModal({
 
           {/* Sheet */}
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl p-6 pb-10"
+            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl p-6 pb-10 md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
             variants={slideUp}
             initial="hidden"
             animate="visible"

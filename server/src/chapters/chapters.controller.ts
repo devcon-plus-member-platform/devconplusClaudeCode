@@ -16,14 +16,10 @@ import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { ChaptersService } from './chapters.service';
+import type { ChapterStatsRow } from './chapters.repository';
 import type { Chapter } from '../supabase/types';
 import { CreateChapterDto } from './dto/create-chapter.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
-
-interface ChapterXpRow {
-  chapter: string;
-  xp: number;
-}
 
 @Controller('chapters')
 export class ChaptersController {
@@ -35,12 +31,12 @@ export class ChaptersController {
     return this.service.getAll();
   }
 
-  /** GET /api/chapters/xp — hq_admin+: chapter XP totals for admin views */
-  @Get('xp')
+  /** GET /api/chapters/stats — hq_admin+: member/event/XP counts per chapter for admin views */
+  @Get('stats')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('hq_admin')
-  getXpByChapter(): Promise<ChapterXpRow[]> {
-    return this.service.getXpByChapter();
+  getStatsByChapter(): Promise<ChapterStatsRow[]> {
+    return this.service.getStatsByChapter();
   }
 
   /** POST /api/chapters — hq_admin+: create a chapter */

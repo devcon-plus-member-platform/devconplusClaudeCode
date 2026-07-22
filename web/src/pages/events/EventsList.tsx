@@ -314,7 +314,7 @@ export default function EventsList() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-          <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
+          <div className="px-4 pt-4 pb-28">
             {/* Loading skeletons — only when no cached data yet */}
             {isLoading && events.length === 0 && (
               <div className="pt-4 space-y-3">
@@ -511,7 +511,7 @@ export default function EventsList() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-          <div className="md:max-w-4xl md:mx-auto px-4 pt-4 pb-28">
+          <div className="px-4 pt-4 pb-28">
             {allTickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center px-4 pt-24">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -666,7 +666,7 @@ export default function EventsList() {
             />
             {/* Sheet */}
             <motion.div
-              className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl px-4 pt-4 pb-10"
+              className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl px-4 pt-4 pb-10 md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
