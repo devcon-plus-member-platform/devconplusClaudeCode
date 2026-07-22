@@ -155,7 +155,7 @@ export default function EventDetail() {
 
       {/* ── Header ── */}
       <header
-        className="relative z-50 h-60 bg-slate-200 overflow-hidden"
+        className="relative z-50 h-96 md:h-[28rem] bg-slate-200 overflow-hidden"
         style={{ clipPath: 'ellipse(100% 100% at 50% 0%)' }}
       >
         {event.cover_image_url ? (

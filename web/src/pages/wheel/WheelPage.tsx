@@ -122,7 +122,7 @@ function PasswordGate({
         <h2 className="text-md3-title-lg font-black text-slate-900">Password</h2>
         {subtitle && <p className="mt-1 text-md3-body-sm text-slate-500">{subtitle}</p>}
         <p className="mt-3 rounded-xl border border-primary/15 bg-primary/5 px-3.5 py-2.5 text-left text-md3-label-md leading-relaxed text-slate-500">
-          The password is the event organizer&rsquo;s email username. Check with the organizer if you don&rsquo;t have it.
+          The password is the event organizer&rsquo;s email username &mdash; e.g. for <code>johndoe@devcon.ph</code>, enter just <code>johndoe</code>. Check with the organizer if you don&rsquo;t have it.
         </p>
         <input
           type="password"
