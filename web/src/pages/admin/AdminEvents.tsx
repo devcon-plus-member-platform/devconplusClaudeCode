@@ -1,32 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, ConfettiOutline, ClipboardListOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, ConfettiOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
+import type { Chapter } from '../../types/types'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import { formatDate, toDatetimeLocalValue, fromDatetimeLocalValue, computeEventStatus } from '../../lib/dates'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import CoverImageUpload from '../../components/CoverImageUpload'
+import { MarkdownEditor } from '../../components/MarkdownEditor'
 import { EventStatusBadge } from '../../components/EventStatusBadge'
-import { DESCRIPTION_MIN_LENGTH, DESCRIPTION_MAX_LENGTH } from '../organizer/events/eventFormConstants'
-
-// ── Custom form field types ────────────────────────────────────────────────────
-
-type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'radio'
-
-interface CustomFormField {
-  id: string          // crypto.randomUUID() — stable key, survives label edits
-  label: string
-  type: CustomFieldType
-  required: boolean
-  options: string[]   // only used for select / radio / checkbox
-}
+import { useFormDraft } from '../../hooks/useFormDraft'
+import {
+  schema as eventSchema,
+  type FormData as EventFormData,
+  type CustomFormField,
+  MAX_XP_ADMIN,
+  ATTENDANCE_PTS,
+  DESCRIPTION_MIN_LENGTH,
+  DESCRIPTION_MAX_LENGTH,
+  inputClass,
+  labelClass,
+  CATEGORY_OPTIONS,
+  DEVCON_PROGRAM_OPTIONS,
+  VISIBILITY_OPTIONS,
+  DEFAULT_VOLUNTEER_POINTS,
+  TAG_MAX_LENGTH,
+  CustomFieldsBuilder,
+  TicketPriceField,
+} from '../organizer/events/eventFormConstants'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -58,8 +65,10 @@ interface AttendanceExportRow extends Record<string, string | number | boolean |
   school_or_company: string
 }
 
-// Custom registration form field (subset of events.custom_form_schema JSONB).
-interface CustomFormField {
+// Lightweight shape for reading an already-saved events.custom_form_schema JSONB
+// back out for CSV export — only `label` is read here, so this stays looser than
+// the full CustomFormField type the create/edit form builder uses.
+interface ExportFormField {
   id: string
   label: string
 }
@@ -84,99 +93,13 @@ const formatResponseAnswer = (answer: unknown): string => {
   return formatResponseValue(answer)
 }
 
-const parseFormSchema = (raw: unknown): CustomFormField[] =>
+const parseFormSchema = (raw: unknown): ExportFormField[] =>
   Array.isArray(raw)
     ? (raw as unknown[]).filter(
-        (f): f is CustomFormField =>
+        (f): f is ExportFormField =>
           !!f && typeof f === 'object' && 'id' in f && 'label' in f,
       )
     : []
-
-// ── Zod schema ─────────────────────────────────────────────────────────────────
-
-const eventSchema = z
-  .object({
-    chapter_id: z.string().min(1, 'Chapter is required'),
-    title: z.string().min(3, 'Title must be at least 3 characters'),
-    description: z.string().min(DESCRIPTION_MIN_LENGTH, `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters`).max(DESCRIPTION_MAX_LENGTH, 'Description must be under 5,000 characters'),
-    location: z.string().min(2, 'Location is required'),
-    event_date: z.string().min(1, 'Start date is required'),
-    end_date: z.string().optional(),
-    category: z.enum([
-      'tech_talk',
-      'hackathon',
-      'workshop',
-      'brown_bag',
-      'summit',
-      'social',
-      'networking',
-      'code_camp',
-    ], { errorMap: () => ({ message: 'Please select a category' }) }),
-    is_external: z.boolean().default(false),
-    external_registration_url: z
-      .string()
-      .url('Enter a valid URL')
-      .optional()
-      .or(z.literal('')),
-    url_is_tba: z.boolean().default(false),
-    visibility: z.enum(['public', 'unlisted', 'draft']).default('public'),
-    is_free: z.boolean().default(true),
-    ticket_price_php: z.preprocess(
-      (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
-      z.number().int().positive('Price must be at least ₱1').optional()
-    ),
-    capacity: z.preprocess(
-      (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
-      z.number().int().positive().optional()
-    ),
-    points_value: z
-      .number({ coerce: true })
-      .min(0, 'Minimum 0 XP')
-      .max(1000, 'Maximum 1000 XP'),
-    requires_approval: z.boolean(),
-  })
-  .superRefine((data, ctx) => {
-    // End date is optional; when provided it must be after the start date.
-    if (data.end_date && data.event_date && data.end_date <= data.event_date) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['end_date'],
-        message: 'End date must be after the start date',
-      })
-    }
-    // Paid events must carry a price of at least ₱1.
-    if (!data.is_external && !data.is_free && (data.ticket_price_php === undefined || data.ticket_price_php < 1)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['ticket_price_php'],
-        message: 'Price must be at least ₱1',
-      })
-    }
-    if (data.is_external) {
-      if (!data.url_is_tba && (!data.external_registration_url || data.external_registration_url === '')) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['external_registration_url'],
-          message: 'External registration URL is required',
-        })
-      }
-      if (data.points_value !== 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['points_value'],
-          message: 'External events must be set to 0 XP',
-        })
-      }
-    } else if (data.points_value < 50) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['points_value'],
-        message: 'Minimum 50 XP',
-      })
-    }
-  })
-
-type EventFormData = z.infer<typeof eventSchema>
 
 const normalizeExternalUrl = (value?: string | null) => (value === 'tba' ? '' : (value ?? ''))
 
@@ -205,29 +128,6 @@ const eventTime = (value?: string | null): number => (value ? new Date(value).ge
 
 const chapterLabel = (event: EventWithChapter): string =>
   event.chapter_id === null ? 'HQ — All Chapters' : (event.chapters?.name ?? '')
-
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-const inputClass =
-  'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-md3-body-md text-slate-900 placeholder:text-slate-300 focus:outline-none focus:border-blue focus:ring-1 focus:ring-blue/20'
-const labelClass = 'block text-md3-label-md font-bold uppercase tracking-wide text-slate-500 mb-1.5'
-
-const CATEGORY_OPTIONS: { value: EventFormData['category']; label: string }[] = [
-  { value: 'tech_talk',  label: 'Tech Talk'  },
-  { value: 'hackathon',  label: 'Hackathon'  },
-  { value: 'workshop',   label: 'Workshop'   },
-  { value: 'brown_bag',  label: 'Brown Bag'  },
-  { value: 'code_camp',  label: 'Code Camp'  },
-  { value: 'summit',     label: 'Summit'     },
-  { value: 'social',     label: 'Social'     },
-  { value: 'networking', label: 'Networking' },
-]
-
-const VISIBILITY_OPTIONS: { value: EventFormData['visibility']; label: string }[] = [
-  { value: 'public',   label: 'Public'   },
-  { value: 'unlisted', label: 'Unlisted' },
-  { value: 'draft',    label: 'Draft'    },
-]
 
 // ── CSV helpers ─────────────────────────────────────────────────────────────
 
@@ -296,16 +196,44 @@ const getEventDateKey = (value?: string | null) =>
 interface SlideOverFormProps {
   mode: 'create' | 'edit'
   event?: EventWithChapter
-  chapters: { id: string; name: string }[]
+  chapters: Chapter[]
   onClose: () => void
   onSaved: (event: EventWithChapter) => void
 }
 
+// State kept outside react-hook-form (tags, custom questions, external-event
+// fields) that still needs to round-trip through the draft, alongside the RHF
+// fields captured by EventFormData.
+type AdminEventDraft = EventFormData & {
+  tags: string[]
+  customFields: CustomFormField[]
+  is_external: boolean
+  external_registration_url: string
+  url_is_tba: boolean
+}
+
 // ── EventSlideOverForm ─────────────────────────────────────────────────────────
+// Shares its schema, XP-by-category defaults, and registration-question builder
+// with the organizer create/edit pages (eventFormConstants.tsx) so the two
+// surfaces can't drift apart the way they used to (admin was missing the DEVCON
+// Program picker, tags, and the chapter-lock toggle entirely).
 
 function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOverFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
+
+  // ── Draft persistence (mirrors organizer's EventCreate/EventEdit) ──────────
+  // One key per create session, one per edited event. `chapter_id` is excluded
+  // from the create draft because that key isn't scoped per-admin — restoring a
+  // stale chapter selection on a shared machine could silently create an event
+  // under the wrong chapter.
+  const draftKey = mode === 'create' ? 'admin-event-create' : `admin-event-edit:${event?.id ?? ''}`
+  const { draft, saveDraft, clearDraft } = useFormDraft<AdminEventDraft>(
+    draftKey,
+    'local',
+    mode === 'create' ? { exclude: ['chapter_id'] } : undefined,
+  )
+  const hasDraft = mode === 'edit' && Object.keys(draft).length > 0
 
   // ── Scroll affordance ────────────────────────────────────────────────────
   // The panel is long; show a fading gradient + chevron at the bottom whenever
@@ -319,46 +247,52 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     setShowScrollHint(el.scrollHeight - el.scrollTop - el.clientHeight > 8)
   }
 
-  // ── Custom form fields state ─────────────────────────────────────────────────
+  // ── Custom registration fields (shared builder + type with organizer) ───────
   const [customFields, setCustomFields] = useState<CustomFormField[]>(() => {
-    const raw = event?.custom_form_schema
-    return Array.isArray(raw) ? (raw as CustomFormField[]) : []
+    if (mode === 'create') return (draft.customFields as CustomFormField[]) ?? []
+    if (hasDraft) return (draft.customFields as CustomFormField[]) ?? []
+    return Array.isArray(event?.custom_form_schema) ? (event.custom_form_schema as CustomFormField[]) : []
   })
-  const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({})
+
+  // ── Tags (managed outside RHF, mirrors organizer) ────────────────────────────
+  const [tags, setTags] = useState<string[]>(() => {
+    if (mode === 'create') return (draft.tags as string[]) ?? []
+    if (hasDraft) return (draft.tags as string[]) ?? []
+    return event?.tags ?? []
+  })
+  const [tagInput, setTagInput] = useState('')
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const val = tagInput.trim()
+      if (val && val.length <= TAG_MAX_LENGTH && !tags.includes(val)) {
+        setTags((prev) => [...prev, val])
+      }
+      setTagInput('')
+    }
+  }
+  const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag))
+
+  // ── External event (managed outside RHF, mirrors organizer) ──────────────────
+  const [isExternal, setIsExternal] = useState<boolean>(() => {
+    if (mode === 'create') return (draft.is_external as boolean) ?? false
+    if (hasDraft) return (draft.is_external as boolean) ?? (event?.is_external ?? false)
+    return event?.is_external ?? false
+  })
+  // "tba" sentinel means external but URL not yet known
+  const savedUrl = mode === 'create'
+    ? (draft.external_registration_url as string) ?? ''
+    : hasDraft
+      ? (draft.external_registration_url as string) ?? normalizeExternalUrl(event?.external_registration_url)
+      : normalizeExternalUrl(event?.external_registration_url)
+  const [urlIsTba, setUrlIsTba] = useState<boolean>(savedUrl === 'tba' || savedUrl === '')
+  const [externalUrl, setExternalUrl] = useState<string>(savedUrl === 'tba' ? '' : savedUrl)
+  const [externalUrlError, setExternalUrlError] = useState<string | null>(null)
 
   // ── Cover image (managed by <CoverImageUpload />, kept here for submit) ────
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(event?.cover_image_url ?? null)
-
-  const addField = () =>
-    setCustomFields(prev => [...prev, {
-      id:       crypto.randomUUID(),
-      label:    '',
-      type:     'text',
-      required: false,
-      options:  [],
-    }])
-
-  const removeField = (id: string) =>
-    setCustomFields(prev => prev.filter(f => f.id !== id))
-
-  const updateField = (id: string, patch: Partial<CustomFormField>) =>
-    setCustomFields(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
-
-  const addOption = (fieldId: string) => {
-    const draft = optionDrafts[fieldId]?.trim()
-    if (!draft) return
-    const field = customFields.find(f => f.id === fieldId)
-    if (!field) return
-    updateField(fieldId, { options: [...field.options, draft] })
-    setOptionDrafts(prev => ({ ...prev, [fieldId]: '' }))
-  }
-
-  const removeOption = (fieldId: string, index: number) => {
-    const field = customFields.find(f => f.id === fieldId)
-    if (!field) return
-    updateField(fieldId, { options: field.options.filter((_, i) => i !== index) })
-  }
 
   const {
     register,
@@ -366,63 +300,77 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     watch,
     control,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
-    defaultValues: event
+    defaultValues: mode === 'edit' && event
       ? {
-          chapter_id:        event.chapter_id === null ? '__hq__' : event.chapter_id,
-          title:             event.title,
-          description:       event.description ?? '',
-          location:          event.location ?? '',
-          event_date:        toDatetimeLocalValue(event.event_date),
-          end_date:          toDatetimeLocalValue(event.end_date),
-          category:          event.category ?? 'tech_talk',
-          is_external:       event.is_external ?? false,
-          external_registration_url: normalizeExternalUrl(event.external_registration_url),
-          url_is_tba:        normalizeExternalUrl(event.external_registration_url) === '',
-          visibility:        event.visibility ?? 'public',
-          is_free:           event.is_free ?? true,
-          ticket_price_php:  event.ticket_price_php || undefined,
-          capacity:          event.capacity ?? undefined,
-          points_value:      event.points_value ?? 200,
-          requires_approval: event.requires_approval ?? false,
+          chapter_id:        hasDraft ? (draft.chapter_id as string) ?? (event.chapter_id === null ? '__hq__' : event.chapter_id) : (event.chapter_id === null ? '__hq__' : event.chapter_id),
+          title:             hasDraft ? (draft.title as string) ?? event.title : event.title,
+          description:       hasDraft ? (draft.description as string) ?? (event.description ?? '') : (event.description ?? ''),
+          location:          hasDraft ? (draft.location as string) ?? (event.location ?? '') : (event.location ?? ''),
+          event_date:        hasDraft ? (draft.event_date as string) ?? toDatetimeLocalValue(event.event_date) : toDatetimeLocalValue(event.event_date),
+          end_date:          hasDraft ? (draft.end_date as string) ?? toDatetimeLocalValue(event.end_date) : toDatetimeLocalValue(event.end_date),
+          category:          hasDraft ? (draft.category as EventFormData['category']) ?? (event.category ?? 'tech_talk') : (event.category ?? 'tech_talk'),
+          devcon_category:   hasDraft ? (draft.devcon_category as EventFormData['devcon_category']) ?? (event.devcon_category ?? undefined) : (event.devcon_category ?? undefined),
+          visibility:        hasDraft ? (draft.visibility as EventFormData['visibility']) ?? (event.visibility ?? 'public') : (event.visibility ?? 'public'),
+          is_free:           hasDraft ? (draft.is_free as boolean) ?? (event.is_free ?? true) : (event.is_free ?? true),
+          ticket_price_php:  hasDraft ? (draft.ticket_price_php as number) ?? (event.ticket_price_php || undefined) : (event.ticket_price_php || undefined),
+          capacity:          hasDraft ? (draft.capacity as number | undefined) ?? (event.capacity ?? undefined) : (event.capacity ?? undefined),
+          points_value:      hasDraft ? (draft.points_value as number) ?? (event.points_value ?? 200) : (event.points_value ?? 200),
+          volunteer_points:  hasDraft ? (draft.volunteer_points as number) ?? (event.volunteer_points ?? DEFAULT_VOLUNTEER_POINTS) : (event.volunteer_points ?? DEFAULT_VOLUNTEER_POINTS),
+          requires_approval: hasDraft ? (draft.requires_approval as boolean) ?? (event.requires_approval ?? false) : (event.requires_approval ?? false),
+          is_chapter_locked: hasDraft ? (draft.is_chapter_locked as boolean) ?? (event.is_chapter_locked ?? false) : (event.is_chapter_locked ?? false),
         }
       : {
-          points_value:      200,
-          requires_approval: false,
-          is_free:           true,
-          ticket_price_php:  undefined,
-          is_external:       false,
-          external_registration_url: '',
-          url_is_tba:        true,
+          chapter_id:        (draft.chapter_id as string) ?? '',
+          title:             (draft.title as string) ?? '',
+          description:       (draft.description as string) ?? '',
+          location:          (draft.location as string) ?? '',
+          event_date:        (draft.event_date as string) ?? '',
+          end_date:          (draft.end_date as string) ?? '',
+          category:          (draft.category as EventFormData['category']) ?? undefined,
+          devcon_category:   (draft.devcon_category as EventFormData['devcon_category']) ?? undefined,
+          points_value:      (draft.points_value as number) ?? 200,
+          volunteer_points:  (draft.volunteer_points as number) ?? DEFAULT_VOLUNTEER_POINTS,
+          requires_approval: (draft.requires_approval as boolean) ?? false,
+          is_chapter_locked: (draft.is_chapter_locked as boolean) ?? true,
+          is_free:           (draft.is_free as boolean) ?? true,
+          ticket_price_php:  (draft.ticket_price_php as number) ?? undefined,
+          capacity:          (draft.capacity as number) ?? undefined,
           visibility:        'public',
+          tags:              [],
         },
   })
 
   const isFree = watch('is_free')
-  const isExternal = watch('is_external')
-  const descriptionLength = (watch('description') ?? '').length
-  const [urlIsTba, setUrlIsTba] = useState<boolean>(() => {
-    const existing = normalizeExternalUrl(event?.external_registration_url)
-    return existing === ''
-  })
+  const category = watch('category')
+  const selectedChapterId = watch('chapter_id')
+  // HQ events ("HQ — All Chapters") span every chapter, so "Lock to Chapter" doesn't apply.
+  const isHqSelected = selectedChapterId === '__hq__'
+  // Freeze schedule/approval/XP once an event is in the past — but NOT while it's
+  // still ongoing, admins may need to correct these mid-event. `event.status` is
+  // set once at creation and never flips (no cron updates it — see dates.ts), so
+  // this uses computeEventStatus() to derive the real lifecycle state from dates.
+  const isLocked = mode === 'edit' && !!event && computeEventStatus(event) === 'past'
 
-  useEffect(() => {
-    if (isExternal) {
-      setValue('points_value', 0)
-      setValue('requires_approval', false)
-      setValue('visibility', 'public')
-      setValue('url_is_tba', urlIsTba)
-      if (urlIsTba) {
-        setValue('external_registration_url', '')
-      }
-    } else {
-      setValue('external_registration_url', '')
-      setValue('url_is_tba', true)
-      setUrlIsTba(true)
+  // Auto-set attendance points when the category changes — always on create;
+  // on edit only if the category actually changed from the stored value, so
+  // editing an event doesn't clobber a deliberately-customized XP value.
+  const prevCategoryRef = useRef<string | undefined>(undefined)
+  if (category && category !== prevCategoryRef.current) {
+    prevCategoryRef.current = category
+    if (mode === 'create' || category !== event?.category) {
+      setValue('points_value', Math.min(ATTENDANCE_PTS[category], MAX_XP_ADMIN), { shouldValidate: false })
     }
-  }, [isExternal, setValue, urlIsTba])
+  }
+
+  // HQ events are open to all chapters — keep the lock off so a stale "true"
+  // left over after switching chapters can never be submitted.
+  useEffect(() => {
+    if (isHqSelected) setValue('is_chapter_locked', false)
+  }, [isHqSelected, setValue])
 
   // Recompute the scroll affordance whenever the form's height changes
   // (sections toggle with isExternal / isFree, questions are added/removed).
@@ -430,18 +378,76 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     updateScrollHint()
   }, [isExternal, isFree, customFields.length, coverPreview])
 
+  // Merely opening this panel in edit mode must never manufacture a draft
+  // snapshot — see the identical guard (and its rationale) in EventEdit.tsx.
+  // Create mode has no existing server truth to shadow, so it writes immediately
+  // (matching organizer's EventCreate).
+  const skipInitialDraftSync = useRef(mode === 'edit')
+  useEffect(() => {
+    if (mode !== 'edit') return
+    const timer = setTimeout(() => { skipInitialDraftSync.current = false }, 0)
+    return () => clearTimeout(timer)
+  }, [mode])
+
+  // Save RHF fields → draft whenever any field changes
+  useEffect(() => {
+    const { unsubscribe } = watch((values) => {
+      if (skipInitialDraftSync.current) return
+      saveDraft({
+        ...(values as Partial<EventFormData>),
+        tags,
+        customFields,
+        is_external: isExternal,
+        external_registration_url: urlIsTba ? 'tba' : externalUrl,
+        url_is_tba: urlIsTba,
+      })
+    })
+    return unsubscribe
+  }, [watch, saveDraft, tags, customFields, isExternal, externalUrl, urlIsTba])
+
+  // Save outside-RHF state → draft whenever tags/customFields/external change
+  useEffect(() => {
+    if (skipInitialDraftSync.current) return
+    saveDraft({
+      ...getValues(),
+      tags,
+      customFields,
+      is_external: isExternal,
+      external_registration_url: urlIsTba ? 'tba' : externalUrl,
+      url_is_tba: urlIsTba,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tags, customFields, isExternal, externalUrl, urlIsTba])
+
   const onSubmit = async (data: EventFormData) => {
+    if (!data.devcon_category) {
+      setSubmitError('Please select a DEVCON Program.')
+      return
+    }
+    if (!data.chapter_id) {
+      setSubmitError('Please select a chapter or HQ.')
+      return
+    }
+    if (isExternal && !urlIsTba) {
+      if (!externalUrl.trim()) {
+        setExternalUrlError('Enter a valid URL or switch to TBA.')
+        return
+      }
+      try {
+        new URL(externalUrl.trim())
+      } catch {
+        setExternalUrlError('Please enter a valid URL (e.g. https://example.com).')
+        return
+      }
+    }
     setSubmitError(null)
+    setExternalUrlError(null)
     setCoverUploadError(null)
+
+    const isHqEvent = data.chapter_id === '__hq__'
+    const chapterId = isHqEvent ? null : data.chapter_id
+
     try {
-      const schema = customFields.length > 0 ? customFields : null
-      const isExternalEvent = data.is_external === true
-      const externalUrl = data.url_is_tba ? 'tba' : (data.external_registration_url?.trim() || null)
-      const { url_is_tba: _urlIsTba, ...rest } = data
-
-      const isHqEvent = rest.chapter_id === '__hq__'
-      const chapterId = isHqEvent ? null : rest.chapter_id
-
       let cover_image_url: string | null = coverPreview
         ? (coverFile ? null : (event?.cover_image_url ?? null))
         : null
@@ -466,33 +472,44 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
       }
 
       const payload = {
-        ...rest,
-        chapter_id: chapterId,
-        is_chapter_locked: isHqEvent ? false : true,
+        title:                       data.title,
+        description:                 data.description,
+        location:                    data.location,
         // datetime-local values are naive local wall-clock — convert to a UTC ISO
         // instant so the event doesn't shift a day when rendered in local time.
-        event_date: fromDatetimeLocalValue(data.event_date) ?? data.event_date,
-        end_date: fromDatetimeLocalValue(data.end_date),
-        capacity: data.capacity ?? null,
-        ticket_price_php: data.is_free ? 0 : (data.ticket_price_php ?? 0),
-        external_registration_url: isExternalEvent ? externalUrl : null,
-        visibility: isExternalEvent ? 'public' : data.visibility,
-        points_value: isExternalEvent ? 0 : data.points_value,
-        requires_approval: isExternalEvent ? false : data.requires_approval,
-        custom_form_schema: isExternalEvent ? null : schema,
+        // Locked (past) events keep their stored schedule regardless of stale form state.
+        event_date:                  isLocked ? (event?.event_date ?? undefined) : (fromDatetimeLocalValue(data.event_date) ?? data.event_date),
+        end_date:                    isLocked ? (event?.end_date ?? null) : fromDatetimeLocalValue(data.end_date),
+        category:                    data.category,
+        devcon_category:             data.devcon_category,
+        tags,
+        visibility:                  isExternal ? 'public' : data.visibility,
+        is_free:                     isExternal ? true : data.is_free,
+        ticket_price_php:            isExternal ? 0 : (data.is_free ? 0 : data.ticket_price_php),
+        capacity:                    isExternal ? null : (data.capacity ?? null),
+        points_value:                isExternal ? 0 : (isLocked ? (event?.points_value ?? data.points_value) : data.points_value),
+        volunteer_points:            isExternal ? 0 : data.volunteer_points,
+        requires_approval:           isExternal ? false : (isLocked ? (event?.requires_approval ?? false) : data.requires_approval),
+        is_chapter_locked:           isHqEvent ? false : data.is_chapter_locked,
+        is_external:                 isExternal,
+        external_registration_url:   isExternal ? (urlIsTba ? 'tba' : externalUrl.trim()) : null,
+        custom_form_schema:          isExternal ? null : (customFields.length > 0 ? customFields : null),
         cover_image_url,
+        chapter_id:                  chapterId,
       }
       if (mode === 'create') {
         const result = await apiFetch<Event>('/api/events', {
           method: 'POST',
           body: JSON.stringify(payload),
         })
+        clearDraft()
         onSaved(attachChapterName(result, chapters))
       } else {
         const result = await apiFetch<Event>(`/api/events/${event!.id}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         })
+        clearDraft()
         onSaved(attachChapterName(result, chapters))
       }
     } catch (err) {
@@ -521,6 +538,14 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         </button>
       </div>
 
+      {isLocked && (
+        <div className="mx-6 mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 shrink-0">
+          <p className="text-md3-label-md font-semibold text-amber-700">
+            This event is in the past. Schedule, approval, and XP are locked.
+          </p>
+        </div>
+      )}
+
       {/* Scrollable form body */}
       <form
         ref={scrollRef}
@@ -538,12 +563,88 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           <select {...register('chapter_id')} className={inputClass}>
             <option value="">Select chapter…</option>
             <option value="__hq__">HQ — All Chapters</option>
-            {chapters.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
+              const group = chapters
+                .filter((c) => c.region === region)
+                .sort((a, b) => {
+                  if (region === 'Luzon') {
+                    if (a.name === 'Manila' && b.name !== 'Manila') return -1
+                    if (b.name === 'Manila' && a.name !== 'Manila') return 1
+                  }
+                  return a.name.localeCompare(b.name)
+                })
+              if (!group.length) return null
+              return (
+                <optgroup key={region} label={region}>
+                  {group.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </optgroup>
+              )
+            })}
           </select>
           {errors.chapter_id && (
             <p className="text-md3-label-md text-red mt-1">{errors.chapter_id.message}</p>
+          )}
+        </div>
+
+        {/* ── DEVCON Program ── */}
+        <div className="border-t border-slate-100 pt-4 mt-4">
+          <label className={labelClass}>
+            DEVCON Program <span className="text-red normal-case">*</span>
+          </label>
+          <Controller
+            control={control}
+            name="devcon_category"
+            render={({ field }) => (
+              <div className="flex flex-wrap gap-2">
+                {DEVCON_PROGRAM_OPTIONS.map((opt) => {
+                  const isSelected = field.value === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => field.onChange(opt.value)}
+                      style={isSelected ? { backgroundColor: opt.hex, borderColor: opt.hex } : undefined}
+                      className={`px-3 py-1.5 rounded-full text-md3-label-md font-semibold border transition-colors ${
+                        isSelected
+                          ? opt.darkText ? 'text-slate-900' : 'text-white'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          />
+          {errors.devcon_category && (
+            <p className="text-md3-label-md text-red mt-1">{errors.devcon_category.message}</p>
+          )}
+        </div>
+
+        {/* ── Tags ── */}
+        <div className="border-t border-slate-100 pt-4 mt-4">
+          <label className={labelClass}>Tags <span className="text-slate-300 normal-case font-normal">optional</span></label>
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleTagKeyDown}
+            placeholder="Type a tag, press Enter"
+            className={inputClass}
+            maxLength={TAG_MAX_LENGTH}
+          />
+          <p className="text-[10px] text-slate-400 mt-1">Max {TAG_MAX_LENGTH} chars per tag.</p>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {tags.map((t) => (
+                <span key={t} className="inline-flex items-center gap-1 px-2 py-1 bg-blue/10 text-blue text-md3-label-md rounded-full">
+                  {t}
+                  <button type="button" onClick={() => removeTag(t)} className="leading-none hover:text-blue-dark">×</button>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
@@ -564,27 +665,19 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           {/* ── Description ── */}
           <div>
             <label className={labelClass}>Description <span className="text-red normal-case">*</span></label>
-            <textarea
-              {...register('description')}
-              rows={4}
-              className={`${inputClass} resize-none`}
-              placeholder="What is this event about?"
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <MarkdownEditor
+                  value={field.value}
+                  onChange={field.onChange as (value: string) => void}
+                  error={errors.description?.message}
+                  maxLength={DESCRIPTION_MAX_LENGTH}
+                  minLength={DESCRIPTION_MIN_LENGTH}
+                />
+              )}
             />
-            <div className="flex justify-end mt-1">
-              <span
-                className={`text-md3-label-sm font-mono ${
-                  descriptionLength > DESCRIPTION_MAX_LENGTH ? 'text-red font-semibold' : 'text-slate-400'
-                }`}
-              >
-                {descriptionLength > 0 && descriptionLength < DESCRIPTION_MIN_LENGTH && (
-                  <span>min {DESCRIPTION_MIN_LENGTH} · </span>
-                )}
-                {descriptionLength} / {DESCRIPTION_MAX_LENGTH}
-              </span>
-            </div>
-            {errors.description && (
-              <p className="text-md3-label-md text-red mt-1">{errors.description.message}</p>
-            )}
           </div>
         </div>
 
@@ -608,8 +701,15 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         <div className="border-t border-slate-100 pt-4 mt-4">
           <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
             <input
-              {...register('is_external')}
               type="checkbox"
+              checked={isExternal}
+              onChange={(e) => {
+                setIsExternal(e.target.checked)
+                if (!e.target.checked) {
+                  setExternalUrl('')
+                  setExternalUrlError(null)
+                }
+              }}
               id="is_external_admin"
               className="w-4 h-4 accent-blue rounded"
             />
@@ -621,7 +721,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                 External Tech Community Event
               </label>
               <p className="text-md3-label-md text-slate-400 mt-0.5">
-                Redirects to an external registration page and awards no XP.
+                Redirects to an external registration page. Ticket price, capacity, and XP are managed there.
               </p>
             </div>
           </div>
@@ -633,11 +733,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      setUrlIsTba(true)
-                      setValue('external_registration_url', '', { shouldValidate: true })
-                      setValue('url_is_tba', true, { shouldValidate: false })
-                    }}
+                    onClick={() => { setUrlIsTba(true); setExternalUrl(''); setExternalUrlError(null) }}
                     className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
                       urlIsTba
                         ? 'bg-blue text-white border-blue'
@@ -648,10 +744,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setUrlIsTba(false)
-                      setValue('url_is_tba', false, { shouldValidate: false })
-                    }}
+                    onClick={() => setUrlIsTba(false)}
                     className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
                       !urlIsTba
                         ? 'bg-blue text-white border-blue'
@@ -672,12 +765,17 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               ) : (
                 <div>
                   <input
-                    {...register('external_registration_url')}
+                    type="url"
+                    value={externalUrl}
+                    onChange={(e) => {
+                      setExternalUrl(e.target.value)
+                      if (externalUrlError) setExternalUrlError(null)
+                    }}
                     className={inputClass}
                     placeholder="https://..."
                   />
-                  {errors.external_registration_url && (
-                    <p className="text-md3-label-md text-red mt-1">{errors.external_registration_url.message}</p>
+                  {externalUrlError && (
+                    <p className="text-md3-label-md text-red mt-1">{externalUrlError}</p>
                   )}
                 </div>
               )}
@@ -732,33 +830,52 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
 
         {/* ── Dates ── */}
         <div className="border-t border-slate-100 pt-4 mt-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Start Date & Time <span className="text-red normal-case">*</span></label>
-              <input
-                {...register('event_date')}
-                type="datetime-local"
-                className={inputClass}
-              />
-              {errors.event_date && (
-                <p className="text-md3-label-md text-red mt-1">{errors.event_date.message}</p>
-              )}
+          {isLocked ? (
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Start Date & Time', value: event?.event_date ? new Date(event.event_date).toLocaleString() : 'TBA' },
+                { label: 'End Date & Time',   value: event?.end_date   ? new Date(event.end_date).toLocaleString()   : 'TBA' },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <label className={labelClass}>{label}</label>
+                  <div className="flex flex-col gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                    <span className="text-md3-body-md text-slate-700">{value}</span>
+                    <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full w-fit">
+                      Locked — event is past
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div>
-              <label className={labelClass}>
-                End Date & Time{' '}
-                <span className="text-slate-300 normal-case font-normal">optional</span>
-              </label>
-              <input
-                {...register('end_date')}
-                type="datetime-local"
-                className={inputClass}
-              />
-              {errors.end_date && (
-                <p className="text-md3-label-md text-red mt-1">{errors.end_date.message}</p>
-              )}
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Start Date & Time <span className="text-red normal-case">*</span></label>
+                <input
+                  {...register('event_date')}
+                  type="datetime-local"
+                  className={inputClass}
+                />
+                {errors.event_date && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.event_date.message}</p>
+                )}
+              </div>
+              <div>
+                <label className={labelClass}>
+                  End Date & Time{' '}
+                  <span className="text-slate-300 normal-case font-normal">optional</span>
+                </label>
+                <input
+                  {...register('end_date')}
+                  type="datetime-local"
+                  className={inputClass}
+                />
+                {errors.end_date && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.end_date.message}</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* ── Visibility ── */}
@@ -793,274 +910,136 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         {/* ── Requires Approval ── */}
         {!isExternal && (
           <div className="border-t border-slate-100 pt-4 mt-4">
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
-              <input
-                {...register('requires_approval')}
-                type="checkbox"
-                id="requires_approval_admin"
-                className="w-4 h-4 accent-blue rounded"
-              />
+            {isLocked ? (
               <div>
-                <label
-                  htmlFor="requires_approval_admin"
-                  className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
-                >
-                  Require Registration Approval
-                </label>
-                <p className="text-md3-label-md text-slate-400 mt-0.5">
-                  Manually approve each registration before members receive their QR ticket.
-                </p>
+                <label className={labelClass}>Registration Approval</label>
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                  <span className="text-md3-body-md text-slate-700">
+                    {event?.requires_approval ? 'Approval required' : 'Auto-approved'}
+                  </span>
+                  <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    Locked — event is past
+                  </span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <input
+                  {...register('requires_approval')}
+                  type="checkbox"
+                  id="requires_approval_admin"
+                  className="w-4 h-4 accent-blue rounded"
+                />
+                <div>
+                  <label
+                    htmlFor="requires_approval_admin"
+                    className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+                  >
+                    Require Registration Approval
+                  </label>
+                  <p className="text-md3-label-md text-slate-400 mt-0.5">
+                    Manually approve each registration before members receive their QR ticket.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── TicketOutline Price ── */}
+        {/* ── Lock to Chapter — N/A for HQ events (they span every chapter) ── */}
+        <div className={`border-t border-slate-100 pt-4 mt-4 ${isHqSelected ? 'opacity-60' : ''}`}>
+          <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+            <input
+              {...register('is_chapter_locked')}
+              type="checkbox"
+              id="is_chapter_locked_admin"
+              disabled={isHqSelected}
+              className="w-4 h-4 accent-blue rounded disabled:cursor-not-allowed"
+            />
+            <div>
+              <label
+                htmlFor="is_chapter_locked_admin"
+                className={`text-md3-body-md font-semibold text-slate-900 ${isHqSelected ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                Lock to Chapter
+              </label>
+              <p className="text-md3-label-md text-slate-400 mt-0.5">
+                {isHqSelected
+                  ? 'HQ events are open to members from every chapter, so chapter locking does not apply.'
+                  : 'Only members of the selected chapter can register for this event. Disable to allow members from any chapter to join.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Ticket Price ── */}
         {!isExternal && (
           <div className="border-t border-slate-100 pt-4 mt-4">
-            <label className={labelClass}>Ticket Price</label>
-            <div className="flex gap-3">
-              <Controller
-                control={control}
-                name="is_free"
-                render={({ field }) => (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => field.onChange(true)}
-                      className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                        field.value
-                          ? 'bg-blue text-white border-blue'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                      }`}
-                    >
-                      Free
-                    </button>
-                    <button
-                      type="button"
-                      disabled
-                      title="Coming soon"
-                      className="flex-1 py-2 rounded-xl text-md3-label-md font-semibold border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed flex items-center justify-center gap-1.5"
-                    >
-                      Paid
-                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-amber/15 text-amber">
-                        Soon
-                      </span>
-                    </button>
-                  </>
-                )}
-              />
-            </div>
-
-            {!isFree && (
-              <div className="mt-3">
-                <label className={labelClass}>Price (PHP)</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
-                    ₱
-                  </span>
-                  <input
-                    {...register('ticket_price_php')}
-                    type="number"
-                    min={1}
-                    step={1}
-                    className={`${inputClass} pl-8`}
-                    placeholder="500"
-                  />
-                </div>
-                {errors.ticket_price_php && (
-                  <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
-                )}
-              </div>
-            )}
+            <TicketPriceField control={control} register={register} errors={errors} isFree={isFree} />
           </div>
         )}
 
         {/* ── Capacity ── */}
-        <div className="border-t border-slate-100 pt-4 mt-4">
-          <label className={labelClass}>
-            Capacity{' '}
-            <span className="text-slate-300 normal-case font-normal">optional</span>
-          </label>
-          <input
-            {...register('capacity')}
-            type="number"
-            min={1}
-            step={1}
-            className={inputClass}
-            placeholder="Unlimited"
-          />
-          {errors.capacity && (
-            <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>
-          )}
-        </div>
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <label className={labelClass}>
+              Capacity{' '}
+              <span className="text-slate-300 normal-case font-normal">optional</span>
+            </label>
+            <input
+              {...register('capacity')}
+              type="number"
+              min={1}
+              step={1}
+              className={inputClass}
+              placeholder="Unlimited"
+            />
+            {errors.capacity && (
+              <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>
+            )}
+          </div>
+        )}
 
         {/* ── XP Points Value ── */}
         {!isExternal && (
           <div className="border-t border-slate-100 pt-4 mt-4">
-            <label className={labelClass}>XP Points Value <span className="text-red normal-case">*</span></label>
-            <input
-              {...register('points_value')}
-              type="number"
-              className={inputClass}
-              min={50}
-              max={1000}
-              step={50}
-            />
-            {errors.points_value && (
-              <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
+            <label className={labelClass}>Attendance XP <span className="text-red normal-case">*</span></label>
+            {isLocked ? (
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                <span className="text-md3-body-md text-slate-700">{event?.points_value ?? 0} pts</span>
+                <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  Locked — event is past
+                </span>
+              </div>
+            ) : (
+              <>
+                <input
+                  {...register('points_value')}
+                  type="number"
+                  className={inputClass}
+                  min={1}
+                  max={MAX_XP_ADMIN}
+                  step={1}
+                />
+                {errors.points_value && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.points_value.message}</p>
+                )}
+                <p className="text-md3-label-md text-slate-400 mt-1">
+                  Auto-set based on category — Tech Talk/Social/Networking = 5 pts, Code Camp = 50 pts, Workshop/Brown Bag/Hackathon = 150 pts.
+                </p>
+              </>
             )}
-            <p className="text-md3-label-md text-slate-400 mt-1">
-              Members earn this many XP when checked in at the event.
-            </p>
           </div>
         )}
 
-        {/* ── Registration Questions (form builder) ── */}
+        {/* ── Registration Questions (shared builder — matches organizer) ── */}
         {!isExternal && (
           <div className="border-t border-slate-100 pt-4 mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <p className={labelClass}>Registration Questions</p>
-                <p className="text-md3-label-md text-slate-400 -mt-1 mb-2">
-                  Extra fields shown on the member registration form.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addField}
-                className="flex items-center gap-1.5 text-md3-label-md font-bold text-blue bg-blue/10 hover:bg-blue/20 px-3 py-1.5 rounded-xl transition-colors shrink-0"
-              >
-                <AddCircleOutline className="w-3.5 h-3.5" />
-                Add Question
-              </button>
-            </div>
-
-            {customFields.length === 0 && (
-              <div className="flex flex-col items-center justify-center text-center py-6 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-2">
-                  <ClipboardListOutline color="#94A3B8" width={20} height={20} />
-                </div>
-                <p className="text-md3-body-md font-semibold text-slate-500">No extra questions yet</p>
-                <p className="text-md3-label-md text-slate-400 mt-0.5">
-                  Only name, email, and school/company will be collected. Add a question to gather more.
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {customFields.map((field, index) => (
-                <div key={field.id} className="bg-slate-50 rounded-xl border border-slate-200 p-3 space-y-3">
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <p className="text-md3-label-md font-bold text-slate-400 uppercase tracking-wide">
-                      Question {index + 1}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => removeField(field.id)}
-                      className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-400 hover:bg-red/10 hover:text-red transition-colors"
-                    >
-                      <TrashBinTrashOutline className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Label */}
-                  <div>
-                    <label className={labelClass}>
-                      Label <span className="text-red normal-case">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={field.label}
-                      onChange={e => updateField(field.id, { label: e.target.value })}
-                      placeholder="e.g. What is your shirt size?"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  {/* Type + Required */}
-                  <div className="flex items-end gap-3">
-                    <div className="flex-1">
-                      <label className={labelClass}>Type</label>
-                      <select
-                        value={field.type}
-                        onChange={e =>
-                          updateField(field.id, {
-                            type:    e.target.value as CustomFieldType,
-                            options: [],
-                          })
-                        }
-                        className={inputClass}
-                      >
-                        <option value="text">Short Text</option>
-                        <option value="textarea">Long Text</option>
-                        <option value="select">Dropdown</option>
-                        <option value="radio">Multiple Choice</option>
-                        <option value="checkbox">Checkboxes</option>
-                      </select>
-                    </div>
-                    <label className="flex items-center gap-2 cursor-pointer pb-2.5 shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={field.required}
-                        onChange={e => updateField(field.id, { required: e.target.checked })}
-                        className="w-4 h-4 accent-blue"
-                      />
-                      <span className="text-md3-label-md font-semibold text-slate-600">Required</span>
-                    </label>
-                  </div>
-
-                  {/* Options — only for select / radio / checkbox */}
-                  {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
-                    <div>
-                      <label className={labelClass}>Options</label>
-                      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[26px]">
-                        {field.options.map((opt, i) => (
-                          <span
-                            key={i}
-                            className="flex items-center gap-1 bg-white border border-slate-200 text-slate-700 text-md3-label-md px-2 py-0.5 rounded-full"
-                          >
-                            {opt}
-                            <button
-                              type="button"
-                              onClick={() => removeOption(field.id, i)}
-                              className="text-slate-400 hover:text-red transition-colors"
-                            >
-                              <CloseCircleLineDuotone className="w-2.5 h-2.5" color="#EF4444" />
-                            </button>
-                          </span>
-                        ))}
-                        {field.options.length === 0 && (
-                          <span className="text-md3-label-md text-slate-300 italic">No options yet</span>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={optionDrafts[field.id] ?? ''}
-                          onChange={e =>
-                            setOptionDrafts(prev => ({ ...prev, [field.id]: e.target.value }))
-                          }
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') { e.preventDefault(); addOption(field.id) }
-                          }}
-                          placeholder="Add option…"
-                          className={inputClass}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => addOption(field.id)}
-                          className="px-3 py-2 bg-blue text-white text-md3-label-md font-bold rounded-xl hover:bg-blue-dark transition-colors shrink-0"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <p className={labelClass}>Registration Questions</p>
+            <p className="text-md3-label-md text-slate-400 -mt-1 mb-3">
+              Extra fields shown on the member registration form.
+            </p>
+            <CustomFieldsBuilder customFields={customFields} setCustomFields={setCustomFields} />
           </div>
         )}
 
@@ -1422,7 +1401,7 @@ export default function AdminEvents() {
         }
       }
 
-      const schemaOf = (row: (typeof dataRows)[number]): CustomFormField[] => {
+      const schemaOf = (row: (typeof dataRows)[number]): ExportFormField[] => {
         const eventData = Array.isArray(row.events) ? row.events[0] : row.events
         return parseFormSchema((eventData as { custom_form_schema?: unknown } | null)?.custom_form_schema)
       }

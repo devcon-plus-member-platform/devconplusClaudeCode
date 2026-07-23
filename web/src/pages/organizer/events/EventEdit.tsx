@@ -29,6 +29,7 @@ import {
   DESCRIPTION_MIN_LENGTH,
   SectionHeader,
   CustomFieldsBuilder,
+  TicketPriceField,
 } from './eventFormConstants'
 import type { Json } from '@devcon-plus/supabase'
 import { useFormDraft } from '../../../hooks/useFormDraft'
@@ -180,9 +181,27 @@ export function OrgEventEdit() {
     }
   }
 
+  // Merely opening this page must never manufacture a draft snapshot — the
+  // "outside-RHF state → draft" effect below fires on mount (it has to, since
+  // tags/visibility/customFields aren't RHF fields watch() can catch), and a
+  // couple of other mount-time effects call setValue() which can also wake the
+  // watch() subscription below. Both would otherwise write today's freshly-fetched
+  // event into localStorage as a "draft" — and on the NEXT visit, hasDraft (in
+  // useFormDraft above) sees that pre-existing key and prefers it over the event
+  // fetched at that time, silently hiding any edits made elsewhere (e.g. an admin
+  // adding registration questions) until this browser's draft is cleared by an
+  // actual submit. Deferring the flip to a macrotask lets every mount-time effect
+  // (including their setValue calls) finish before real draft-writing turns on.
+  const skipInitialDraftSync = useRef(true)
+  useEffect(() => {
+    const timer = setTimeout(() => { skipInitialDraftSync.current = false }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
   // Save RHF fields → draft
   useEffect(() => {
     const { unsubscribe } = watch((values) => {
+      if (skipInitialDraftSync.current) return
       saveDraft({ ...(values as Partial<FormData>), tags, visibility, customFields })
     })
     return unsubscribe
@@ -190,6 +209,7 @@ export function OrgEventEdit() {
 
   // Save outside-RHF state → draft
   useEffect(() => {
+    if (skipInitialDraftSync.current) return
     saveDraft({ ...getValues(), tags, visibility, customFields })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tags, visibility, customFields])
@@ -631,37 +651,7 @@ export function OrgEventEdit() {
               </div>
             </div>
 
-            <div>
-              <label className={labelClass}>Ticket Price</label>
-              <div className="flex gap-3">
-                <Controller
-                  control={control}
-                  name="is_free"
-                  render={({ field }) => (
-                    <>
-                      <button type="button" onClick={() => field.onChange(true)}
-                        className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${field.value ? 'bg-blue text-white border-blue' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'}`}>
-                        Free
-                      </button>
-                      <button type="button" onClick={() => field.onChange(false)}
-                        className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${!field.value ? 'bg-blue text-white border-blue' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'}`}>
-                        Paid
-                      </button>
-                    </>
-                  )}
-                />
-              </div>
-              {!isFree && (
-                <div className="mt-3">
-                  <label className={labelClass}>Price (PHP)</label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">₱</span>
-                    <input {...register('ticket_price_php')} type="number" min={1} step={1} className={`${inputClass} pl-8`} placeholder="0" />
-                  </div>
-                  {errors.ticket_price_php && <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>}
-                </div>
-              )}
-            </div>
+            <TicketPriceField control={control} register={register} errors={errors} isFree={isFree} />
 
             <div>
               <label className={labelClass}>Capacity <span className="text-slate-300 normal-case font-normal">optional</span></label>

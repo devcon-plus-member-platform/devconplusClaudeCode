@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Controller, type Control, type UseFormRegister, type FieldErrors } from 'react-hook-form'
 import { AddCircleOutline, TrashBinTrashOutline, CloseCircleLineDuotone } from 'solar-icon-set'
 import { z } from 'zod'
 import type { DevconCategory } from '@devcon-plus/supabase'
@@ -142,6 +143,84 @@ export const VISIBILITY_OPTIONS: { value: FormData['visibility']; label: string 
   { value: 'unlisted', label: 'Unlisted' },
   { value: 'draft',    label: 'Draft'    },
 ]
+
+// ── TicketPriceField ───────────────────────────────────────────────────────────
+// Shared Free/Paid control. Paid is a permanent "Coming Soon" placeholder — ticket
+// sales aren't live yet on either the organizer or admin event forms. Kept as a
+// disabled option (rather than removed) so the toggle communicates the roadmap
+// intent and an already-paid legacy event still shows its stored price below.
+
+export function TicketPriceField({
+  control,
+  register,
+  errors,
+  isFree,
+}: {
+  control: Control<FormData>
+  register: UseFormRegister<FormData>
+  errors: FieldErrors<FormData>
+  isFree: boolean
+}) {
+  return (
+    <div>
+      <label className={labelClass}>Ticket Price</label>
+      <div className="flex gap-3">
+        <Controller
+          control={control}
+          name="is_free"
+          render={({ field }) => (
+            <>
+              <button
+                type="button"
+                onClick={() => field.onChange(true)}
+                className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
+                  field.value
+                    ? 'bg-blue text-white border-blue'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
+                }`}
+              >
+                Free
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Coming soon"
+                className="flex-1 py-2 rounded-xl text-md3-label-md font-semibold border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                Paid
+                <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-amber/15 text-amber">
+                  Soon
+                </span>
+              </button>
+            </>
+          )}
+        />
+      </div>
+
+      {!isFree && (
+        <div className="mt-3">
+          <label className={labelClass}>Price (PHP)</label>
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
+              ₱
+            </span>
+            <input
+              {...register('ticket_price_php')}
+              type="number"
+              min={1}
+              step={1}
+              className={`${inputClass} pl-8`}
+              placeholder="0"
+            />
+          </div>
+          {errors.ticket_price_php && (
+            <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── SectionHeader ─────────────────────────────────────────────────────────────
 

@@ -29,6 +29,7 @@ import {
   DESCRIPTION_MIN_LENGTH,
   SectionHeader,
   CustomFieldsBuilder,
+  TicketPriceField,
 } from './eventFormConstants'
 import type { Json } from '@devcon-plus/supabase'
 import { MarkdownEditor } from '../../../components/MarkdownEditor'
@@ -738,63 +739,7 @@ export function OrgEventCreate() {
 
             {/* Ticket price — hidden for external events */}
             {!isExternal && (
-              <div>
-                <label className={labelClass}>Ticket Price</label>
-                <div className="flex gap-3">
-                  <Controller
-                    control={control}
-                    name="is_free"
-                    render={({ field }) => (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => field.onChange(true)}
-                          className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                            field.value
-                              ? 'bg-blue text-white border-blue'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                          }`}
-                        >
-                          Free
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => field.onChange(false)}
-                          className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${
-                            !field.value
-                              ? 'bg-blue text-white border-blue'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'
-                          }`}
-                        >
-                          Paid
-                        </button>
-                      </>
-                    )}
-                  />
-                </div>
-
-                {!isFree && (
-                  <div className="mt-3">
-                    <label className={labelClass}>Price (PHP)</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">
-                        ₱
-                      </span>
-                      <input
-                        {...register('ticket_price_php')}
-                        type="number"
-                        min={1}
-                        step={1}
-                        className={`${inputClass} pl-8`}
-                        placeholder="0"
-                      />
-                    </div>
-                    {errors.ticket_price_php && (
-                      <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <TicketPriceField control={control} register={register} errors={errors} isFree={isFree} />
             )}
 
             {/* Capacity — hidden for external events */}
