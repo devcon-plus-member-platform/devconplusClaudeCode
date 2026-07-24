@@ -40,6 +40,7 @@ interface CreateEventPayload {
   requires_approval: boolean
   is_chapter_locked: boolean
   cover_image_url: string | null
+  poster_image_url?: string | null
   is_external?: boolean
   external_registration_url?: string | null
   chapter_id: string | null
@@ -65,6 +66,7 @@ export interface UpdateEventPayload {
   requires_approval?: boolean
   is_chapter_locked?: boolean
   cover_image_url?: string | null
+  poster_image_url?: string | null
   is_external?: boolean
   external_registration_url?: string | null
   /** JSONB: array of CustomFormField objects */

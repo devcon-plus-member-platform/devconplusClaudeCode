@@ -13,18 +13,32 @@ interface Props {
   /** Parent-supplied error (e.g. an upload failure from onSubmit). */
   error?: string | null
   disabled?: boolean
+  /** Crop aspect ratio (width / height). Default 16:9 (cover banner). Pass 1 for a square poster. */
+  aspect?: number
+  /** Copy used in the picker button/aria labels. Default "cover image". */
+  label?: string
+  /** Recommended-dimensions hint shown under the picker. Default matches the 16:9 cover. */
+  recommendedText?: string
+  /** Crop sheet heading. Default "Adjust cover". */
+  modalTitle?: string
 }
 
 /**
- * Shared event-cover picker: validate → crop to 16:9 → preview. Owns the file
+ * Shared event-image picker: validate → crop → preview. Owns the file
  * input, drag-and-drop, the crop modal, and object-URL lifecycle. Hands the
  * parent a cropped WebP `File` via onChange; the parent uploads it on submit.
+ * Defaults to the 16:9 event cover banner; pass `aspect`/`label`/etc. to reuse
+ * it for the square event poster.
  */
 export default function CoverImageUpload({
   initialPreviewUrl,
   onChange,
   error,
   disabled = false,
+  aspect = 16 / 9,
+  label = 'cover image',
+  recommendedText = 'Recommended: 1200 × 675 px (16:9), max 5 MB',
+  modalTitle = 'Adjust cover',
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(initialPreviewUrl ?? null)
@@ -135,7 +149,7 @@ export default function CoverImageUpload({
     <>
       {preview ? (
         <div className="relative rounded-xl overflow-hidden mb-3 border border-slate-200">
-          <img src={preview} alt="Cover preview" className="w-full h-44 object-cover" />
+          <img src={preview} alt={`${label} preview`} className="w-full h-44 object-cover" />
           <button
             type="button"
             disabled={disabled || recropping}
@@ -149,7 +163,7 @@ export default function CoverImageUpload({
             disabled={disabled}
             onClick={removeCover}
             className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center disabled:opacity-50"
-            aria-label="Remove cover image"
+            aria-label={`Remove ${label}`}
           >
             <CloseCircleLineDuotone className="w-4 h-4" color="#EF4444" />
           </button>
@@ -169,9 +183,9 @@ export default function CoverImageUpload({
           }`}
         >
           <GalleryAddOutline className="w-6 h-6" />
-          <span className="text-md3-label-md font-medium">Click or drag to upload cover image</span>
+          <span className="text-md3-label-md font-medium">Click or drag to upload {label}</span>
           <span className="text-[10px] text-slate-300">JPG, PNG, WebP — optional</span>
-          <span className="text-[10px] text-slate-300">Recommended: 1200 × 675 px (16:9), max 5 MB</span>
+          <span className="text-[10px] text-slate-300">{recommendedText}</span>
         </button>
       )}
 
@@ -191,6 +205,8 @@ export default function CoverImageUpload({
           fileName={cropName}
           onApply={handleCropApply}
           onClose={() => setCropSrc(null)}
+          aspect={aspect}
+          title={modalTitle}
         />
       )}
     </>
