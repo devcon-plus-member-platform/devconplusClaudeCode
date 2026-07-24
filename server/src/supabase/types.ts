@@ -296,6 +296,7 @@ export interface Event {
   is_external: boolean | null;
   external_registration_url: string | null;
   cover_image_url: string | null;
+  poster_image_url: string | null;
   status: string | null;
   slug: string | null;
   custom_form_schema: Record<string, unknown> | null;

@@ -221,6 +221,7 @@ type AdminEventDraft = EventFormData & {
 function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOverFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
+  const [posterUploadError, setPosterUploadError] = useState<string | null>(null)
 
   // ── Draft persistence (mirrors organizer's EventCreate/EventEdit) ──────────
   // One key per create session, one per edited event. `chapter_id` is excluded
@@ -293,6 +294,10 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   // ── Cover image (managed by <CoverImageUpload />, kept here for submit) ────
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(event?.cover_image_url ?? null)
+
+  // ── Poster image — same pipeline as the cover, square aspect ────────────
+  const [posterFile, setPosterFile] = useState<File | null>(null)
+  const [posterPreview, setPosterPreview] = useState<string | null>(event?.poster_image_url ?? null)
 
   const {
     register,
@@ -376,7 +381,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
   // (sections toggle with isExternal / isFree, questions are added/removed).
   useEffect(() => {
     updateScrollHint()
-  }, [isExternal, isFree, customFields.length, coverPreview])
+  }, [isExternal, isFree, customFields.length, coverPreview, posterPreview])
 
   // Merely opening this panel in edit mode must never manufacture a draft
   // snapshot — see the identical guard (and its rationale) in EventEdit.tsx.
@@ -443,6 +448,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
     setSubmitError(null)
     setExternalUrlError(null)
     setCoverUploadError(null)
+    setPosterUploadError(null)
 
     const isHqEvent = data.chapter_id === '__hq__'
     const chapterId = isHqEvent ? null : data.chapter_id
@@ -471,6 +477,29 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         }
       }
 
+      let poster_image_url: string | null = posterPreview
+        ? (posterFile ? null : (event?.poster_image_url ?? null))
+        : null
+
+      if (posterFile) {
+        const { data: authData } = await supabase.auth.getUser()
+        const userId = authData.user?.id ?? 'admin'
+        const safeName = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100)
+        const path = `${userId}/${Date.now()}-${safeName}`
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('event-covers')
+          .upload(path, posterFile)
+        if (uploadError) {
+          setPosterUploadError('Poster image upload failed — saving without image change.')
+          poster_image_url = event?.poster_image_url ?? null
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('event-covers')
+            .getPublicUrl(uploadData.path)
+          poster_image_url = urlData.publicUrl
+        }
+      }
+
       const payload = {
         title:                       data.title,
         description:                 data.description,
@@ -495,6 +524,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         external_registration_url:   isExternal ? (urlIsTba ? 'tba' : externalUrl.trim()) : null,
         custom_form_schema:          isExternal ? null : (customFields.length > 0 ? customFields : null),
         cover_image_url,
+        poster_image_url,
         chapter_id:                  chapterId,
       }
       if (mode === 'create') {
@@ -681,10 +711,10 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           </div>
         </div>
 
-        {/* ── Cover Image ── */}
+        {/* ── Header Image ── */}
         <div className="border-t border-slate-100 pt-4 mt-4">
           <label className={labelClass}>
-            Cover Image <span className="text-slate-300 normal-case font-normal">optional</span>
+            Header Image <span className="text-slate-300 normal-case font-normal">optional</span>
           </label>
 
           <CoverImageUpload
@@ -694,6 +724,26 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               setCoverPreview(previewUrl)
             }}
             error={coverUploadError}
+          />
+        </div>
+
+        {/* ── Event Poster ── */}
+        <div className="border-t border-slate-100 pt-4 mt-4">
+          <label className={labelClass}>
+            Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+          </label>
+
+          <CoverImageUpload
+            initialPreviewUrl={event?.poster_image_url}
+            onChange={({ file, previewUrl }) => {
+              setPosterFile(file)
+              setPosterPreview(previewUrl)
+            }}
+            error={posterUploadError}
+            aspect={1}
+            label="poster image"
+            recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+            modalTitle="Adjust poster"
           />
         </div>
 

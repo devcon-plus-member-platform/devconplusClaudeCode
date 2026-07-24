@@ -89,6 +89,7 @@ export function makeEventSchema(xpMax: number) {
     is_chapter_locked: z.boolean(),
     chapter_id: z.string(),
     cover_image_url: z.string().url().optional().or(z.literal('')),
+    poster_image_url: z.string().url().optional().or(z.literal('')),
   })
   .superRefine((data, ctx) => {
     if (data.end_date && data.event_date && data.end_date <= data.event_date) {

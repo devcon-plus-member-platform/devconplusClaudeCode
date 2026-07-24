@@ -71,6 +71,10 @@ export function OrgEventCreate() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
+  // Poster image — same pipeline as the cover, square aspect (managed by <CoverImageUpload />)
+  const [posterFile, setPosterFile] = useState<File | null>(null)
+  const [posterUploadError, setPosterUploadError] = useState<string | null>(null)
+
   // Tags (managed outside RHF)
   const [tags, setTags] = useState<string[]>((draft.tags as string[]) ?? [])
   const [tagInput, setTagInput] = useState('')
@@ -236,6 +240,7 @@ export function OrgEventCreate() {
     setSubmitError(null)
     setExternalUrlError(null)
     setCoverUploadError(null)
+    setPosterUploadError(null)
     setSubmitStalled(false)
     submitStartRef.current = Date.now()
 
@@ -254,6 +259,24 @@ export function OrgEventCreate() {
           .from('event-covers')
           .getPublicUrl(uploadData.path)
         cover_image_url = urlData.publicUrl
+      }
+    }
+
+    // Upload poster image (non-blocking on failure)
+    let poster_image_url: string | null = null
+    if (posterFile) {
+      const safeName = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100)
+      const path = `${user.id}/${Date.now()}-${safeName}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('event-covers')
+        .upload(path, posterFile)
+      if (uploadError) {
+        setPosterUploadError('Poster image upload failed — event will be saved without image.')
+      } else {
+        const { data: urlData } = supabase.storage
+          .from('event-covers')
+          .getPublicUrl(uploadData.path)
+        poster_image_url = urlData.publicUrl
       }
     }
 
@@ -284,6 +307,7 @@ export function OrgEventCreate() {
         is_external:                 isExternal,
         external_registration_url:   isExternal ? (urlIsTba ? 'tba' : externalUrl.trim()) : null,
         cover_image_url,
+        poster_image_url,
         chapter_id:                  chapterId,
         custom_form_schema:          customFields.length > 0 ? customFields as unknown as Json : null,
       })
@@ -378,10 +402,27 @@ export function OrgEventCreate() {
         <motion.div variants={fadeUp}>
           <SectionHeader title="Media" />
 
-          <CoverImageUpload
-            onChange={({ file }) => setCoverFile(file)}
-            error={coverUploadError}
-          />
+          <div>
+            <label className={labelClass}>Header Image</label>
+            <CoverImageUpload
+              onChange={({ file }) => setCoverFile(file)}
+              error={coverUploadError}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>
+              Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+            </label>
+            <CoverImageUpload
+              onChange={({ file }) => setPosterFile(file)}
+              error={posterUploadError}
+              aspect={1}
+              label="poster image"
+              recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+              modalTitle="Adjust poster"
+            />
+          </div>
         </motion.div>
 
         {/* ── CATEGORIZATION ── */}

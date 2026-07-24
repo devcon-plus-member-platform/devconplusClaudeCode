@@ -11,6 +11,7 @@ import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
 import { formatDate } from '../../lib/dates'
+import EventPosterPlaceholder from '../../components/EventPosterPlaceholder'
 
 const VOLUNTEER_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSczVxZPmHIRPphNJNgbuRVzEC5QTponVzjDPPMmkSxP0cIdrg/viewform?embedded=true'
@@ -171,15 +172,12 @@ export default function EventDetail() {
 
       <div className="px-4 pb-4 pt-7 md:px-8 md:pb-8 md:pt-12 md:max-w-7xl md:mx-auto">
         <div className="md:grid md:grid-cols-[1fr_1fr] md:gap-12 md:items-start">
-          {/* Left column — cover image (desktop only, larger repeat of the hero) */}
+          {/* Left column — event poster (desktop only); no upload → generated brand poster placeholder */}
           <div className="hidden md:block md:sticky md:top-8">
-            {event.cover_image_url ? (
-              <img src={event.cover_image_url} alt={event.title} className="w-full h-auto rounded-2xl" />
+            {event.poster_image_url ? (
+              <img src={event.poster_image_url} alt={event.title} className="w-full h-auto rounded-2xl" />
             ) : (
-              <div
-                className="w-full aspect-[4/3] bg-primary rounded-2xl"
-                style={{ backgroundImage: PATTERN_BG, backgroundSize: '60px 60px' }}
-              />
+              <EventPosterPlaceholder event={event} />
             )}
           </div>
 
@@ -234,13 +232,17 @@ export default function EventDetail() {
 
             {event.description && (
               <div className="order-3 md:order-4 mt-2 md:mt-0">
-                {event.cover_image_url && (
-                  <img
-                    src={event.cover_image_url}
-                    alt={event.title}
-                    className="w-full h-auto rounded-2xl mb-6 md:hidden"
-                  />
-                )}
+                <div className="mb-6 md:hidden">
+                  {event.poster_image_url ? (
+                    <img
+                      src={event.poster_image_url}
+                      alt={event.title}
+                      className="w-full h-auto rounded-2xl"
+                    />
+                  ) : (
+                    <EventPosterPlaceholder event={event} />
+                  )}
+                </div>
                 <h2 className="text-md3-body-md font-bold text-slate-900 mb-1 pt-4 border-t border-slate-200 md:pt-0 md:border-t-0">About</h2>
                 <MarkdownContent value={event.description} />
               </div>

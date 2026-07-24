@@ -75,6 +75,13 @@ export function OrgEventEdit() {
   )
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
+  // ── Poster image — same pipeline as the cover, square aspect ────────────
+  const [posterFile, setPosterFile] = useState<File | null>(null)
+  const [posterPreview, setPosterPreview] = useState<string | null>(
+    event?.poster_image_url ?? null
+  )
+  const [posterUploadError, setPosterUploadError] = useState<string | null>(null)
+
   // ── Custom registration fields ───────────────────────────────────────────
   const [customFields, setCustomFields] = useState<CustomFormField[]>(
     hasDraft
@@ -271,6 +278,7 @@ export function OrgEventEdit() {
     if (!event) return
     setSubmitError(null)
     setCoverUploadError(null)
+    setPosterUploadError(null)
     setSubmitStalled(false)
     submitStartRef.current = Date.now()
 
@@ -279,7 +287,12 @@ export function OrgEventEdit() {
       ? (coverFile ? null : (event.cover_image_url ?? null))
       : null
 
-    if (coverFile && !user?.id) {
+    // Determine poster image URL
+    let poster_image_url: string | null = posterPreview
+      ? (posterFile ? null : (event.poster_image_url ?? null))
+      : null
+
+    if ((coverFile || posterFile) && !user?.id) {
       setSubmitError('Session expired. Please sign in again.')
       return
     }
@@ -299,6 +312,24 @@ export function OrgEventEdit() {
           .from('event-covers')
           .getPublicUrl(uploadData.path)
         cover_image_url = urlData.publicUrl
+      }
+    }
+
+    if (posterFile) {
+      const userId = user?.id ?? 'unknown'
+      const safeName = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100)
+      const path = `${userId}/${Date.now()}-${safeName}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('event-covers')
+        .upload(path, posterFile)
+      if (uploadError) {
+        setPosterUploadError('Poster image upload failed — saving without image change.')
+        poster_image_url = event.poster_image_url ?? null
+      } else {
+        const { data: urlData } = supabase.storage
+          .from('event-covers')
+          .getPublicUrl(uploadData.path)
+        poster_image_url = urlData.publicUrl
       }
     }
 
@@ -323,6 +354,7 @@ export function OrgEventEdit() {
         ticket_price_php:   data.is_free ? 0 : data.ticket_price_php,
         capacity:           data.capacity ?? null,
         cover_image_url,
+        poster_image_url,
         custom_form_schema: customFields.length > 0 ? customFields as unknown as Json : null,
       })
       submitStartRef.current = null
@@ -431,14 +463,36 @@ export function OrgEventEdit() {
         {/* ── MEDIA ── */}
         <motion.div variants={fadeUp}>
           <SectionHeader title="Media" />
-          <CoverImageUpload
-            initialPreviewUrl={event.cover_image_url}
-            onChange={({ file, previewUrl }) => {
-              setCoverFile(file)
-              setCoverPreview(previewUrl)
-            }}
-            error={coverUploadError}
-          />
+
+          <div>
+            <label className={labelClass}>Header Image</label>
+            <CoverImageUpload
+              initialPreviewUrl={event.cover_image_url}
+              onChange={({ file, previewUrl }) => {
+                setCoverFile(file)
+                setCoverPreview(previewUrl)
+              }}
+              error={coverUploadError}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>
+              Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+            </label>
+            <CoverImageUpload
+              initialPreviewUrl={event.poster_image_url}
+              onChange={({ file, previewUrl }) => {
+                setPosterFile(file)
+                setPosterPreview(previewUrl)
+              }}
+              error={posterUploadError}
+              aspect={1}
+              label="poster image"
+              recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+              modalTitle="Adjust poster"
+            />
+          </div>
         </motion.div>
 
         {/* ── CATEGORIZATION ── */}
