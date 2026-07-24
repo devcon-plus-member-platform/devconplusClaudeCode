@@ -171,9 +171,11 @@ export default function EventDetail() {
       </header>
 
       <div className="px-4 pb-4 pt-7 md:px-8 md:pb-8 md:pt-12 md:max-w-7xl md:mx-auto">
-        <div className="md:grid md:grid-cols-[1fr_1fr] md:gap-12 md:items-start">
-          {/* Left column — event poster (desktop only); no upload → generated brand poster placeholder */}
-          <div className="hidden md:block md:sticky md:top-8">
+        <div className="lg:grid lg:grid-cols-[1fr_1fr] lg:gap-12 lg:items-start">
+          {/* Left column — event poster (wide desktop only); below lg it renders inline in the
+              right column instead so tablet widths get a full-width poster, not a cramped half-column one.
+              No upload → generated brand poster placeholder */}
+          <div className="hidden lg:block lg:sticky lg:top-8">
             {event.poster_image_url ? (
               <img src={event.poster_image_url} alt={event.title} className="w-full h-auto rounded-2xl" />
             ) : (
@@ -232,7 +234,7 @@ export default function EventDetail() {
 
             {event.description && (
               <div className="order-3 md:order-4 mt-2 md:mt-0">
-                <div className="mb-6 md:hidden">
+                <div className="mb-6 lg:hidden">
                   {event.poster_image_url ? (
                     <img
                       src={event.poster_image_url}
