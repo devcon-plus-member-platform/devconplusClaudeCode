@@ -196,7 +196,7 @@ export default function EventDetail() {
               <img
                 src={event.poster_image_url}
                 alt={event.title}
-                className="aspect-square w-full rounded-2xl object-cover"
+                className="aspect-video w-full rounded-2xl object-cover"
               />
             ) : (
               <EventPosterPlaceholder event={event} />

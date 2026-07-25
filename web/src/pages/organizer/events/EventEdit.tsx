@@ -478,7 +478,7 @@ export function OrgEventEdit() {
 
           <div className="mt-4">
             <label className={labelClass}>
-              Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+              Event Poster <span className="text-slate-300 normal-case font-normal">optional, landscape</span>
             </label>
             <CoverImageUpload
               initialPreviewUrl={event.poster_image_url}
@@ -487,9 +487,9 @@ export function OrgEventEdit() {
                 setPosterPreview(previewUrl)
               }}
               error={posterUploadError}
-              aspect={1}
+              aspect={16 / 9}
               label="poster image"
-              recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+              recommendedText="Recommended: 1280 × 720 px (16:9), max 5 MB"
               modalTitle="Adjust poster"
             />
           </div>

@@ -71,7 +71,7 @@ export function OrgEventCreate() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
 
-  // Poster image — same pipeline as the cover, square aspect (managed by <CoverImageUpload />)
+  // Poster image — same pipeline as the cover, landscape aspect (managed by <CoverImageUpload />)
   const [posterFile, setPosterFile] = useState<File | null>(null)
   const [posterUploadError, setPosterUploadError] = useState<string | null>(null)
 
@@ -412,14 +412,14 @@ export function OrgEventCreate() {
 
           <div className="mt-4">
             <label className={labelClass}>
-              Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+              Event Poster <span className="text-slate-300 normal-case font-normal">optional, landscape</span>
             </label>
             <CoverImageUpload
               onChange={({ file }) => setPosterFile(file)}
               error={posterUploadError}
-              aspect={1}
+              aspect={16 / 9}
               label="poster image"
-              recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+              recommendedText="Recommended: 1280 × 720 px (16:9), max 5 MB"
               modalTitle="Adjust poster"
             />
           </div>
