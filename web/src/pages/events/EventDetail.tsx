@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, CalendarOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CalendarOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 // import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
@@ -69,6 +69,10 @@ export default function EventDetail() {
     ? (getChapterById(event.chapter_id)?.name ?? null)
     : null
 
+  const presentedByLabel = event?.chapter_id
+    ? `DEVCON ${getChapterById(event.chapter_id)?.name ?? ''} Chapter`.trim()
+    : 'DEVCON HQ'
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -108,6 +112,18 @@ export default function EventDetail() {
   const externalUrl = event.external_registration_url ?? ''
 
   const externalIsTba = externalUrl === 'tba' || externalUrl === ''
+
+  const presentedByRow = (
+    <div className="mt-3 flex items-center gap-3">
+      <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+        <UsersGroupRoundedOutline color="rgb(var(--color-primary))" width={22} height={22} />
+      </div>
+      <div>
+        <p className="text-md3-label-md text-slate-400">Presented by</p>
+        <p className="text-md3-title-md font-bold text-slate-900">{presentedByLabel}</p>
+      </div>
+    </div>
+  )
 
   const handleExternalRegistration = () => {
     if (externalIsTba) return
@@ -177,10 +193,15 @@ export default function EventDetail() {
               No upload → generated brand poster placeholder */}
           <div className="hidden lg:block lg:sticky lg:top-8">
             {event.poster_image_url ? (
-              <img src={event.poster_image_url} alt={event.title} className="w-full h-auto rounded-2xl" />
+              <img
+                src={event.poster_image_url}
+                alt={event.title}
+                className="aspect-square w-full rounded-2xl object-cover"
+              />
             ) : (
               <EventPosterPlaceholder event={event} />
             )}
+            {presentedByRow}
           </div>
 
           {/* Right column */}
@@ -239,11 +260,12 @@ export default function EventDetail() {
                     <img
                       src={event.poster_image_url}
                       alt={event.title}
-                      className="w-full h-auto rounded-2xl"
+                      className="aspect-square w-full rounded-2xl object-cover"
                     />
                   ) : (
                     <EventPosterPlaceholder event={event} />
                   )}
+                  {presentedByRow}
                 </div>
                 <h2 className="text-md3-body-md font-bold text-slate-900 mb-1 pt-4 border-t border-slate-200 md:pt-0 md:border-t-0">About</h2>
                 <MarkdownContent value={event.description} />
