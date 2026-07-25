@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { createPortal } from 'react-dom'
 import {
@@ -100,8 +100,9 @@ function RedemptionModal({ reward, spendablePoints, onClose, onGoToMissions }: R
             exit="exit"
             onClick={sheetState === 'loading' ? undefined : handleClose}
           />
+          <div className="fixed inset-0 z-[70] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[24px] overflow-hidden md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
+            className="pointer-events-auto w-full bg-white rounded-t-[24px] overflow-hidden md:max-h-[85vh] md:max-w-md md:rounded-3xl md:overflow-y-auto"
             variants={slideUp}
             initial="hidden"
             animate="visible"
@@ -256,6 +257,77 @@ function RedemptionModal({ reward, spendablePoints, onClose, onGoToMissions }: R
               </div>
             )}
           </motion.div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>,
+    document.body
+  )
+}
+
+// ── Guest Sign-Up Gate Modal ─────────────────────────────────────────────────
+
+interface GuestSignUpModalProps {
+  open: boolean
+  message: string
+  returnTo: string
+  onClose: () => void
+}
+
+function GuestSignUpModal({ open, message, returnTo, onClose }: GuestSignUpModalProps) {
+  const navigate = useNavigate()
+  const returnToParam = encodeURIComponent(returnTo)
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            className="fixed inset-0 bg-black/50 z-[60]"
+            variants={backdrop}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={onClose}
+          />
+          <div className="fixed inset-0 z-[70] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
+          <motion.div
+            className="pointer-events-auto w-full bg-white rounded-t-[24px] overflow-hidden md:max-h-[85vh] md:max-w-md md:rounded-3xl md:overflow-y-auto"
+            variants={slideUp}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                <LockOutline className="w-7 h-7" color="rgb(var(--color-primary))" />
+              </div>
+              <h2 className="text-[18px] font-proxima font-bold text-slate-900 mb-2">
+                Sign up to continue
+              </h2>
+              <p className="text-[14px] text-slate-500 font-proxima leading-relaxed mb-6">
+                {message}
+              </p>
+
+              <motion.button
+                onClick={() => navigate(`/sign-up?returnTo=${returnToParam}`)}
+                className="w-full py-3.5 bg-primary text-white rounded-full font-proxima font-bold text-[15px] hover:opacity-90 transition-opacity"
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              >
+                Sign Up
+              </motion.button>
+              <motion.button
+                onClick={() => navigate(`/sign-in?returnTo=${returnToParam}`)}
+                className="w-full py-3.5 mt-2 text-slate-500 font-proxima font-semibold text-[14px]"
+                whileTap={{ scale: 0.97 }}
+              >
+                I already have an account
+              </motion.button>
+            </div>
+          </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>,
@@ -383,8 +455,9 @@ function ClaimReceiptSheet({ redemption, reward, onClose }: ClaimReceiptSheetPro
             exit="exit"
             onClick={handleClose}
           />
+          <div className="fixed inset-0 z-[70] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
           <motion.div
-            className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[24px] overflow-hidden md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
+            className="pointer-events-auto w-full bg-white rounded-t-[24px] overflow-hidden md:max-h-[85vh] md:max-w-md md:rounded-3xl md:overflow-y-auto"
             variants={slideUp}
             initial="hidden"
             animate="visible"
@@ -429,6 +502,7 @@ function ClaimReceiptSheet({ redemption, reward, onClose }: ClaimReceiptSheetPro
               </motion.button>
             </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>,
@@ -557,9 +631,10 @@ interface MissionsFeedProps {
   missionFilter: MissionFilterId
   userId: string | undefined
   initialExpandId?: string
+  onGuestAction: () => void
 }
 
-function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedProps) {
+function MissionsFeed({ missionFilter, userId, initialExpandId, onGuestAction }: MissionsFeedProps) {
   const {
     missions, participants, submissions,
     isLoading, error, fetchAll, startMission, submitMission,
@@ -584,7 +659,10 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
   }, [fetchAll])
 
   const handleStart = async (missionId: string) => {
-    if (!userId) return
+    if (!userId) {
+      onGuestAction()
+      return
+    }
     try {
       await startMissionRef.current(missionId, userId)
       toast.success('Mission Started!')
@@ -594,7 +672,10 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
   }
 
   const handleSubmit = async (missionId: string) => {
-    if (!userId) return
+    if (!userId) {
+      onGuestAction()
+      return
+    }
     const link = (linkDrafts[missionId] ?? '').trim()
     if (!link) {
       setSubmitErrors((p) => ({ ...p, [missionId]: 'Please enter a valid link.' }))
@@ -618,7 +699,10 @@ function MissionsFeed({ missionFilter, userId, initialExpandId }: MissionsFeedPr
   }
 
   const handleAttest = async (missionId: string) => {
-    if (!userId) return
+    if (!userId) {
+      onGuestAction()
+      return
+    }
     setAttesting((p) => ({ ...p, [missionId]: true }))
     setAttestErrors((p) => ({ ...p, [missionId]: '' }))
     try {
@@ -1013,6 +1097,7 @@ const TABS = [
 
 export default function Rewards() {
   const location = useLocation()
+  const navigate = useNavigate()
   const locationState = location.state as { expandMissionId?: string; tab?: string } | null
   const initialExpandId = locationState?.expandMissionId
   const { user } = useAuthStore()
@@ -1026,6 +1111,11 @@ export default function Rewards() {
     locationState?.tab === 'missions' ? 'missions' : 'redeem'
   )
   const [missionFilter, setMissionFilter] = useState<MissionFilterId>('all')
+  const [guestGate, setGuestGate] = useState<{ open: boolean; returnTo: string; message: string }>({
+    open: false,
+    returnTo: '/rewards',
+    message: '',
+  })
 
   useEffect(() => {
     void fetchRewards()
@@ -1038,9 +1128,21 @@ export default function Rewards() {
     if (mainTab === 'missions') void loadTotalPoints()
   }, [mainTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleRedeem = useCallback((reward: Reward) => {
-    setSelectedReward(reward)
+  const openGuestGate = useCallback((returnTo: string, message: string) => {
+    setGuestGate({ open: true, returnTo, message })
   }, [])
+
+  const closeGuestGate = useCallback(() => {
+    setGuestGate((g) => ({ ...g, open: false }))
+  }, [])
+
+  const handleRedeem = useCallback((reward: Reward) => {
+    if (!user) {
+      openGuestGate('/rewards', 'Create a free DEVCON+ account to redeem rewards and track your points.')
+      return
+    }
+    setSelectedReward(reward)
+  }, [user, openGuestGate])
 
   const handleSheetClose = useCallback(() => {
     setSelectedReward(null)
@@ -1076,32 +1178,42 @@ export default function Rewards() {
             <h1 className="text-white text-[24px] font-semibold font-proxima leading-none tracking-tight">
               Rewards
             </h1>
+            {!user && (
+              <button
+                onClick={() => navigate('/sign-up')}
+                className="bg-white text-primary font-proxima font-semibold text-[13px] px-4 h-[38px] rounded-full shadow-lg active:opacity-80 transition-opacity"
+              >
+                Sign Up
+              </button>
+            )}
           </div>
         </div>
 
-        {/* ── Points Card Overlay ── */}
-        <div className="relative z-10 flex flex-col px-4 -mt-[40px] pointer-events-none">
-          <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-400/30 px-[21px] py-6 flex items-center pointer-events-auto">
-            <div className="flex items-center gap-[8px]">
-              <div className="shrink-0 size-[48px] flex items-center justify-center">
-                <MedalStarCircleBoldDuotone color="#F8C630" size={48} />
-              </div>
-              <div className="flex flex-col justify-center translate-y-px">
-                <p className="font-proxima text-slate-500 text-[14px] leading-none mb-[6px]">
-                  Spendable Points
-                </p>
-                <div className="flex items-baseline gap-1.5">
-                  <p className="font-proxima font-extrabold text-[40.867px] text-slate-900 leading-none tracking-[-1.226px]">
-                    {spendablePoints.toLocaleString()}
+        {/* ── Points Card Overlay — guests have no balance to show ── */}
+        {user && (
+          <div className="relative z-10 flex flex-col px-4 -mt-[40px] pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] border border-slate-400/30 px-[21px] py-6 flex items-center pointer-events-auto">
+              <div className="flex items-center gap-[8px]">
+                <div className="shrink-0 size-[48px] flex items-center justify-center">
+                  <MedalStarCircleBoldDuotone color="#F8C630" size={48} />
+                </div>
+                <div className="flex flex-col justify-center translate-y-px">
+                  <p className="font-proxima text-slate-500 text-[14px] leading-none mb-[6px]">
+                    Spendable Points
                   </p>
-                  <p className="font-proxima font-semibold text-[24px] text-slate-900 leading-none">
-                    XP
-                  </p>
+                  <div className="flex items-baseline gap-1.5">
+                    <p className="font-proxima font-extrabold text-[40.867px] text-slate-900 leading-none tracking-[-1.226px]">
+                      {spendablePoints.toLocaleString()}
+                    </p>
+                    <p className="font-proxima font-semibold text-[24px] text-slate-900 leading-none">
+                      XP
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ── Segmented Toggle: Missions / Redeem ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
@@ -1162,7 +1274,12 @@ export default function Rewards() {
       {/* ── Content ── */}
       <div className="px-4 pt-4 pb-28">
         {mainTab === 'missions' ? (
-          <MissionsFeed missionFilter={missionFilter} userId={user?.id} initialExpandId={initialExpandId} />
+          <MissionsFeed
+            missionFilter={missionFilter}
+            userId={user?.id}
+            initialExpandId={initialExpandId}
+            onGuestAction={() => openGuestGate('/rewards?tab=missions', 'Create a free DEVCON+ account to join missions and earn XP.')}
+          />
         ) : activeTab === 'redeem' ? (
           <>
             {isLoading ? (
@@ -1221,6 +1338,13 @@ export default function Rewards() {
           onGoToMissions={() => { handleSheetClose(); setMainTab('missions') }}
         />
       )}
+
+      <GuestSignUpModal
+        open={guestGate.open}
+        message={guestGate.message}
+        returnTo={guestGate.returnTo}
+        onClose={closeGuestGate}
+      />
 
       {selectedReceipt && (
         <ClaimReceiptSheet

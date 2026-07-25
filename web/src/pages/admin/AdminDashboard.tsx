@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, CalendarOutline, StarOutline, BuildingsOutline, AddCircleOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, CalendarOutline, StarOutline, BuildingsOutline, AddCircleOutline, AltArrowUpOutline, AltArrowDownOutline, GiftOutline, AltArrowRightOutline } from 'solar-icon-set'
 import {
   AreaChart,
   Area,
@@ -19,6 +19,7 @@ import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import { EventStatusBadge } from '../../components/EventStatusBadge'
 import { formatDate, computeEventStatus } from '../../lib/dates'
+import { useRewardsStore } from '../../stores/useRewardsStore'
 
 interface KpiData {
   totalMembers: number
@@ -77,6 +78,8 @@ export default function AdminDashboard() {
   const [recentEventsSortColumn, setRecentEventsSortColumn] = useState<RecentEventsSortColumn | null>(null)
   const [recentEventsSortDir, setRecentEventsSortDir] = useState<SortDir>('asc')
 
+  const { allRedemptions, fetchAllRedemptions, isLoadingClaims } = useRewardsStore()
+
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
@@ -119,6 +122,18 @@ export default function AdminDashboard() {
     }
     void loadRecentEvents()
   }, [])
+
+  useEffect(() => {
+    void fetchAllRedemptions()
+  }, [fetchAllRedemptions])
+
+  const pendingClaims = useMemo(
+    () =>
+      allRedemptions
+        .filter((r) => r.status === 'pending')
+        .sort((a, b) => new Date(b.redeemed_at ?? 0).getTime() - new Date(a.redeemed_at ?? 0).getTime()),
+    [allRedemptions]
+  )
 
   const recentEventsChapterLabel = (event: Event): string =>
     event.chapter_id === null ? 'HQ — All Chapters' : (chapterNames[event.chapter_id ?? ''] ?? '—')
@@ -393,6 +408,58 @@ export default function AdminDashboard() {
         )}
 
         <Pagination controller={recentEventsPagination} itemLabel="event" className="border-t border-slate-100" />
+      </div>
+
+      {/* Row 6 — Rewards Claims (pending redemptions preview) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card mt-4 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-5 pb-4">
+          <div className="flex items-center gap-2">
+            <p className="text-md3-body-lg font-bold text-slate-900">Rewards Claims</p>
+            {pendingClaims.length > 0 && (
+              <span className="text-md3-label-md font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                {pendingClaims.length} pending
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => navigate('/admin/rewards')}
+            className="flex items-center gap-1 text-md3-label-lg font-semibold text-blue hover:text-blue-dark transition-colors"
+          >
+            View All
+            <AltArrowRightOutline width={14} height={14} color="#1152D4" />
+          </button>
+        </div>
+
+        {isLoadingClaims ? (
+          <div className="h-[120px] flex items-center justify-center text-slate-400 text-md3-body-md">Loading…</div>
+        ) : pendingClaims.length === 0 ? (
+          <div className="h-[120px] flex items-center justify-center text-slate-400 text-md3-body-md">No pending claims</div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {pendingClaims.slice(0, 5).map((claim) => (
+              <div key={claim.id} className="flex items-center gap-3 px-5 py-3">
+                <div className="size-9 bg-slate-100 rounded-lg overflow-hidden shrink-0">
+                  {claim.reward_image_url ? (
+                    <img src={claim.reward_image_url} alt={claim.reward_name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-blue">
+                      <GiftOutline className="w-4 h-4" color="white" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-md3-body-md font-semibold text-slate-900 truncate">{claim.member_name}</p>
+                  <p className="text-md3-label-md text-slate-400 truncate">
+                    {claim.reward_name} · {claim.reward_points_cost.toLocaleString()} XP
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 bg-amber-100 text-amber-700">
+                  Pending
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

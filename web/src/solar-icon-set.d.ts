@@ -57,6 +57,7 @@ declare module 'solar-icon-set' {
   export const FileTextOutline: SolarIcon
   export const FilterLinear: SolarIcon
   export const FilterOutline: SolarIcon
+  export const FlagOutline: SolarIcon
   export const FlipHorizontalOutline: SolarIcon
   export const GalleryAddOutline: SolarIcon
   export const GiftOutline: SolarIcon
@@ -68,6 +69,7 @@ declare module 'solar-icon-set' {
   export const HomeOutline: SolarIcon
   export const InfoCircleOutline: SolarIcon
   export const KeyOutline: SolarIcon
+  export const LaptopOutline: SolarIcon
   export const LetterOutline: SolarIcon
   export const LinkOutline: SolarIcon
   export const LockOutline: SolarIcon

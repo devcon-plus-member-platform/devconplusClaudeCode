@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, CalendarOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CalendarOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 // import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
@@ -69,6 +69,10 @@ export default function EventDetail() {
     ? (getChapterById(event.chapter_id)?.name ?? null)
     : null
 
+  const presentedByLabel = event?.chapter_id
+    ? `DEVCON ${getChapterById(event.chapter_id)?.name ?? ''} Chapter`.trim()
+    : 'DEVCON HQ'
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -108,6 +112,18 @@ export default function EventDetail() {
   const externalUrl = event.external_registration_url ?? ''
 
   const externalIsTba = externalUrl === 'tba' || externalUrl === ''
+
+  const presentedByRow = (
+    <div className="mt-3 flex items-center gap-3">
+      <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+        <UsersGroupRoundedOutline color="rgb(var(--color-primary))" width={22} height={22} />
+      </div>
+      <div>
+        <p className="text-md3-label-md text-slate-400">Presented by</p>
+        <p className="text-md3-title-md font-bold text-slate-900">{presentedByLabel}</p>
+      </div>
+    </div>
+  )
 
   const handleExternalRegistration = () => {
     if (externalIsTba) return
@@ -171,14 +187,21 @@ export default function EventDetail() {
       </header>
 
       <div className="px-4 pb-4 pt-7 md:px-8 md:pb-8 md:pt-12 md:max-w-7xl md:mx-auto">
-        <div className="md:grid md:grid-cols-[1fr_1fr] md:gap-12 md:items-start">
-          {/* Left column — event poster (desktop only); no upload → generated brand poster placeholder */}
-          <div className="hidden md:block md:sticky md:top-8">
+        <div className="lg:grid lg:grid-cols-[1fr_1fr] lg:gap-12 lg:items-start">
+          {/* Left column — event poster (wide desktop only); below lg it renders inline in the
+              right column instead so tablet widths get a full-width poster, not a cramped half-column one.
+              No upload → generated brand poster placeholder */}
+          <div className="hidden lg:block lg:sticky lg:top-8">
             {event.poster_image_url ? (
-              <img src={event.poster_image_url} alt={event.title} className="w-full h-auto rounded-2xl" />
+              <img
+                src={event.poster_image_url}
+                alt={event.title}
+                className="aspect-square w-full rounded-2xl object-cover"
+              />
             ) : (
               <EventPosterPlaceholder event={event} />
             )}
+            {presentedByRow}
           </div>
 
           {/* Right column */}
@@ -232,16 +255,17 @@ export default function EventDetail() {
 
             {event.description && (
               <div className="order-3 md:order-4 mt-2 md:mt-0">
-                <div className="mb-6 md:hidden">
+                <div className="mb-6 lg:hidden">
                   {event.poster_image_url ? (
                     <img
                       src={event.poster_image_url}
                       alt={event.title}
-                      className="w-full h-auto rounded-2xl"
+                      className="aspect-square w-full rounded-2xl object-cover"
                     />
                   ) : (
                     <EventPosterPlaceholder event={event} />
                   )}
+                  {presentedByRow}
                 </div>
                 <h2 className="text-md3-body-md font-bold text-slate-900 mb-1 pt-4 border-t border-slate-200 md:pt-0 md:border-t-0">About</h2>
                 <MarkdownContent value={event.description} />
@@ -377,13 +401,14 @@ export default function EventDetail() {
               className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
               onClick={() => setShowVolunteerForm(false)}
             />
+            <div className="fixed inset-0 z-[80] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
             <motion.div
               key="sheet"
               variants={slideUp}
               initial="hidden"
               animate="visible"
               exit="hidden"
-              className="fixed bottom-0 left-0 right-0 z-[80] bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl"
+              className="pointer-events-auto w-full bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:h-fit md:max-h-[85vh] md:max-w-md md:rounded-3xl"
             >
               {/* Sheet header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
@@ -406,6 +431,7 @@ export default function EventDetail() {
                 className="w-full flex-1 border-0"
               />
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>
