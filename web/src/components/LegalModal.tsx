@@ -243,8 +243,9 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
           />
 
           {/* Sheet */}
+          <div className="fixed inset-0 z-50 flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-50 bg-slate-50 rounded-t-3xl max-h-[90dvh] flex flex-col shadow-2xl md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-lg md:rounded-3xl"
+            className="pointer-events-auto relative w-full bg-slate-50 rounded-t-3xl max-h-[90dvh] flex flex-col shadow-2xl md:max-h-[85vh] md:max-w-lg md:rounded-3xl"
             variants={slideUp}
             initial="hidden"
             animate="visible"
@@ -312,6 +313,7 @@ export default function LegalModal({ type, onClose }: LegalModalProps) {
               )}
             </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

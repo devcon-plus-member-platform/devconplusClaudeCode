@@ -665,8 +665,9 @@ export default function EventsList() {
               onClick={() => setShowChapterSheet(false)}
             />
             {/* Sheet */}
+            <div className="fixed inset-0 z-[70] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
             <motion.div
-              className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl px-4 pt-4 pb-10 md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl md:overflow-y-auto"
+              className="pointer-events-auto w-full bg-white rounded-t-3xl px-4 pt-4 pb-10 md:max-h-[85vh] md:max-w-md md:rounded-3xl md:overflow-y-auto"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
@@ -723,6 +724,7 @@ export default function EventsList() {
                 )
               })}
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>

@@ -134,6 +134,7 @@ export interface Event {
   is_external: boolean | null
   external_registration_url: string | null
   cover_image_url: string | null
+  poster_image_url: string | null
   created_by: string
   created_at: string
   /** JSONB: array of CustomFormField objects defined by the officer/admin */

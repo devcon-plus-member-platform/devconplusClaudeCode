@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ClockCircleOutline, CloseCircleOutline } from 'solar-icon-set'
+import { CalendarAddOutline, ClockCircleOutline, CloseCircleOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
+import AddToCalendarSheet from '../../components/AddToCalendarSheet'
 
 export default function EventPending() {
   const { slug } = useParams<{ slug: string }>()
@@ -16,6 +17,18 @@ export default function EventPending() {
   const reg = registrations.find((r) => r.event_id === eventId && r.user_id === user?.id)
 
   const [isRejected, setIsRejected] = useState(false)
+  const [showCalSheet, setShowCalSheet] = useState(false)
+
+  const pendingCalEvent = event
+    ? {
+        ...event,
+        title: `Pending: ${event.title}`,
+        description:
+          `Your registration for "${event.title}" is awaiting review by a chapter officer. ` +
+          "This calendar entry won't update itself, so tap the link below anytime to check — " +
+          `if it takes you straight to your ticket, you're approved and in:\n${window.location.origin}/events/${event.slug}/pending`,
+      }
+    : null
 
   // React to status from the store — driven by BOTH the realtime channel (instant)
   // and the 5 s poll below (fallback). Handles approved/cancelled/rejected so the
@@ -119,6 +132,21 @@ export default function EventPending() {
         </ul>
       </motion.div>
 
+      {event?.event_date && (
+        <motion.button
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.25 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowCalSheet(true)}
+          className="w-full max-w-xs flex items-center justify-center gap-2 bg-white text-primary
+                     font-semibold border border-primary rounded-2xl py-3 text-md3-body-md mb-3"
+        >
+          <CalendarAddOutline className="w-4 h-4" color="rgb(var(--color-primary))" />
+          Add to Calendar
+        </motion.button>
+      )}
+
       <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -129,6 +157,14 @@ export default function EventPending() {
       >
         Back to Events
       </motion.button>
+
+      {pendingCalEvent && (
+        <AddToCalendarSheet
+          event={pendingCalEvent}
+          isOpen={showCalSheet}
+          onClose={() => setShowCalSheet(false)}
+        />
+      )}
     </div>
   )
 }

@@ -14,10 +14,14 @@ interface Props {
   /** Called with the cropped WebP File when the user taps Apply. */
   onApply: (file: File) => void
   onClose: () => void
+  /** Crop aspect ratio (width / height). Default 16:9 (event cover banner). */
+  aspect?: number
+  /** Sheet heading. Default "Adjust cover". */
+  title?: string
 }
 
-/** Fixed 16:9 crop sheet for event cover images. */
-export default function ImageCropModal({ src, fileName, onApply, onClose }: Props) {
+/** Crop sheet for event images — 16:9 cover banners by default, or a square poster via `aspect={1}`. */
+export default function ImageCropModal({ src, fileName, onApply, onClose, aspect = 16 / 9, title = 'Adjust cover' }: Props) {
   const [visible, setVisible] = useState(true)
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
@@ -71,7 +75,7 @@ export default function ImageCropModal({ src, fileName, onApply, onClose }: Prop
             {/* Handle + title row */}
             <div className="relative flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100 shrink-0">
               <div className="w-9 h-1 bg-slate-200 rounded-full absolute left-1/2 -translate-x-1/2 top-2" />
-              <h2 className="text-md3-title-md font-bold text-slate-900 font-proxima">Adjust cover</h2>
+              <h2 className="text-md3-title-md font-bold text-slate-900 font-proxima">{title}</h2>
               <button
                 type="button"
                 onClick={handleClose}
@@ -89,7 +93,7 @@ export default function ImageCropModal({ src, fileName, onApply, onClose }: Prop
                   image={src}
                   crop={crop}
                   zoom={zoom}
-                  aspect={16 / 9}
+                  aspect={aspect}
                   minZoom={1}
                   maxZoom={3}
                   showGrid

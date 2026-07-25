@@ -57,6 +57,11 @@ function shuffleStories<T>(items: T[]): T[] {
   return arr
 }
 
+// Remembers the story shown first last time, so a shuffle that happens to
+// re-roll the same one to the front (likely with a small story pool) gets
+// bumped back instead of greeting the member with the same video again.
+const LAST_FEATURED_STORY_KEY = 'devcon-last-featured-story'
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
@@ -87,10 +92,22 @@ export default function Dashboard() {
   // Featured Stories — shuffled whenever a fresh fetch lands, so re-mounting
   // the dashboard (e.g. navigating away and back) surfaces a fresh order.
   // Capped to 5 so the dashboard preview stays short — full list lives elsewhere.
-  const stories = useMemo(() => shuffleStories(rawStories).slice(0, 5), [rawStories])
+  const stories = useMemo(() => {
+    const shuffled = shuffleStories(rawStories).slice(0, 5)
+    if (shuffled.length > 1) {
+      const lastId = sessionStorage.getItem(LAST_FEATURED_STORY_KEY)
+      if (lastId && shuffled[0].id === lastId) {
+        const swapWith = 1 + Math.floor(Math.random() * (shuffled.length - 1))
+        ;[shuffled[0], shuffled[swapWith]] = [shuffled[swapWith], shuffled[0]]
+      }
+    }
+    if (shuffled[0]) sessionStorage.setItem(LAST_FEATURED_STORY_KEY, shuffled[0].id)
+    return shuffled
+  }, [rawStories])
   const [storyIdx, setStoryIdx] = useState(0)
   const storySliderViewportRef = useRef<HTMLDivElement>(null)
   const [storySlideW, setStorySlideW] = useState(0)
+  const isDraggingStoryRef = useRef(false)
 
   useEffect(() => {
     void fetchEvents()
@@ -140,6 +157,18 @@ export default function Dashboard() {
     const t = setInterval(() => setBannerIdx((i) => (i + 1) % Math.max(bannersLengthRef.current, 1)), 4000)
     return () => clearInterval(t)
   }, [])
+
+  // Auto-advance the featured stories carousel. Slower than the hero banner
+  // (15s) so a video gets real watch time before rotating, and skipped while
+  // the member is mid-drag so it doesn't fight their swipe.
+  useEffect(() => {
+    if (stories.length <= 1) return
+    const t = setInterval(() => {
+      if (isDraggingStoryRef.current) return
+      setStoryIdx((i) => (i + 1) % stories.length)
+    }, 15000)
+    return () => clearInterval(t)
+  }, [stories.length])
 
   useEffect(() => {
     const el = storySliderViewportRef.current
@@ -661,7 +690,9 @@ useEffect(() => {
                   dragConstraints={{ left: -(stories.length - 1) * storySlideW, right: 0 }}
                   dragElastic={0.18}
                   dragMomentum={false}
+                  onDragStart={() => { isDraggingStoryRef.current = true }}
                   onDragEnd={(_, info) => {
+                    isDraggingStoryRef.current = false
                     if (storySlideW === 0) return
                     const dragged  = -info.offset.x / storySlideW
                     const velBoost = -info.velocity.x / (storySlideW * 4)

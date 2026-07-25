@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CalendarOutline, MapPointOutline, TicketOutline, HeartOutline, CloseCircleOutline, ShareOutline, CopyOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 // import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
@@ -10,6 +10,8 @@ import { useChaptersStore } from '../../stores/useChaptersStore'
 import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
+import { formatDate } from '../../lib/dates'
+import EventPosterPlaceholder from '../../components/EventPosterPlaceholder'
 
 const VOLUNTEER_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSczVxZPmHIRPphNJNgbuRVzEC5QTponVzjDPPMmkSxP0cIdrg/viewform?embedded=true'
@@ -67,6 +69,10 @@ export default function EventDetail() {
     ? (getChapterById(event.chapter_id)?.name ?? null)
     : null
 
+  const presentedByLabel = event?.chapter_id
+    ? `DEVCON ${getChapterById(event.chapter_id)?.name ?? ''} Chapter`.trim()
+    : 'DEVCON HQ'
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -107,6 +113,18 @@ export default function EventDetail() {
 
   const externalIsTba = externalUrl === 'tba' || externalUrl === ''
 
+  const presentedByRow = (
+    <div className="mt-3 flex items-center gap-3">
+      <div className="w-11 h-11 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+        <UsersGroupRoundedOutline color="rgb(var(--color-primary))" width={22} height={22} />
+      </div>
+      <div>
+        <p className="text-md3-label-md text-slate-400">Presented by</p>
+        <p className="text-md3-title-md font-bold text-slate-900">{presentedByLabel}</p>
+      </div>
+    </div>
+  )
+
   const handleExternalRegistration = () => {
     if (externalIsTba) return
     window.open(externalUrl, '_blank', 'noopener,noreferrer')
@@ -114,7 +132,7 @@ export default function EventDetail() {
 
   return (
     <motion.div
-      className="relative min-h-screen bg-slate-50"
+      className="relative min-h-screen bg-gradient-to-b from-primary/5 via-white to-slate-50"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
@@ -155,7 +173,7 @@ export default function EventDetail() {
 
       {/* ── Header ── */}
       <header
-        className="relative z-50 h-96 md:h-[28rem] bg-slate-200 overflow-hidden"
+        className="relative z-50 h-56 md:h-64 bg-slate-200 overflow-hidden"
         style={{ clipPath: 'ellipse(100% 100% at 50% 0%)' }}
       >
         {event.cover_image_url ? (
@@ -168,41 +186,94 @@ export default function EventDetail() {
         )}
       </header>
 
-      <div className="p-4 space-y-4 md:max-w-4xl md:mx-auto">
-        <div>
-          <p className="text-md3-label-md text-slate-400 mb-1">{dateStr}</p>
-          <h1 className="text-md3-title-lg font-bold text-slate-900">{event.title}</h1>
-          {event.location && (
-            <p className="text-md3-body-md text-slate-500 mt-1 flex items-center gap-1">
-              <MapPointOutline className="w-3.5 h-3.5 shrink-0" />
-              {event.location}
-            </p>
-          )}
-        </div>
-
-        {!isExternal && (
-          <div className="flex gap-3">
-            <div className="bg-primary/10 rounded-xl px-3 py-2 flex-1 text-center">
-              <p className="text-primary text-md3-label-md font-medium">Points Value</p>
-              <p className="text-primary font-bold">+{event.points_value} pts</p>
-            </div>
-            <div className="bg-slate-100 rounded-xl px-3 py-2 flex-1 text-center">
-              <p className="text-slate-500 text-md3-label-md font-medium">Status</p>
-              <p className="text-slate-700 font-bold capitalize">{event.status}</p>
-            </div>
+      <div className="px-4 pb-4 pt-7 md:px-8 md:pb-8 md:pt-12 md:max-w-7xl md:mx-auto">
+        <div className="lg:grid lg:grid-cols-[1fr_1fr] lg:gap-12 lg:items-start">
+          {/* Left column — event poster (wide desktop only); below lg it renders inline in the
+              right column instead so tablet widths get a full-width poster, not a cramped half-column one.
+              No upload → generated brand poster placeholder */}
+          <div className="hidden lg:block lg:sticky lg:top-8">
+            {event.poster_image_url ? (
+              <img
+                src={event.poster_image_url}
+                alt={event.title}
+                className="aspect-square w-full rounded-2xl object-cover"
+              />
+            ) : (
+              <EventPosterPlaceholder event={event} />
+            )}
+            {presentedByRow}
           </div>
-        )}
 
+          {/* Right column */}
+          <div className="flex flex-col gap-4">
+            <div className="order-1 space-y-3">
+              <h1 className="text-md3-headline-sm md:text-md3-headline-lg font-black text-slate-900">{event.title}</h1>
 
-        {event.description && (
-          <div>
-            <h2 className="text-md3-body-md font-bold text-slate-900 mb-1">About</h2>
-            <MarkdownContent value={event.description} />
-          </div>
-        )}
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-primary/10 flex flex-col items-center justify-center overflow-hidden shrink-0">
+                  <span className="text-primary text-[9px] font-bold leading-none pt-1.5">
+                    {event.event_date ? formatDate.monthShort(event.event_date) : <CalendarOutline color="rgb(var(--color-primary))" width={16} height={16} />}
+                  </span>
+                  {event.event_date && (
+                    <span className="text-slate-900 text-sm font-bold leading-none pb-1.5">
+                      {formatDate.day(event.event_date)}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-md3-body-md font-semibold text-slate-900">{dateStr}</p>
+                  {event.event_date && (
+                    <p className="text-md3-label-md text-slate-400">
+                      {new Date(event.event_date).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {event.location && (
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                    <MapPointOutline color="#64748B" width={20} height={20} />
+                  </div>
+                  <p className="text-md3-body-md font-semibold text-slate-900">{event.location}</p>
+                </div>
+              )}
+            </div>
+
+            {!isExternal && (
+              <div className="order-2 flex gap-3">
+                <div className="bg-primary/10 rounded-xl px-3 py-2 flex-1 text-center">
+                  <p className="text-primary text-md3-label-md font-medium">Points Value</p>
+                  <p className="text-primary font-bold">+{event.points_value} pts</p>
+                </div>
+                <div className="bg-slate-100 rounded-xl px-3 py-2 flex-1 text-center">
+                  <p className="text-slate-500 text-md3-label-md font-medium">Status</p>
+                  <p className="text-slate-700 font-bold capitalize">{event.status}</p>
+                </div>
+              </div>
+            )}
+
+            {event.description && (
+              <div className="order-3 md:order-4 mt-2 md:mt-0">
+                <div className="mb-6 lg:hidden">
+                  {event.poster_image_url ? (
+                    <img
+                      src={event.poster_image_url}
+                      alt={event.title}
+                      className="aspect-square w-full rounded-2xl object-cover"
+                    />
+                  ) : (
+                    <EventPosterPlaceholder event={event} />
+                  )}
+                  {presentedByRow}
+                </div>
+                <h2 className="text-md3-body-md font-bold text-slate-900 mb-1 pt-4 border-t border-slate-200 md:pt-0 md:border-t-0">About</h2>
+                <MarkdownContent value={event.description} />
+              </div>
+            )}
 
         {/* CTA based on auth + registration state */}
-        <div className="pt-2 space-y-3">
+        <div className="order-4 md:order-3 pt-2 space-y-3">
           {isExternal ? (
             externalIsTba ? (
               <button
@@ -313,6 +384,8 @@ export default function EventDetail() {
             </motion.button>
           )}
         </div>
+          </div>
+        </div>
       </div>
 
       {/* Future Volunteer Google Form bottom sheet */}
@@ -328,13 +401,14 @@ export default function EventDetail() {
               className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
               onClick={() => setShowVolunteerForm(false)}
             />
+            <div className="fixed inset-0 z-[80] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
             <motion.div
               key="sheet"
               variants={slideUp}
               initial="hidden"
               animate="visible"
               exit="hidden"
-              className="fixed bottom-0 left-0 right-0 z-[80] bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl"
+              className="pointer-events-auto w-full bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:h-fit md:max-h-[85vh] md:max-w-md md:rounded-3xl"
             >
               {/* Sheet header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
@@ -357,6 +431,7 @@ export default function EventDetail() {
                 className="w-full flex-1 border-0"
               />
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>

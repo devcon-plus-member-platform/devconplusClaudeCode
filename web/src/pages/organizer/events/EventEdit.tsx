@@ -29,6 +29,7 @@ import {
   DESCRIPTION_MIN_LENGTH,
   SectionHeader,
   CustomFieldsBuilder,
+  TicketPriceField,
 } from './eventFormConstants'
 import type { Json } from '@devcon-plus/supabase'
 import { useFormDraft } from '../../../hooks/useFormDraft'
@@ -73,6 +74,13 @@ export function OrgEventEdit() {
     event?.cover_image_url ?? null
   )
   const [coverUploadError, setCoverUploadError] = useState<string | null>(null)
+
+  // ── Poster image — same pipeline as the cover, square aspect ────────────
+  const [posterFile, setPosterFile] = useState<File | null>(null)
+  const [posterPreview, setPosterPreview] = useState<string | null>(
+    event?.poster_image_url ?? null
+  )
+  const [posterUploadError, setPosterUploadError] = useState<string | null>(null)
 
   // ── Custom registration fields ───────────────────────────────────────────
   const [customFields, setCustomFields] = useState<CustomFormField[]>(
@@ -180,9 +188,27 @@ export function OrgEventEdit() {
     }
   }
 
+  // Merely opening this page must never manufacture a draft snapshot — the
+  // "outside-RHF state → draft" effect below fires on mount (it has to, since
+  // tags/visibility/customFields aren't RHF fields watch() can catch), and a
+  // couple of other mount-time effects call setValue() which can also wake the
+  // watch() subscription below. Both would otherwise write today's freshly-fetched
+  // event into localStorage as a "draft" — and on the NEXT visit, hasDraft (in
+  // useFormDraft above) sees that pre-existing key and prefers it over the event
+  // fetched at that time, silently hiding any edits made elsewhere (e.g. an admin
+  // adding registration questions) until this browser's draft is cleared by an
+  // actual submit. Deferring the flip to a macrotask lets every mount-time effect
+  // (including their setValue calls) finish before real draft-writing turns on.
+  const skipInitialDraftSync = useRef(true)
+  useEffect(() => {
+    const timer = setTimeout(() => { skipInitialDraftSync.current = false }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
   // Save RHF fields → draft
   useEffect(() => {
     const { unsubscribe } = watch((values) => {
+      if (skipInitialDraftSync.current) return
       saveDraft({ ...(values as Partial<FormData>), tags, visibility, customFields })
     })
     return unsubscribe
@@ -190,6 +216,7 @@ export function OrgEventEdit() {
 
   // Save outside-RHF state → draft
   useEffect(() => {
+    if (skipInitialDraftSync.current) return
     saveDraft({ ...getValues(), tags, visibility, customFields })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tags, visibility, customFields])
@@ -251,6 +278,7 @@ export function OrgEventEdit() {
     if (!event) return
     setSubmitError(null)
     setCoverUploadError(null)
+    setPosterUploadError(null)
     setSubmitStalled(false)
     submitStartRef.current = Date.now()
 
@@ -259,7 +287,12 @@ export function OrgEventEdit() {
       ? (coverFile ? null : (event.cover_image_url ?? null))
       : null
 
-    if (coverFile && !user?.id) {
+    // Determine poster image URL
+    let poster_image_url: string | null = posterPreview
+      ? (posterFile ? null : (event.poster_image_url ?? null))
+      : null
+
+    if ((coverFile || posterFile) && !user?.id) {
       setSubmitError('Session expired. Please sign in again.')
       return
     }
@@ -279,6 +312,24 @@ export function OrgEventEdit() {
           .from('event-covers')
           .getPublicUrl(uploadData.path)
         cover_image_url = urlData.publicUrl
+      }
+    }
+
+    if (posterFile) {
+      const userId = user?.id ?? 'unknown'
+      const safeName = posterFile.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100)
+      const path = `${userId}/${Date.now()}-${safeName}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('event-covers')
+        .upload(path, posterFile)
+      if (uploadError) {
+        setPosterUploadError('Poster image upload failed — saving without image change.')
+        poster_image_url = event.poster_image_url ?? null
+      } else {
+        const { data: urlData } = supabase.storage
+          .from('event-covers')
+          .getPublicUrl(uploadData.path)
+        poster_image_url = urlData.publicUrl
       }
     }
 
@@ -303,6 +354,7 @@ export function OrgEventEdit() {
         ticket_price_php:   data.is_free ? 0 : data.ticket_price_php,
         capacity:           data.capacity ?? null,
         cover_image_url,
+        poster_image_url,
         custom_form_schema: customFields.length > 0 ? customFields as unknown as Json : null,
       })
       submitStartRef.current = null
@@ -411,14 +463,36 @@ export function OrgEventEdit() {
         {/* ── MEDIA ── */}
         <motion.div variants={fadeUp}>
           <SectionHeader title="Media" />
-          <CoverImageUpload
-            initialPreviewUrl={event.cover_image_url}
-            onChange={({ file, previewUrl }) => {
-              setCoverFile(file)
-              setCoverPreview(previewUrl)
-            }}
-            error={coverUploadError}
-          />
+
+          <div>
+            <label className={labelClass}>Header Image</label>
+            <CoverImageUpload
+              initialPreviewUrl={event.cover_image_url}
+              onChange={({ file, previewUrl }) => {
+                setCoverFile(file)
+                setCoverPreview(previewUrl)
+              }}
+              error={coverUploadError}
+            />
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>
+              Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+            </label>
+            <CoverImageUpload
+              initialPreviewUrl={event.poster_image_url}
+              onChange={({ file, previewUrl }) => {
+                setPosterFile(file)
+                setPosterPreview(previewUrl)
+              }}
+              error={posterUploadError}
+              aspect={1}
+              label="poster image"
+              recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+              modalTitle="Adjust poster"
+            />
+          </div>
         </motion.div>
 
         {/* ── CATEGORIZATION ── */}
@@ -631,37 +705,7 @@ export function OrgEventEdit() {
               </div>
             </div>
 
-            <div>
-              <label className={labelClass}>Ticket Price</label>
-              <div className="flex gap-3">
-                <Controller
-                  control={control}
-                  name="is_free"
-                  render={({ field }) => (
-                    <>
-                      <button type="button" onClick={() => field.onChange(true)}
-                        className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${field.value ? 'bg-blue text-white border-blue' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'}`}>
-                        Free
-                      </button>
-                      <button type="button" onClick={() => field.onChange(false)}
-                        className={`flex-1 py-2 rounded-xl text-md3-label-md font-semibold border transition-colors ${!field.value ? 'bg-blue text-white border-blue' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-blue hover:text-blue'}`}>
-                        Paid
-                      </button>
-                    </>
-                  )}
-                />
-              </div>
-              {!isFree && (
-                <div className="mt-3">
-                  <label className={labelClass}>Price (PHP)</label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-md3-body-md text-slate-400 pointer-events-none">₱</span>
-                    <input {...register('ticket_price_php')} type="number" min={1} step={1} className={`${inputClass} pl-8`} placeholder="0" />
-                  </div>
-                  {errors.ticket_price_php && <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>}
-                </div>
-              )}
-            </div>
+            <TicketPriceField control={control} register={register} errors={errors} isFree={isFree} />
 
             <div>
               <label className={labelClass}>Capacity <span className="text-slate-300 normal-case font-normal">optional</span></label>

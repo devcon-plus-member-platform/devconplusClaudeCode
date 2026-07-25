@@ -101,6 +101,12 @@ export class CreateEventDto {
   cover_image_url?: string | null;
 
   @IsOptional()
+  @ValidateIf((o: CreateEventDto) => o.poster_image_url != null && o.poster_image_url !== '')
+  @IsUrl({ require_protocol: true, protocols: ['https', 'http'] })
+  @MaxLength(512)
+  poster_image_url?: string | null;
+
+  @IsOptional()
   @IsString()
   @MaxLength(300)
   slug?: string | null;

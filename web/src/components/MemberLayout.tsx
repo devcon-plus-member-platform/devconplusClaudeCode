@@ -23,7 +23,10 @@ let hasShownDesktopToast = false
 
 // Routes inside MemberLayout that guests (unauthenticated users) may view.
 // Keep this list minimal — only routes whose components handle !user gracefully.
-const GUEST_PATHS = ['/events']
+// Matched as an exact path or a prefix (so '/jobs' also covers '/jobs/:id').
+const GUEST_PATHS = ['/events', '/jobs', '/rewards']
+const isGuestPath = (pathname: string) =>
+  GUEST_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 
 export default function MemberLayout() {
   const { user } = useAuthStore()
@@ -46,7 +49,7 @@ export default function MemberLayout() {
 
 
   useEffect(() => {
-    if (!user && !GUEST_PATHS.includes(location.pathname)) {
+    if (!user && !isGuestPath(location.pathname)) {
       navigate('/sign-in', { replace: true })
       return
     }
@@ -205,7 +208,7 @@ export default function MemberLayout() {
     unsubNotifsRef.current = subscribeNotifications(approvedIds, eventTitles)
   }, [registrations, events, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!user && !GUEST_PATHS.includes(location.pathname)) return null
+  if (!user && !isGuestPath(location.pathname)) return null
 
   const isGuest = !user
 

@@ -5,6 +5,7 @@ import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline
 import { useAuthStore } from '../stores/useAuthStore'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
+import { ROLE_DISPLAY_NAMES } from '../lib/constants'
 
 const NAV_ITEMS = [
   { path: '/admin',           label: 'Dashboard', Icon: WidgetOutline, end: true,  superOnly: false },
@@ -21,6 +22,20 @@ const NAV_ITEMS = [
 ]
 
 const ADMIN_ROLES = ['super_admin', 'hq_admin'] as const
+
+const ROLE_TAG_STYLES: Record<string, string> = {
+  hq_admin:    'bg-white text-blue',
+  super_admin: 'bg-gold text-navy',
+}
+
+function RoleTag({ role, className = '' }: { role: string; className?: string }) {
+  const style = ROLE_TAG_STYLES[role] ?? 'bg-white/20 text-white'
+  return (
+    <span className={`inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${style} ${className}`}>
+      {ROLE_DISPLAY_NAMES[role] ?? role}
+    </span>
+  )
+}
 
 export default function AdminLayout() {
   const { user, signOut } = useAuthStore()
@@ -83,9 +98,12 @@ export default function AdminLayout() {
       <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between gap-2">
         <div>
           <img src={logoHorizontal} alt="DEVCON+" className="h-6 w-auto" />
-          <span className="mt-1 block text-[10px] font-bold uppercase tracking-widest text-white/50">
-            Admin Panel
-          </span>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+              Admin Panel
+            </span>
+            <RoleTag role={user.role} />
+          </div>
         </div>
         {onNavigate && (
           <button
@@ -161,7 +179,10 @@ export default function AdminLayout() {
 
       {/* ── MOBILE top bar (< md) ── */}
       <header className="md:hidden shrink-0 bg-blue flex items-center justify-between px-4 h-14 shadow-card">
-        <img src={logoHorizontal} alt="DEVCON+" className="h-5 w-auto" />
+        <div className="flex items-center gap-2">
+          <img src={logoHorizontal} alt="DEVCON+" className="h-5 w-auto" />
+          <RoleTag role={user.role} />
+        </div>
         <button
           onClick={() => setDrawerOpen(true)}
           aria-label="Open menu"
