@@ -379,13 +379,14 @@ export default function EventDetail() {
               className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
               onClick={() => setShowVolunteerForm(false)}
             />
+            <div className="fixed inset-0 z-[80] flex flex-col justify-end md:items-center md:justify-center pointer-events-none">
             <motion.div
               key="sheet"
               variants={slideUp}
               initial="hidden"
               animate="visible"
               exit="hidden"
-              className="fixed bottom-0 left-0 right-0 z-[80] bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:inset-0 md:m-auto md:bottom-auto md:left-auto md:right-auto md:top-auto md:h-fit md:max-h-[85vh] md:w-full md:max-w-md md:rounded-3xl"
+              className="pointer-events-auto w-full bg-white rounded-t-3xl overflow-hidden flex flex-col h-[88dvh] md:h-fit md:max-h-[85vh] md:max-w-md md:rounded-3xl"
             >
               {/* Sheet header */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
@@ -408,6 +409,7 @@ export default function EventDetail() {
                 className="w-full flex-1 border-0"
               />
             </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>

@@ -1673,6 +1673,14 @@ export default function AdminEvents() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
+                        onClick={() => window.open(buildEventUrl(event), '_blank', 'noopener')}
+                        title="View live event page"
+                        aria-label="View live event page"
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors"
+                      >
+                        <EyeOutline className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={() => void shareEvent(event)}
                         title={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
                         aria-label={shareCopiedId === event.id ? 'Link copied!' : 'Share event link'}
