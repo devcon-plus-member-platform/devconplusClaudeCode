@@ -11,8 +11,9 @@ import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
 import { formatDate } from '../../lib/dates'
-import { isRegistrationClosed, REGISTRATION_CLOSED_MESSAGE } from '../../lib/constants'
+import { REGISTRATION_CLOSED_MESSAGE, EVENT_FULL_MESSAGE } from '../../lib/constants'
 import EventPosterPlaceholder from '../../components/EventPosterPlaceholder'
+import type { EventCapacitySummary } from '@devcon-plus/supabase'
 
 const VOLUNTEER_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSczVxZPmHIRPphNJNgbuRVzEC5QTponVzjDPPMmkSxP0cIdrg/viewform?embedded=true'
@@ -24,7 +25,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export default function EventDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const { events, registrations } = useEventsStore()
+  const { events, registrations, fetchEventCapacity } = useEventsStore()
   const { user } = useAuthStore()
   const { getChapterById, fetchChapters } = useChaptersStore()
   // const { loadApplications, getApplicationByEventId } = useVolunteerStore() // disabled: volunteer-for-event feature
@@ -34,6 +35,7 @@ export default function EventDetail() {
   const [loading, setLoading] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [showVolunteerForm, setShowVolunteerForm] = useState(false)
+  const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
 
   const event = storeEvent ?? localEvent ?? undefined
 
@@ -63,11 +65,20 @@ export default function EventDetail() {
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== null && event.chapter_id !== user?.chapter_id
   const isExternal = event?.is_external === true
 
-  // Hotfix kill switch — capacity is unenforced server-side, so full events are
-  // closed manually via CLOSED_EVENT_SLUGS. Members who already hold a live
-  // registration keep their pending screen / ticket; only new joins are blocked.
+  // Members who already hold a live registration keep their pending/waitlist
+  // screen or ticket; only new joins are gated by these flags.
   const hasLiveReg = !!reg && reg.status !== 'cancelled'
-  const registrationClosed = isRegistrationClosed(event?.slug) && !hasLiveReg
+  const registrationClosed = event?.registration_closed === true && !hasLiveReg
+  const isFull = capacitySummary?.is_full === true && !hasLiveReg
+
+  useEffect(() => {
+    if (!eventId || isExternal) return
+    let cancelled = false
+    void fetchEventCapacity(eventId)
+      .then((summary) => { if (!cancelled) setCapacitySummary(summary) })
+      .catch(() => { /* best-effort — CTA just falls back to the normal flow */ })
+    return () => { cancelled = true }
+  }, [eventId, isExternal, fetchEventCapacity])
 
   useEffect(() => { void fetchChapters() }, [fetchChapters])
 
@@ -317,6 +328,16 @@ export default function EventDetail() {
               <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 font-semibold py-4 rounded-2xl text-center text-md3-body-md">
                 This event is exclusive to {eventChapterName ?? "this chapter's"} members
               </div>
+            ) : isFull ? (
+              <div className="space-y-2">
+                <p className="text-md3-body-md text-slate-500 text-center">{EVENT_FULL_MESSAGE}</p>
+                <button
+                  onClick={() => navigate(registerPath)}
+                  className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm"
+                >
+                  Join Waitlist
+                </button>
+              </div>
             ) : (
               <button
                 onClick={() => navigate(registerPath)}
@@ -331,6 +352,13 @@ export default function EventDetail() {
               className="w-full bg-yellow-400 text-white font-bold py-4 rounded-2xl"
             >
               View Pending Status
+            </button>
+          ) : reg.status === 'waitlisted' ? (
+            <button
+              onClick={() => navigate(`/events/${slug}/waitlist`)}
+              className="w-full bg-slate-700 text-white font-bold py-4 rounded-2xl"
+            >
+              View Waitlist Status
             </button>
           ) : reg.status === 'approved' ? (
             <button

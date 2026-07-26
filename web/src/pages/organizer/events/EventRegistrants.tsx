@@ -14,6 +14,7 @@ import { ApprovalCard, type Registration } from '../../../components/ApprovalCar
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
+import type { EventCapacitySummary } from '@devcon-plus/supabase'
 
 // ── Custom form field types ───────────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ function RegistrantDetailView({
 
       {/* Sticky action bar */}
       <div className="bg-white border-t border-slate-100 px-4 py-3 shrink-0">
-        {localReg.status === 'pending' && (
+        {(localReg.status === 'pending' || localReg.status === 'waitlisted') && (
           <div className="flex gap-2">
             <motion.button
               onClick={handleRejectClick}
@@ -237,7 +238,7 @@ function RegistrantDetailView({
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             >
               <CheckCircleOutline color="white" size={16} />
-              Approve
+              {localReg.status === 'waitlisted' ? 'Approve from Waitlist' : 'Approve'}
             </motion.button>
           </div>
         )}
@@ -282,7 +283,7 @@ function RegistrantDetailView({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected'
+type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected' | 'waitlisted'
 type MainTab = 'registrants' | 'volunteers'
 
 interface VolunteerApplication {
@@ -300,7 +301,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventRegistrants() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, fetchEventCapacity } = useEventsStore()
 
   const event = events.find((e) => e.id === id)
   const organizerUser = useOrganizerUser()
@@ -308,6 +309,7 @@ export function OrgEventRegistrants() {
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
@@ -348,6 +350,17 @@ export function OrgEventRegistrants() {
       .finally(() => setIsLoading(false))
   }, [id, event?.title])
 
+  const refreshCapacity = async () => {
+    if (!id) return
+    try {
+      setCapacitySummary(await fetchEventCapacity(id))
+    } catch {
+      // best-effort — the summary badge just stays hidden on failure
+    }
+  }
+
+  useEffect(() => { void refreshCapacity() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchVolunteers = async () => {
     if (!id) return
     setVolunteersLoading(true)
@@ -376,7 +389,10 @@ export function OrgEventRegistrants() {
   const handleApprove = async (regId: string): Promise<boolean> => {
     try {
       await apiFetch(`/api/registrations/${regId}/approve`, { method: 'POST' })
-    } catch { return false }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Approval failed.')
+      return false
+    }
 
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'approved' as const } : r))
@@ -400,6 +416,7 @@ export function OrgEventRegistrants() {
         })
       }
     }
+    void refreshCapacity()
     return true
   }
 
@@ -410,6 +427,7 @@ export function OrgEventRegistrants() {
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'rejected' as const } : r))
     )
+    void refreshCapacity()
     return true
   }
 
@@ -420,6 +438,7 @@ export function OrgEventRegistrants() {
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'pending' as const } : r))
     )
+    void refreshCapacity()
     return true
   }
 
@@ -480,10 +499,11 @@ export function OrgEventRegistrants() {
   const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
 
   const counts = {
-    all:      registrants.length,
-    pending:  registrants.filter((r) => r.status === 'pending').length,
-    approved: registrants.filter((r) => r.status === 'approved').length,
-    rejected: registrants.filter((r) => r.status === 'rejected').length,
+    all:        registrants.length,
+    pending:    registrants.filter((r) => r.status === 'pending').length,
+    approved:   registrants.filter((r) => r.status === 'approved').length,
+    rejected:   registrants.filter((r) => r.status === 'rejected').length,
+    waitlisted: registrants.filter((r) => r.status === 'waitlisted').length,
   }
 
   return (
@@ -540,6 +560,14 @@ export function OrgEventRegistrants() {
             <p className="text-white/70 text-[13px] font-proxima truncate leading-none">
               {event?.title ?? 'Event'}
             </p>
+            {capacitySummary?.capacity != null && (
+              <p className="text-white/60 text-[11px] font-proxima truncate leading-none mt-1.5">
+                {capacitySummary.approved_count}/{capacitySummary.capacity} approved
+                {' · '}{capacitySummary.pending_count} pending
+                {' · '}{capacitySummary.waitlisted_count} waitlisted
+                {' · '}+{capacitySummary.no_show_buffer} buffer
+              </p>
+            )}
           </div>
         </div>
       </header>
@@ -579,8 +607,8 @@ export function OrgEventRegistrants() {
               exit="exit"
             >
               {/* Status filter sub-tabs */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5">
-                {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5 flex-wrap">
+                {(['all', 'pending', 'approved', 'waitlisted', 'rejected'] as FilterStatus[]).map((f) => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}

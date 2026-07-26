@@ -22,7 +22,7 @@ export type DevconCategory = 'devcon' | 'she' | 'kids' | 'campus'
 
 export type EventVisibility = 'public' | 'unlisted' | 'draft'
 
-export type RegistrationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+export type RegistrationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'waitlisted'
 
 export type PointSource =
   | 'signup'
@@ -123,6 +123,8 @@ export interface Event {
   is_free: boolean
   ticket_price_php: number
   capacity: number | null
+  no_show_buffer: number
+  registration_closed: boolean
   points_value: number
   volunteer_points: number
   requires_approval: boolean
@@ -139,6 +141,16 @@ export interface Event {
   created_at: string
   /** JSONB: array of CustomFormField objects defined by the officer/admin */
   custom_form_schema: unknown
+}
+
+export interface EventCapacitySummary {
+  capacity: number | null
+  no_show_buffer: number
+  approved_count: number
+  pending_count: number
+  waitlisted_count: number
+  effective_cap: number | null
+  is_full: boolean
 }
 
 export interface EventRegistration {

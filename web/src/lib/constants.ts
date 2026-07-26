@@ -34,31 +34,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   tech_community:  'Tech Community',
 }
 
-/**
- * HOTFIX (2026-07-26) — manual registration kill switch.
- *
- * `events.capacity` is stored but never enforced: the gateway's
- * `RegistrationsService.register()` inserts unconditionally, and `GET /api/events`
- * returns no registration count, so the client cannot tell that an event is full.
- * Until the server-side cap lands, list an event's slug here to close in-app
- * registration for it.
- *
- * Scope of the switch: hides the join CTA on the event card + detail page and
- * bounces `/events/:slug/register` back to the detail page. Members who are
- * ALREADY registered keep their pending screen / QR ticket.
- *
- * Caveat: this is UI-only. `POST /api/registrations` still accepts direct calls,
- * so it stops normal users, not a crafted request. Remove entries once the
- * gateway enforces capacity.
- */
-export const CLOSED_EVENT_SLUGS: readonly string[] = [
-  'dev-roast-claude-vs-codex-vs-cursor-vs-qwen-coder-367a87d4',
-]
+/** Message shown when an organizer has manually closed registration (events.registration_closed). */
+export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — the organizer has stopped new registrations for this event'
 
-/** Message shown in place of the join CTA for a closed event. */
-export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — this event has reached full capacity'
-
-/** True when in-app registration is manually closed for this event slug. */
-export function isRegistrationClosed(slug: string | null | undefined): boolean {
-  return !!slug && CLOSED_EVENT_SLUGS.includes(slug)
-}
+/** Message shown when an event has hit its capacity + no-show buffer ceiling. */
+export const EVENT_FULL_MESSAGE = "This event has reached full capacity. Join the waitlist and you'll be notified if a spot opens up."

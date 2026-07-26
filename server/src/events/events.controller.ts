@@ -18,7 +18,7 @@ import { RolesGuard } from '../common/authz/roles.guard';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { WheelAccessDto } from './dto/wheel-access.dto';
-import { EventsService } from './events.service';
+import { EventsService, type EventCapacitySummary } from './events.service';
 import type { Event } from '../supabase/types';
 
 @Controller('events')
@@ -29,6 +29,16 @@ export class EventsController {
   @Get()
   getAll(): Promise<Event[]> {
     return this.service.getAll();
+  }
+
+  /**
+   * GET /api/events/:id/capacity — public live capacity/waitlist snapshot for
+   * a single event. Deliberately not folded into GET /api/events (the hot
+   * list endpoint) — see events-endpoint-load-bottleneck perf notes.
+   */
+  @Get(':id/capacity')
+  getCapacity(@Param() { id }: IdParamDto): Promise<EventCapacitySummary> {
+    return this.service.getCapacity(id);
   }
 
   /**

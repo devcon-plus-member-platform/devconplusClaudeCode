@@ -1,0 +1,169 @@
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { CalendarAddOutline, UsersGroupRoundedOutline, CloseCircleOutline } from 'solar-icon-set'
+import { motion } from 'framer-motion'
+import { useEventsStore } from '../../stores/useEventsStore'
+import { useAuthStore } from '../../stores/useAuthStore'
+import AddToCalendarSheet from '../../components/AddToCalendarSheet'
+
+export default function EventWaitlist() {
+  const { slug } = useParams<{ slug: string }>()
+  const navigate = useNavigate()
+  const { events, registrations, subscribeToRegistration, fetchRegistrations } = useEventsStore()
+  const { user } = useAuthStore()
+
+  const event = events.find((e) => e.slug === slug)
+  const eventId = event?.id
+  const reg = registrations.find((r) => r.event_id === eventId && r.user_id === user?.id)
+
+  const [isRejected, setIsRejected] = useState(false)
+  const [showCalSheet, setShowCalSheet] = useState(false)
+
+  const waitlistCalEvent = event
+    ? {
+        ...event,
+        title: `Waitlisted: ${event.title}`,
+        description:
+          `You're on the waitlist for "${event.title}" — a chapter officer will move you in if a ` +
+          "spot opens up. This calendar entry won't update itself, so tap the link below anytime to " +
+          `check — if it takes you straight to your ticket, you're in:\n${window.location.origin}/events/${event.slug}/waitlist`,
+      }
+    : null
+
+  // React to status from the store — driven by BOTH the realtime channel (instant)
+  // and the 5 s poll below (fallback). Handles approved/cancelled/rejected so the
+  // poll path works even when the realtime channel gave up past the 200-conn cap.
+  useEffect(() => {
+    if (reg?.status === 'approved') {
+      navigate(`/events/${slug}/ticket`, { replace: true })
+    } else if (reg?.status === 'cancelled') {
+      navigate('/events', { replace: true })
+    } else if (reg?.status === 'rejected') {
+      setIsRejected(true)
+    }
+  }, [reg?.status, slug, navigate])
+
+  // Polling baseline: refetch registrations every 5 s while waitlisted, so a
+  // promotion off the waitlist is reflected within ~5 s even without realtime.
+  useEffect(() => {
+    if (!reg?.id || !user) return
+    const interval = setInterval(() => { void fetchRegistrations(user.id) }, 5000)
+    return () => clearInterval(interval)
+  }, [reg?.id, user, fetchRegistrations])
+
+  // Best-effort realtime: instant flip when the channel connects (it gives up on
+  // error past the cap — the poll above is the safety net).
+  useEffect(() => {
+    if (!reg?.id) return
+    const unsubscribe = subscribeToRegistration(reg.id, (status) => {
+      if (status === 'approved') {
+        navigate(`/events/${slug}/ticket`, { replace: true })
+      } else if (status === 'rejected') {
+        setIsRejected(true)
+      }
+    })
+    return unsubscribe
+  }, [reg?.id, slug, navigate, subscribeToRegistration])
+
+  // ── Rejection screen ──────────────────────────────────────────────────────
+  if (isRejected) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 text-center">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+          className="w-20 h-20 rounded-full bg-red/10 flex items-center justify-center mb-4"
+        >
+          <CloseCircleOutline className="w-10 h-10" color="#EF4444" />
+        </motion.div>
+        <h1 className="text-md3-title-lg font-bold text-slate-900 mb-2">Waitlist Closed</h1>
+        <p className="text-md3-body-md text-slate-500 mb-8">
+          A spot for <strong>{event?.title}</strong> did not open up in time. Thanks for your patience!
+        </p>
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={() => navigate('/events')}
+          className="w-full max-w-xs bg-primary text-white font-bold py-3 rounded-full shadow-sm"
+        >
+          Back to Events
+        </motion.button>
+      </div>
+    )
+  }
+
+  // ── Main waitlist screen ──────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 text-center pb-24">
+
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+        className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center mb-5"
+      >
+        <UsersGroupRoundedOutline className="w-9 h-9" color="#334155" />
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <h1 className="text-md3-title-lg font-bold text-slate-900 mb-2">You're on the Waitlist</h1>
+        <p className="text-md3-body-md text-slate-500 max-w-[280px] leading-relaxed mb-6">
+          <strong>{event?.title}</strong> is at full capacity. If a spot opens up, a chapter officer
+          may move you off the waitlist and you'll get your QR ticket.
+        </p>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="w-full max-w-xs bg-slate-100 border border-slate-200 rounded-2xl px-4 py-4 mb-8 text-left"
+      >
+        <p className="text-md3-label-md font-semibold text-slate-500 uppercase tracking-widest mb-1">What happens next</p>
+        <ul className="text-md3-body-md text-slate-600 space-y-1 list-disc list-inside">
+          <li>You'll stay on the waitlist until a spot frees up</li>
+          <li>An officer decides who gets moved in, e.g. after a no-show or cancellation</li>
+          <li>You'll receive a QR ticket right away if you're moved off the waitlist</li>
+        </ul>
+      </motion.div>
+
+      {event?.event_date && (
+        <motion.button
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.25 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowCalSheet(true)}
+          className="w-full max-w-xs flex items-center justify-center gap-2 bg-white text-primary
+                     font-semibold border border-primary rounded-2xl py-3 text-md3-body-md mb-3"
+        >
+          <CalendarAddOutline className="w-4 h-4" color="rgb(var(--color-primary))" />
+          Add to Calendar
+        </motion.button>
+      )}
+
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => navigate('/events')}
+        className="w-full max-w-xs border border-slate-200 text-slate-600 font-semibold py-3 rounded-2xl text-md3-body-md"
+      >
+        Back to Events
+      </motion.button>
+
+      {waitlistCalEvent && (
+        <AddToCalendarSheet
+          event={waitlistCalEvent}
+          isOpen={showCalSheet}
+          onClose={() => setShowCalSheet(false)}
+        />
+      )}
+    </div>
+  )
+}
