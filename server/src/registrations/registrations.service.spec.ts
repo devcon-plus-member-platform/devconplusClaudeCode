@@ -38,7 +38,7 @@ function makeRepo(eventChapterId: string | null = CH_1) {
     findByEvent:               jest.fn().mockResolvedValue([]),
     findEventChapterScope:     jest.fn().mockResolvedValue({ chapterId: eventChapterId }),
     findRegistrationEventId:   jest.fn().mockResolvedValue(EVENT_ID),
-    approveRegistration:       jest.fn().mockResolvedValue(undefined),
+    approveRegistration:       jest.fn().mockResolvedValue({ success: true }),
     rejectRegistration:        jest.fn().mockResolvedValue(undefined),
     revertRegistration:        jest.fn().mockResolvedValue(undefined),
     manualCheckin:             jest.fn().mockResolvedValue({ success: true, member_name: 'Juan', points_awarded: 200 }),
@@ -92,7 +92,7 @@ describe('RegistrationsService', () => {
   describe('approveRegistration', () => {
     it('succeeds when officer is in same chapter as event', async () => {
       await service.approveRegistration(officer1, REG_ID);
-      expect(repo.approveRegistration).toHaveBeenCalledWith(REG_ID);
+      expect(repo.approveRegistration).toHaveBeenCalledWith(REG_ID, 'officer-1');
     });
 
     it('throws ForbiddenException for officer in different chapter', async () => {
