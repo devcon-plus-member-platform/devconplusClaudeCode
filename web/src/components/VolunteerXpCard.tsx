@@ -203,7 +203,7 @@ export default function VolunteerXpCard() {
             className="font-proxima font-semibold w-full bg-primary text-white text-[16px] h-12 rounded-full"
             whileTap={{ scale: 0.95 }}
           >
-            Join Our Events
+            Discover Tech Events
           </motion.button>
         </div>
       </motion.div>

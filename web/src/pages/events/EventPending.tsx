@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { CalendarAddOutline, ClockCircleOutline, CloseCircleOutline } from 'solar-icon-set'
+import {
+  CalendarAddOutline, ClockCircleOutline, CloseCircleOutline,
+  HomeOutline, GiftOutline, CalendarOutline,
+} from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import AddToCalendarSheet from '../../components/AddToCalendarSheet'
+import type { SolarIcon } from '../../lib/icons'
+
+// Where to send members while their registration sits in review — the pending
+// screen is otherwise a dead end.
+const WHILE_YOU_WAIT: { path: string; label: string; Icon: SolarIcon }[] = [
+  { path: '/home',    label: 'Explore DEVCON+',      Icon: HomeOutline },
+  { path: '/rewards', label: 'Redeem Rewards',       Icon: GiftOutline },
+  { path: '/events',  label: 'Discover Tech Events', Icon: CalendarOutline },
+]
 
 export default function EventPending() {
   const { slug } = useParams<{ slug: string }>()
@@ -147,16 +159,23 @@ export default function EventPending() {
         </motion.button>
       )}
 
-      <motion.button
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => navigate('/events')}
-        className="w-full max-w-xs border border-slate-200 text-slate-600 font-semibold py-3 rounded-2xl text-md3-body-md"
-      >
-        Back to Events
-      </motion.button>
+      <div className="w-full max-w-xs flex flex-col gap-3">
+        {WHILE_YOU_WAIT.map(({ path, label, Icon }, i) => (
+          <motion.button
+            key={path}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 + i * 0.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate(path)}
+            className="w-full flex items-center justify-center gap-2 border border-slate-200 bg-white
+                       text-slate-700 font-semibold py-3 rounded-2xl text-md3-body-md"
+          >
+            <Icon className="w-4 h-4" color="rgb(var(--color-primary))" />
+            {label}
+          </motion.button>
+        ))}
+      </div>
 
       {pendingCalEvent && (
         <AddToCalendarSheet
