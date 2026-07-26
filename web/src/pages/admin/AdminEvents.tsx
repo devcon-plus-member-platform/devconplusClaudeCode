@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, ConfettiOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline } from 'solar-icon-set'
+import { MapPointOutline, TrashBinTrashOutline, BoltOutline, AddCircleOutline, PenOutline, CloseCircleLineDuotone, DownloadOutline, ConfettiOutline, AltArrowDownOutline, CheckCircleOutline, ShareOutline, EyeOutline, MagniferOutline, AltArrowUpOutline, ClipboardListOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -730,7 +730,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         {/* ── Event Poster ── */}
         <div className="border-t border-slate-100 pt-4 mt-4">
           <label className={labelClass}>
-            Event Poster <span className="text-slate-300 normal-case font-normal">optional, square</span>
+            Event Poster <span className="text-slate-300 normal-case font-normal">optional, landscape</span>
           </label>
 
           <CoverImageUpload
@@ -740,9 +740,9 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
               setPosterPreview(previewUrl)
             }}
             error={posterUploadError}
-            aspect={1}
+            aspect={16 / 9}
             label="poster image"
-            recommendedText="Recommended: 800 × 800 px (1:1), max 5 MB"
+            recommendedText="Recommended: 1280 × 720 px (16:9), max 5 MB"
             modalTitle="Adjust poster"
           />
         </div>
@@ -1698,6 +1698,16 @@ export default function AdminEvents() {
                       >
                         <ConfettiOutline className="w-4 h-4" />
                       </button>
+                      {!event.is_external && (
+                        <button
+                          onClick={() => navigate(`/admin/events/${event.id}/registrants`)}
+                          title="View registrants"
+                          aria-label="View registrants"
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors"
+                        >
+                          <ClipboardListOutline className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => setSlideOver({ mode: 'edit', event })}
                         title="Edit event"
