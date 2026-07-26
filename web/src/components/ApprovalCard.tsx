@@ -10,7 +10,7 @@ export interface Registration {
   school_or_company: string
   event_title: string
   registered_at: string
-  status: 'pending' | 'approved' | 'rejected' | 'waitlisted'
+  status: 'pending' | 'approved' | 'rejected'
   checked_in?: boolean
 }
 

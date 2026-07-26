@@ -257,7 +257,7 @@ export default function EventRegister() {
     event.chapter_id !== user.chapter_id
   )
   // Manual organizer close (registration_closed) blocks the direct /register URL;
-  // existing registrants fall through to their ticket/pending/waitlist redirect below.
+  // existing registrants fall through to their ticket/pending redirect below.
   const isClosed = event?.registration_closed === true && !existingReg
   const hasSchoolOnProfile = !!user?.school_or_company?.trim()
 
@@ -279,9 +279,7 @@ export default function EventRegister() {
         ? `/events/${slug}/ticket`
         : existingReg.status === 'rejected'
           ? `/events/${slug}`
-          : existingReg.status === 'waitlisted'
-            ? `/events/${slug}/waitlist`
-            : `/events/${slug}/pending`
+          : `/events/${slug}/pending`
       navigate(destination, { replace: true })
     }
   }, [isChapterBlocked, isClosed, existingReg, event, user, slug, navigate, externalUrl])
@@ -333,9 +331,7 @@ export default function EventRegister() {
       const reg = useEventsStore.getState().registrations.find((r) => r.event_id === eventId)
       const destination = reg?.status === 'approved'
         ? `/events/${slug}/ticket`
-        : reg?.status === 'waitlisted'
-          ? `/events/${slug}/waitlist`
-          : `/events/${slug}/pending`
+        : `/events/${slug}/pending`
 
       // Save form responses to the registration row
       if (reg && customSchema.length > 0 && Object.keys(formResponses).length > 0) {

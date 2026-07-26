@@ -22,7 +22,7 @@ export type DevconCategory = 'devcon' | 'she' | 'kids' | 'campus'
 
 export type EventVisibility = 'public' | 'unlisted' | 'draft'
 
-export type RegistrationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'waitlisted'
+export type RegistrationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
 
 export type PointSource =
   | 'signup'
@@ -148,7 +148,6 @@ export interface EventCapacitySummary {
   no_show_buffer: number
   approved_count: number
   pending_count: number
-  waitlisted_count: number
   effective_cap: number | null
   is_full: boolean
 }

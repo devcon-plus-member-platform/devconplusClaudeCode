@@ -18,7 +18,6 @@ export interface EventCapacitySummary {
   no_show_buffer: number;
   approved_count: number;
   pending_count: number;
-  waitlisted_count: number;
   effective_cap: number | null;
   is_full: boolean;
 }

@@ -36,8 +36,8 @@ function EventCard({
   const externalUrl = event.external_registration_url ?? ''
   const externalIsTba = externalUrl === 'tba' || externalUrl === ''
   const isArchived = isEventArchived(event)
-  // Manual organizer override — live capacity/waitlist fullness is only surfaced
-  // on EventDetail (a per-card capacity fetch here would be an N+1 call in list views).
+  // Manual organizer close is the only thing that stops new joins — capacity +
+  // no_show_buffer only gates approval, it never blocks registration itself.
   const isClosed = event.registration_closed
   const dateStr = event.event_date
     ? formatDate.compact(event.event_date)

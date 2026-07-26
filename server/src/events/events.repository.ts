@@ -117,13 +117,12 @@ export class EventsRepository extends BaseRepository {
     );
   }
 
-  /** Live registration-count snapshot for the capacity/waitlist endpoint. */
+  /** Live registration-count snapshot for the capacity endpoint. */
   async findCapacitySummary(eventId: string): Promise<{
     capacity: number | null;
     no_show_buffer: number;
     approved_count: number;
     pending_count: number;
-    waitlisted_count: number;
   } | null> {
     const eventRes = await this.db
       .from('events')
@@ -137,14 +136,13 @@ export class EventsRepository extends BaseRepository {
       .from('event_registrations')
       .select('status')
       .eq('event_id', eventId)
-      .in('status', ['approved', 'pending', 'waitlisted']);
+      .in('status', ['approved', 'pending']);
     if (error) throw new BadRequestException((error as { message: string }).message);
 
-    const counts = { approved_count: 0, pending_count: 0, waitlisted_count: 0 };
+    const counts = { approved_count: 0, pending_count: 0 };
     for (const row of (data ?? []) as Array<{ status: string }>) {
       if (row.status === 'approved') counts.approved_count += 1;
       else if (row.status === 'pending') counts.pending_count += 1;
-      else if (row.status === 'waitlisted') counts.waitlisted_count += 1;
     }
 
     return {

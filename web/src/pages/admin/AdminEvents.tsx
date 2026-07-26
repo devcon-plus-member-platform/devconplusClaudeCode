@@ -1073,7 +1073,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             )}
             <p className="text-md3-label-md text-slate-400 mt-1">
               Officers can still approve this many registrations past Capacity, to cover expected
-              no-shows. New joins beyond Capacity + Buffer are placed on a waitlist.
+              no-shows. Approvals stop once Capacity + Buffer is reached.
             </p>
           </div>
         )}

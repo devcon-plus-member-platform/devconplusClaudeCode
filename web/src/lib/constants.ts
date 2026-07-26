@@ -36,6 +36,3 @@ export const CATEGORY_LABELS: Record<string, string> = {
 
 /** Message shown when an organizer has manually closed registration (events.registration_closed). */
 export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — the organizer has stopped new registrations for this event'
-
-/** Message shown when an event has hit its capacity + no-show buffer ceiling. */
-export const EVENT_FULL_MESSAGE = "This event has reached full capacity. Join the waitlist and you'll be notified if a spot opens up."
