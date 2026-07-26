@@ -51,9 +51,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
  * so it stops normal users, not a crafted request. Remove entries once the
  * gateway enforces capacity.
  */
-export const CLOSED_EVENT_SLUGS: readonly string[] = [
-  'dev-roast-claude-vs-codex-vs-cursor-vs-qwen-coder-367a87d4',
-]
+export const CLOSED_EVENT_SLUGS: readonly string[] = []
 
 /** Message shown in place of the join CTA for a closed event. */
 export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — this event has reached full capacity'
