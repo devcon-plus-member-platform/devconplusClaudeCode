@@ -15,6 +15,13 @@ interface ApproveRegistrationRpcResult {
   error?: string;
 }
 
+/** One custom registration question, as stored in `events.custom_form_schema`. */
+export interface CustomFormField {
+  id: string;
+  label: string;
+  required: boolean;
+}
+
 @Injectable()
 export class RegistrationsRepository extends BaseRepository {
   constructor(supabase: SupabaseService) {
@@ -46,10 +53,19 @@ export class RegistrationsRepository extends BaseRepository {
   }
 
   /** Re-registration: resets a cancelled row back to pending. */
-  async reactivateCancelled(regId: string): Promise<Registration> {
+  async reactivateCancelled(
+    regId: string,
+    formResponses?: Record<string, unknown> | null,
+  ): Promise<Registration> {
     const result = await this.db
       .from('event_registrations')
-      .update({ status: 'pending', qr_code_token: null })
+      .update({
+        status: 'pending',
+        qr_code_token: null,
+        // Overwrite prior answers on re-registration — the member just
+        // re-submitted the form. `null` clears stale answers.
+        form_responses: formResponses ?? null,
+      })
       .eq('id', regId)
       .select()
       .single();
@@ -58,10 +74,18 @@ export class RegistrationsRepository extends BaseRepository {
     );
   }
 
-  async insertRegistration(eventId: string, userId: string): Promise<Registration> {
+  async insertRegistration(
+    eventId: string,
+    userId: string,
+    formResponses?: Record<string, unknown> | null,
+  ): Promise<Registration> {
     const result = await this.db
       .from('event_registrations')
-      .insert({ event_id: eventId, user_id: userId })
+      .insert({
+        event_id: eventId,
+        user_id: userId,
+        form_responses: formResponses ?? null,
+      })
       .select()
       .single();
     if (result.error?.message?.includes('registration_closed')) {
@@ -133,6 +157,22 @@ export class RegistrationsRepository extends BaseRepository {
       .maybeSingle();
     if (!data) return null;
     return { chapterId: (data.chapter_id ?? null) as string | null };
+  }
+
+  /**
+   * Loads an event's custom registration questions. Returns `[]` when the event
+   * has no custom form (or does not exist) — callers treat that as "nothing to
+   * validate", never as an error.
+   */
+  async findEventFormSchema(eventId: string): Promise<CustomFormField[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (this.db as any)
+      .from('events')
+      .select('custom_form_schema')
+      .eq('id', eventId)
+      .maybeSingle();
+    const schema = (data as { custom_form_schema?: unknown } | null)?.custom_form_schema;
+    return Array.isArray(schema) ? (schema as CustomFormField[]) : [];
   }
 
   /** Loads registration to get event_id for chapter-scope check. */

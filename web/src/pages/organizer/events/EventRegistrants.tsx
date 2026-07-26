@@ -97,7 +97,11 @@ function RegistrantDetailView({
     minute: '2-digit',
   })
 
-  const hasResponses = formSchema.length > 0 && !!localReg.form_responses
+  // Render the card whenever the event HAS questions — an event with questions
+  // and a registrant with no answers must look different from an event that
+  // never asked anything. Hiding the section made lost answers invisible.
+  const hasQuestions = formSchema.length > 0
+  const noResponsesRecorded = hasQuestions && !localReg.form_responses
   const answeredCount = formSchema.filter(f => {
     const v = localReg.form_responses?.[f.id]
     return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
@@ -181,7 +185,7 @@ function RegistrantDetailView({
         </div>
 
         {/* Custom form responses — always fully expanded */}
-        {hasResponses && (
+        {hasQuestions && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[14px] font-bold text-slate-500 flex items-center gap-1.5">
@@ -192,6 +196,12 @@ function RegistrantDetailView({
                 {answeredCount}/{formSchema.length}
               </span>
             </div>
+            {noResponsesRecorded && (
+              <p className="text-[12px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
+                No responses recorded — this member registered before these questions
+                were added, or before the response-saving fix shipped.
+              </p>
+            )}
             <div className="space-y-3">
               {formSchema.map((field, i) => {
                 const answer = localReg.form_responses?.[field.id]

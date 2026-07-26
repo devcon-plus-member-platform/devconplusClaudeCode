@@ -55,7 +55,7 @@ describe('RegistrationsController', () => {
 
   it('register — userId from token, eventId from body (IDOR: never from body)', async () => {
     await controller.register(mockMember, { eventId: EVENT_ID });
-    expect(service.register).toHaveBeenCalledWith(mockMember, EVENT_ID);
+    expect(service.register).toHaveBeenCalledWith(mockMember, EVENT_ID, undefined);
   });
 
   it('cancelRegistration — ownership enforced via caller token, not body', async () => {
