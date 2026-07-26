@@ -220,7 +220,7 @@ function RegistrantDetailView({
 
       {/* Sticky action bar */}
       <div className="bg-white border-t border-slate-100 px-4 py-3 shrink-0">
-        {(localReg.status === 'pending' || localReg.status === 'waitlisted') && (
+        {localReg.status === 'pending' && (
           <div className="flex gap-2">
             <motion.button
               onClick={handleRejectClick}
@@ -238,7 +238,7 @@ function RegistrantDetailView({
               transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             >
               <CheckCircleOutline color="white" size={16} />
-              {localReg.status === 'waitlisted' ? 'Approve from Waitlist' : 'Approve'}
+              Approve
             </motion.button>
           </div>
         )}
@@ -283,7 +283,7 @@ function RegistrantDetailView({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected' | 'waitlisted'
+type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected'
 type MainTab = 'registrants' | 'volunteers'
 
 interface VolunteerApplication {
@@ -499,11 +499,10 @@ export function OrgEventRegistrants() {
   const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
 
   const counts = {
-    all:        registrants.length,
-    pending:    registrants.filter((r) => r.status === 'pending').length,
-    approved:   registrants.filter((r) => r.status === 'approved').length,
-    rejected:   registrants.filter((r) => r.status === 'rejected').length,
-    waitlisted: registrants.filter((r) => r.status === 'waitlisted').length,
+    all:      registrants.length,
+    pending:  registrants.filter((r) => r.status === 'pending').length,
+    approved: registrants.filter((r) => r.status === 'approved').length,
+    rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
 
   return (
@@ -564,7 +563,6 @@ export function OrgEventRegistrants() {
               <p className="text-white/60 text-[11px] font-proxima truncate leading-none mt-1.5">
                 {capacitySummary.approved_count}/{capacitySummary.capacity} approved
                 {' · '}{capacitySummary.pending_count} pending
-                {' · '}{capacitySummary.waitlisted_count} waitlisted
                 {' · '}+{capacitySummary.no_show_buffer} buffer
               </p>
             )}
@@ -608,7 +606,7 @@ export function OrgEventRegistrants() {
             >
               {/* Status filter sub-tabs */}
               <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5 flex-wrap">
-                {(['all', 'pending', 'approved', 'waitlisted', 'rejected'] as FilterStatus[]).map((f) => (
+                {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}

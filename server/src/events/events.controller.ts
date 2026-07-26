@@ -32,9 +32,9 @@ export class EventsController {
   }
 
   /**
-   * GET /api/events/:id/capacity — public live capacity/waitlist snapshot for
-   * a single event. Deliberately not folded into GET /api/events (the hot
-   * list endpoint) — see events-endpoint-load-bottleneck perf notes.
+   * GET /api/events/:id/capacity — public live capacity snapshot for a single
+   * event. Deliberately not folded into GET /api/events (the hot list
+   * endpoint) — see events-endpoint-load-bottleneck perf notes.
    */
   @Get(':id/capacity')
   getCapacity(@Param() { id }: IdParamDto): Promise<EventCapacitySummary> {

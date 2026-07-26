@@ -110,7 +110,7 @@ export interface Registration {
   id: string;
   event_id: string;
   user_id: string;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'waitlisted';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   qr_code_token: string | null;
   checked_in: boolean;
   registered_at: string | null;

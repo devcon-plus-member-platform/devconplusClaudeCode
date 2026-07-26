@@ -1,12 +1,11 @@
 interface StatusBadgeProps {
-  status: 'pending' | 'approved' | 'rejected' | 'waitlisted'
+  status: 'pending' | 'approved' | 'rejected'
 }
 
 const CONFIG = {
-  pending:    { label: 'Pending',    className: 'bg-yellow-100/90 text-yellow-700' },
-  approved:   { label: 'Approved',   className: 'bg-green/10 text-green'           },
-  rejected:   { label: 'Rejected',   className: 'bg-red/10 text-red'               },
-  waitlisted: { label: 'Waitlisted', className: 'bg-slate-200 text-slate-700'      },
+  pending:  { label: 'Pending',  className: 'bg-yellow-100/90 text-yellow-700' },
+  approved: { label: 'Approved', className: 'bg-green/10 text-green'           },
+  rejected: { label: 'Rejected', className: 'bg-red/10 text-red'               },
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {

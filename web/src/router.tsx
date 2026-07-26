@@ -28,7 +28,6 @@ import EventsList from './pages/events/EventsList'
 import EventDetail from './pages/events/EventDetail'
 import EventRegister from './pages/events/EventRegister'
 import EventPending from './pages/events/EventPending'
-import EventWaitlist from './pages/events/EventWaitlist'
 import EventTicket from './pages/events/EventTicket'
 import EventVolunteer from './pages/events/EventVolunteer'
 import JobsList from './pages/jobs/JobsList'
@@ -98,7 +97,6 @@ export const router = createBrowserRouter([
       { path: '/events',                    element: <EventsList /> },
       { path: '/events/:slug/register',       element: <EventRegister /> },
       { path: '/events/:slug/pending',        element: <EventPending /> },
-      { path: '/events/:slug/waitlist',       element: <EventWaitlist /> },
       { path: '/events/:slug/ticket',         element: <EventTicket /> },
       { path: '/events/:slug/volunteer',      element: <EventVolunteer /> },
       { path: '/jobs',                      element: <JobsList /> },
