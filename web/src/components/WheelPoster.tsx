@@ -7,7 +7,9 @@ import type { Event } from '@devcon-plus/supabase'
 import { backdrop } from '../lib/animation'
 import RafflePosterArt, { POSTER_DIMS, type PosterOrientation } from './RafflePosterArt'
 
-const PREVIEW_SCALE = 0.66
+// The preview scales each orientation down to fit this box, so the modal keeps the
+// same height whichever one is selected (and never outgrows a laptop screen).
+const PREVIEW_BOX = { w: 620, h: 430 }
 const PIXEL_RATIO = 3 // upscale on export so print/large-screen QR stays crisp
 
 /** Centered modal entrance (mirrors WheelPage's popIn). */
@@ -34,6 +36,7 @@ export default function WheelPoster({ event, onClose }: WheelPosterProps) {
   const posterRef = useRef<HTMLDivElement>(null)
 
   const dims = POSTER_DIMS[orientation]
+  const previewScale = Math.min(PREVIEW_BOX.w / dims.w, PREVIEW_BOX.h / dims.h)
   const publicUrl = `${window.location.origin}/wheel/${event.id}/poster`
   const fileSlug = (event.slug || 'event').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()
 
@@ -44,7 +47,7 @@ export default function WheelPoster({ event, onClose }: WheelPosterProps) {
       const dataUrl = await toPng(posterRef.current, {
         pixelRatio: PIXEL_RATIO,
         cacheBust: true,
-        backgroundColor: '#1E2A56',
+        backgroundColor: '#05030F',
       })
       const link = document.createElement('a')
       link.download = `devcon-raffle-poster-${fileSlug}-${orientation}.png`
@@ -121,13 +124,18 @@ export default function WheelPoster({ event, onClose }: WheelPosterProps) {
         </div>
 
         {/* ── Poster preview (the captured node, scaled down via CSS) ── */}
-        <div className="mt-5 flex justify-center overflow-auto rounded-2xl bg-slate-100 p-5">
-          <div style={{ width: dims.w * PREVIEW_SCALE, height: dims.h * PREVIEW_SCALE }} className="shrink-0">
+        {/* overflow-auto so the landscape preview stays reachable on a narrow phone,
+            where the modal is thinner than PREVIEW_BOX.w */}
+        <div
+          className="mt-5 flex items-center justify-center overflow-auto rounded-2xl bg-slate-100 p-5"
+          style={{ minHeight: PREVIEW_BOX.h + 40 }}
+        >
+          <div style={{ width: dims.w * previewScale, height: dims.h * previewScale }} className="shrink-0">
             <div
               style={{
                 width: dims.w,
                 height: dims.h,
-                transform: `scale(${PREVIEW_SCALE})`,
+                transform: `scale(${previewScale})`,
                 transformOrigin: 'top left',
               }}
             >

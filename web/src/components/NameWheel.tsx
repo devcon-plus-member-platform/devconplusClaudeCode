@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import centerLogo from '../assets/logos/thumbnail.png'
+import { POSTER_DEEP_NAVY, POSTER_INDIGO } from './RafflePosterArt'
 
 interface NameWheelProps {
   entrants: string[]
@@ -16,7 +17,7 @@ const SIZE = 360 // viewBox units (geometry is computed in these); the SVG fills
 const RADIUS = SIZE / 2
 const CENTER = SIZE / 2
 
-// DEVCON 16 vivid rainbow — matches the multicolor DEVCON 16 logo.
+// DEVCON 16 vivid rainbow — full-spectrum hues so segments stay visually distinct.
 const SEGMENT_FILLS = [
   '#E5342B', // red
   '#F26C21', // orange
@@ -78,7 +79,7 @@ export default function NameWheel({
           height: 0,
           borderLeft: '18px solid transparent',
           borderRight: '18px solid transparent',
-          borderTop: '30px solid #0F172A',
+          borderTop: `30px solid ${POSTER_DEEP_NAVY}`,
           filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.25))',
         }}
         aria-hidden
@@ -146,6 +147,25 @@ export default function NameWheel({
         </motion.g>
       </svg>
 
+      {/* Idle "tap me" glow — only while a spin is actually available, so it
+          never implies the button works when the pool is too small. The
+          centering transform lives on this plain wrapper (not the motion
+          element) because framer-motion's own `animate` transform would
+          otherwise overwrite the Tailwind translate classes. */}
+      {canSpin && !isSpinning && (
+        <div
+          className="absolute left-1/2 top-1/2 z-0 h-28 w-28 -translate-x-1/2 -translate-y-1/2"
+          aria-hidden
+        >
+          <motion.span
+            className="block h-full w-full rounded-full"
+            style={{ background: POSTER_INDIGO }}
+            animate={{ scale: [1, 1.25, 1], opacity: [0.35, 0, 0.35] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </div>
+      )}
+
       {/* Center hub / spin button — sits outside the rotating group, so the
           DEVCON+ logo stays upright while the segments spin. */}
       <button
@@ -153,11 +173,15 @@ export default function NameWheel({
         onClick={onSpin}
         disabled={!canSpin}
         aria-label="Spin the wheel"
-        className={`absolute left-1/2 top-1/2 z-10 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-blue shadow-xl transition active:scale-95 disabled:cursor-not-allowed ${
-          isSpinning ? 'animate-pulse opacity-70' : ''
-        }`}
+        style={{ background: `linear-gradient(135deg, ${POSTER_INDIGO}, ${POSTER_DEEP_NAVY})` }}
+        className={`absolute left-1/2 top-1/2 z-10 flex h-28 w-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-full border-4 border-white shadow-xl transition active:scale-95 disabled:cursor-not-allowed ${
+          canSpin ? 'cursor-pointer' : ''
+        } ${isSpinning ? 'animate-pulse opacity-70' : ''}`}
       >
-        <img src={centerLogo} alt="DEVCON+" className="h-full w-full object-contain p-3" />
+        <img src={centerLogo} alt="DEVCON+" className="h-12 w-12 object-contain" />
+        <span className="font-proxima text-md3-label-sm font-bold uppercase tracking-wide text-white">
+          {isSpinning ? 'Spinning…' : 'Tap to spin'}
+        </span>
       </button>
     </div>
   )

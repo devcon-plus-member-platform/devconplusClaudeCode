@@ -148,8 +148,10 @@ export default function CoverImageUpload({
   return (
     <>
       {preview ? (
-        <div className="relative rounded-xl overflow-hidden mb-3 border border-slate-200">
-          <img src={preview} alt={`${label} preview`} className="w-full h-44 object-cover" />
+        <div className="relative mb-3">
+          <div className="rounded-xl overflow-hidden border border-slate-200" style={{ aspectRatio: aspect }}>
+            <img src={preview} alt={`${label} preview`} className="w-full h-full object-cover" />
+          </div>
           <button
             type="button"
             disabled={disabled || recropping}
@@ -162,10 +164,10 @@ export default function CoverImageUpload({
             type="button"
             disabled={disabled}
             onClick={removeCover}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900/60 flex items-center justify-center disabled:opacity-50"
+            className="absolute -top-2.5 -right-2.5 w-8 h-8 rounded-full bg-white border-2 border-red shadow-md flex items-center justify-center disabled:opacity-50 hover:bg-red/5 transition-colors"
             aria-label={`Remove ${label}`}
           >
-            <CloseCircleLineDuotone className="w-4 h-4" color="#EF4444" />
+            <CloseCircleLineDuotone className="w-5 h-5" color="#EF4444" />
           </button>
         </div>
       ) : (
