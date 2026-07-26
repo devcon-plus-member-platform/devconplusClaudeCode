@@ -35,7 +35,7 @@ export class RegistrationsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   register(@CurrentUser() user: AuthenticatedUser, @Body() dto: RegisterDto) {
-    return this.service.register(user, dto.eventId);
+    return this.service.register(user, dto.eventId, dto.formResponses);
   }
 
   /** PATCH /api/registrations/:id/cancel — cancel own registration */

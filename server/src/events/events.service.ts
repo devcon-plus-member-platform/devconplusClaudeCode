@@ -13,6 +13,15 @@ import type { Event } from '../supabase/types';
 import type { CreateEventDto } from './dto/create-event.dto';
 import type { UpdateEventDto } from './dto/update-event.dto';
 
+export interface EventCapacitySummary {
+  capacity: number | null;
+  no_show_buffer: number;
+  approved_count: number;
+  pending_count: number;
+  effective_cap: number | null;
+  is_full: boolean;
+}
+
 @Injectable()
 export class EventsService {
   // Chapter officers cannot award more than this much attendance XP per event.
@@ -112,6 +121,16 @@ export class EventsService {
     const updated = await this.repo.update(id, payload);
     await this.cache.del(CacheKeys.EVENTS_LIST);
     return updated;
+  }
+
+  async getCapacity(id: string): Promise<EventCapacitySummary> {
+    const summary = await this.repo.findCapacitySummary(id);
+    if (!summary) throw new NotFoundException(`Event ${id} not found`);
+    const effectiveCap =
+      summary.capacity != null ? summary.capacity + summary.no_show_buffer : null;
+    const committed = summary.approved_count + summary.pending_count;
+    const isFull = effectiveCap != null && committed >= effectiveCap;
+    return { ...summary, effective_cap: effectiveCap, is_full: isFull };
   }
 
   async delete(id: string, user: AuthenticatedUser): Promise<void> {

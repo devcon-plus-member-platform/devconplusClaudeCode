@@ -287,6 +287,8 @@ export interface Event {
   ticket_price: number | null;
   ticket_price_php: number | null;
   capacity: number | null;
+  no_show_buffer: number;
+  registration_closed: boolean;
   points_value: number | null;
   volunteer_points: number | null;
   requires_approval: boolean | null;

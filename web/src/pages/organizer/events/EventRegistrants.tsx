@@ -14,6 +14,7 @@ import { ApprovalCard, type Registration } from '../../../components/ApprovalCar
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
+import type { EventCapacitySummary } from '@devcon-plus/supabase'
 
 // ── Custom form field types ───────────────────────────────────────────────────
 
@@ -96,7 +97,11 @@ function RegistrantDetailView({
     minute: '2-digit',
   })
 
-  const hasResponses = formSchema.length > 0 && !!localReg.form_responses
+  // Render the card whenever the event HAS questions — an event with questions
+  // and a registrant with no answers must look different from an event that
+  // never asked anything. Hiding the section made lost answers invisible.
+  const hasQuestions = formSchema.length > 0
+  const noResponsesRecorded = hasQuestions && !localReg.form_responses
   const answeredCount = formSchema.filter(f => {
     const v = localReg.form_responses?.[f.id]
     return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
@@ -180,7 +185,7 @@ function RegistrantDetailView({
         </div>
 
         {/* Custom form responses — always fully expanded */}
-        {hasResponses && (
+        {hasQuestions && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[14px] font-bold text-slate-500 flex items-center gap-1.5">
@@ -191,6 +196,12 @@ function RegistrantDetailView({
                 {answeredCount}/{formSchema.length}
               </span>
             </div>
+            {noResponsesRecorded && (
+              <p className="text-[12px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
+                No responses recorded — this member registered before these questions
+                were added, or before the response-saving fix shipped.
+              </p>
+            )}
             <div className="space-y-3">
               {formSchema.map((field, i) => {
                 const answer = localReg.form_responses?.[field.id]
@@ -300,7 +311,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventRegistrants() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, fetchEvents } = useEventsStore()
+  const { events, fetchEvents, fetchEventCapacity } = useEventsStore()
 
   const event = events.find((e) => e.id === id)
   const organizerUser = useOrganizerUser()
@@ -308,6 +319,7 @@ export function OrgEventRegistrants() {
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
@@ -348,6 +360,17 @@ export function OrgEventRegistrants() {
       .finally(() => setIsLoading(false))
   }, [id, event?.title])
 
+  const refreshCapacity = async () => {
+    if (!id) return
+    try {
+      setCapacitySummary(await fetchEventCapacity(id))
+    } catch {
+      // best-effort — the summary badge just stays hidden on failure
+    }
+  }
+
+  useEffect(() => { void refreshCapacity() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const fetchVolunteers = async () => {
     if (!id) return
     setVolunteersLoading(true)
@@ -376,7 +399,10 @@ export function OrgEventRegistrants() {
   const handleApprove = async (regId: string): Promise<boolean> => {
     try {
       await apiFetch(`/api/registrations/${regId}/approve`, { method: 'POST' })
-    } catch { return false }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Approval failed.')
+      return false
+    }
 
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'approved' as const } : r))
@@ -400,6 +426,7 @@ export function OrgEventRegistrants() {
         })
       }
     }
+    void refreshCapacity()
     return true
   }
 
@@ -410,6 +437,7 @@ export function OrgEventRegistrants() {
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'rejected' as const } : r))
     )
+    void refreshCapacity()
     return true
   }
 
@@ -420,6 +448,7 @@ export function OrgEventRegistrants() {
     setRegistrants((prev) =>
       prev.map((r) => (r.id === regId ? { ...r, status: 'pending' as const } : r))
     )
+    void refreshCapacity()
     return true
   }
 
@@ -540,6 +569,13 @@ export function OrgEventRegistrants() {
             <p className="text-white/70 text-[13px] font-proxima truncate leading-none">
               {event?.title ?? 'Event'}
             </p>
+            {capacitySummary?.capacity != null && (
+              <p className="text-white/60 text-[11px] font-proxima truncate leading-none mt-1.5">
+                {capacitySummary.approved_count}/{capacitySummary.capacity} approved
+                {' · '}{capacitySummary.pending_count} pending
+                {' · '}+{capacitySummary.no_show_buffer} buffer
+              </p>
+            )}
           </div>
         </div>
       </header>
@@ -579,7 +615,7 @@ export function OrgEventRegistrants() {
               exit="exit"
             >
               {/* Status filter sub-tabs */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5">
+              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5 flex-wrap">
                 {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
                   <button
                     key={f}

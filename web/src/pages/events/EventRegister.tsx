@@ -6,7 +6,6 @@ import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { buildRegistrationConfirmationEmail } from '../../lib/emailTemplates'
 import { useFormDraft } from '../../hooks/useFormDraft'
-import { isRegistrationClosed } from '../../lib/constants'
 
 // ── Custom form field types ───────────────────────────────────────────────────
 
@@ -257,10 +256,9 @@ export default function EventRegister() {
     event.chapter_id !== null &&
     event.chapter_id !== user.chapter_id
   )
-  // Hotfix kill switch — see CLOSED_EVENT_SLUGS. Blocks the direct /register URL
-  // for manually-closed (full) events; existing registrants fall through to their
-  // ticket/pending redirect below.
-  const isClosed = isRegistrationClosed(slug) && !existingReg
+  // Manual organizer close (registration_closed) blocks the direct /register URL;
+  // existing registrants fall through to their ticket/pending redirect below.
+  const isClosed = event?.registration_closed === true && !existingReg
   const hasSchoolOnProfile = !!user?.school_or_company?.trim()
 
   useEffect(() => {
@@ -329,20 +327,15 @@ export default function EventRegister() {
         await useAuthStore.getState().updateProfile({ school_or_company: trimmedSchool })
       }
 
-      await register(eventId, user.id)
+      // Answers are sent WITH the registration — one write, server-side, inside
+      // the same request. They must never be patched in afterwards from the
+      // browser: RLS gives members no grant to update their own registration
+      // row, so that write fails silently and the answers are lost.
+      await register(eventId, user.id, customSchema.length > 0 ? formResponses : undefined)
       const reg = useEventsStore.getState().registrations.find((r) => r.event_id === eventId)
       const destination = reg?.status === 'approved'
         ? `/events/${slug}/ticket`
         : `/events/${slug}/pending`
-
-      // Save form responses to the registration row
-      if (reg && customSchema.length > 0 && Object.keys(formResponses).length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- form_responses not yet in generated DB types
-        await (supabase as any)
-          .from('event_registrations')
-          .update({ form_responses: formResponses })
-          .eq('id', reg.id)
-      }
 
       // Fire-and-forget confirmation email for auto-approved registrations
       if (reg?.status === 'approved') {

@@ -117,6 +117,41 @@ export class EventsRepository extends BaseRepository {
     );
   }
 
+  /** Live registration-count snapshot for the capacity endpoint. */
+  async findCapacitySummary(eventId: string): Promise<{
+    capacity: number | null;
+    no_show_buffer: number;
+    approved_count: number;
+    pending_count: number;
+  } | null> {
+    const eventRes = await this.db
+      .from('events')
+      .select('capacity, no_show_buffer')
+      .eq('id', eventId)
+      .maybeSingle();
+    if (!eventRes.data) return null;
+    const event = eventRes.data as { capacity: number | null; no_show_buffer: number };
+
+    const { data, error } = await this.db
+      .from('event_registrations')
+      .select('status')
+      .eq('event_id', eventId)
+      .in('status', ['approved', 'pending']);
+    if (error) throw new BadRequestException((error as { message: string }).message);
+
+    const counts = { approved_count: 0, pending_count: 0 };
+    for (const row of (data ?? []) as Array<{ status: string }>) {
+      if (row.status === 'approved') counts.approved_count += 1;
+      else if (row.status === 'pending') counts.pending_count += 1;
+    }
+
+    return {
+      capacity: event.capacity,
+      no_show_buffer: event.no_show_buffer,
+      ...counts,
+    };
+  }
+
   async create(
     dto: CreateEventDto & {
       chapter_id: string | null;

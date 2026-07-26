@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Event, EventCategory, EventRegistration, DevconCategory, Json } from '@devcon-plus/supabase'
+import type { Event, EventCategory, EventRegistration, EventCapacitySummary, DevconCategory, Json } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
 
@@ -35,6 +35,8 @@ interface CreateEventPayload {
   is_free: boolean
   ticket_price_php: number
   capacity: number | null
+  no_show_buffer?: number
+  registration_closed?: boolean
   points_value: number
   volunteer_points: number
   requires_approval: boolean
@@ -61,6 +63,8 @@ export interface UpdateEventPayload {
   is_free?: boolean
   ticket_price_php?: number
   capacity?: number | null
+  no_show_buffer?: number
+  registration_closed?: boolean
   points_value?: number
   volunteer_points?: number
   requires_approval?: boolean
@@ -83,9 +87,14 @@ interface EventsState {
   createEvent: (payload: CreateEventPayload) => Promise<Event>
   deleteEvent: (id: string) => Promise<void>
   updateEvent: (id: string, payload: UpdateEventPayload) => Promise<Event>
+  fetchEventCapacity: (eventId: string) => Promise<EventCapacitySummary>
   subscribeToChanges: () => () => void
   fetchRegistrations: (userId: string) => Promise<void>
-  register: (eventId: string, userId: string) => Promise<void>
+  register: (
+    eventId: string,
+    userId: string,
+    formResponses?: Record<string, string | string[]>
+  ) => Promise<void>
   cancelRegistration: (regId: string) => Promise<void>
   subscribeToRegistration: (
     registrationId: string,
@@ -137,6 +146,10 @@ export const useEventsStore = create<EventsState>((set) => ({
     return updated
   },
 
+  fetchEventCapacity: (eventId) => {
+    return publicFetch<EventCapacitySummary>(`/api/events/${eventId}/capacity`)
+  },
+
   // Neutralized 2026-06-14: the always-on, global, unfiltered `events` realtime
   // firehose was the single heaviest connection + fan-out cost (every session held
   // it for life). The events list now refreshes via polling — recover() in the
@@ -159,15 +172,22 @@ export const useEventsStore = create<EventsState>((set) => ({
     }
   },
 
-  register: async (eventId, _userId) => {
+  register: async (eventId, _userId, formResponses) => {
     // _userId is ignored — server derives userId from the token.
     const event = useEventsStore.getState().events.find((e) => e.id === eventId)
     if (event?.is_external) {
       throw new Error('This event uses external registration.')
     }
+    // Custom-question answers travel WITH the registration. They must not be
+    // patched in afterwards from the browser: members hold no RLS grant to
+    // update their own registration row, so that write is silently rejected.
     const data = await apiFetch<FullRegistration>('/api/registrations', {
       method: 'POST',
-      body: JSON.stringify({ eventId }),
+      body: JSON.stringify(
+        formResponses && Object.keys(formResponses).length > 0
+          ? { eventId, formResponses }
+          : { eventId }
+      ),
     })
     // Server handles re-registration logic — just update local state
     set((s) => {

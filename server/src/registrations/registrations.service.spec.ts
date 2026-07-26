@@ -37,8 +37,9 @@ function makeRepo(eventChapterId: string | null = CH_1) {
     cancelRegistration:        jest.fn().mockResolvedValue(undefined),
     findByEvent:               jest.fn().mockResolvedValue([]),
     findEventChapterScope:     jest.fn().mockResolvedValue({ chapterId: eventChapterId }),
+    findEventFormSchema:       jest.fn().mockResolvedValue([]),
     findRegistrationEventId:   jest.fn().mockResolvedValue(EVENT_ID),
-    approveRegistration:       jest.fn().mockResolvedValue(undefined),
+    approveRegistration:       jest.fn().mockResolvedValue({ success: true }),
     rejectRegistration:        jest.fn().mockResolvedValue(undefined),
     revertRegistration:        jest.fn().mockResolvedValue(undefined),
     manualCheckin:             jest.fn().mockResolvedValue({ success: true, member_name: 'Juan', points_awarded: 200 }),
@@ -69,14 +70,64 @@ describe('RegistrationsService', () => {
     it('inserts new registration when no cancelled row exists', async () => {
       await service.register(member, EVENT_ID);
       expect(repo.findCancelled).toHaveBeenCalledWith(EVENT_ID, 'member-1');
-      expect(repo.insertRegistration).toHaveBeenCalledWith(EVENT_ID, 'member-1');
+      expect(repo.insertRegistration).toHaveBeenCalledWith(EVENT_ID, 'member-1', null);
     });
 
     it('reactivates cancelled row instead of inserting duplicate', async () => {
       repo.findCancelled.mockResolvedValue({ ...mockReg, status: 'cancelled' });
       await service.register(member, EVENT_ID);
-      expect(repo.reactivateCancelled).toHaveBeenCalledWith(REG_ID);
+      expect(repo.reactivateCancelled).toHaveBeenCalledWith(REG_ID, null);
       expect(repo.insertRegistration).not.toHaveBeenCalled();
+    });
+
+    // ── Custom registration questions ───────────────────────────────────────
+    // Answers must be persisted in the SAME write as the registration. The old
+    // client-side follow-up UPDATE was rejected by RLS and lost 125 responses.
+
+    it('persists answers in the same write as the registration', async () => {
+      repo.findEventFormSchema.mockResolvedValue([
+        { id: 'f1', label: 'Role', required: true },
+      ]);
+      await service.register(member, EVENT_ID, { f1: 'Student' });
+      expect(repo.insertRegistration).toHaveBeenCalledWith(EVENT_ID, 'member-1', {
+        f1: 'Student',
+      });
+    });
+
+    it('rejects registration when a required question is unanswered', async () => {
+      repo.findEventFormSchema.mockResolvedValue([
+        { id: 'f1', label: 'Role', required: true },
+      ]);
+      await expect(service.register(member, EVENT_ID, {})).rejects.toThrow(/Role/);
+      expect(repo.insertRegistration).not.toHaveBeenCalled();
+    });
+
+    it('rejects a blank "Other" free-text answer as unanswered', async () => {
+      repo.findEventFormSchema.mockResolvedValue([
+        { id: 'f1', label: 'Role', required: true },
+      ]);
+      await expect(
+        service.register(member, EVENT_ID, { f1: '__other__:   ' }),
+      ).rejects.toThrow(/Role/);
+    });
+
+    it('drops keys the event schema does not define', async () => {
+      repo.findEventFormSchema.mockResolvedValue([
+        { id: 'f1', label: 'Role', required: false },
+      ]);
+      await service.register(member, EVENT_ID, { f1: 'Student', junk: 'x' });
+      expect(repo.insertRegistration).toHaveBeenCalledWith(EVENT_ID, 'member-1', {
+        f1: 'Student',
+      });
+    });
+
+    it('carries answers through re-registration of a cancelled row', async () => {
+      repo.findCancelled.mockResolvedValue({ ...mockReg, status: 'cancelled' });
+      repo.findEventFormSchema.mockResolvedValue([
+        { id: 'f1', label: 'Role', required: true },
+      ]);
+      await service.register(member, EVENT_ID, { f1: 'Mentor' });
+      expect(repo.reactivateCancelled).toHaveBeenCalledWith(REG_ID, { f1: 'Mentor' });
     });
   });
 
@@ -92,7 +143,7 @@ describe('RegistrationsService', () => {
   describe('approveRegistration', () => {
     it('succeeds when officer is in same chapter as event', async () => {
       await service.approveRegistration(officer1, REG_ID);
-      expect(repo.approveRegistration).toHaveBeenCalledWith(REG_ID);
+      expect(repo.approveRegistration).toHaveBeenCalledWith(REG_ID, 'officer-1');
     });
 
     it('throws ForbiddenException for officer in different chapter', async () => {

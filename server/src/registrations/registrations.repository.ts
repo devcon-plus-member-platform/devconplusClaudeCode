@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import * as crypto from 'crypto';
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Registration, RegistrantWithProfile } from '../supabase/types';
@@ -9,6 +8,18 @@ interface ManualCheckinRpcResult {
   member_name: string;
   points_awarded: number;
   error?: string;
+}
+
+interface ApproveRegistrationRpcResult {
+  success: boolean;
+  error?: string;
+}
+
+/** One custom registration question, as stored in `events.custom_form_schema`. */
+export interface CustomFormField {
+  id: string;
+  label: string;
+  required: boolean;
 }
 
 @Injectable()
@@ -42,10 +53,19 @@ export class RegistrationsRepository extends BaseRepository {
   }
 
   /** Re-registration: resets a cancelled row back to pending. */
-  async reactivateCancelled(regId: string): Promise<Registration> {
+  async reactivateCancelled(
+    regId: string,
+    formResponses?: Record<string, unknown> | null,
+  ): Promise<Registration> {
     const result = await this.db
       .from('event_registrations')
-      .update({ status: 'pending', qr_code_token: null })
+      .update({
+        status: 'pending',
+        qr_code_token: null,
+        // Overwrite prior answers on re-registration — the member just
+        // re-submitted the form. `null` clears stale answers.
+        form_responses: formResponses ?? null,
+      })
       .eq('id', regId)
       .select()
       .single();
@@ -54,12 +74,23 @@ export class RegistrationsRepository extends BaseRepository {
     );
   }
 
-  async insertRegistration(eventId: string, userId: string): Promise<Registration> {
+  async insertRegistration(
+    eventId: string,
+    userId: string,
+    formResponses?: Record<string, unknown> | null,
+  ): Promise<Registration> {
     const result = await this.db
       .from('event_registrations')
-      .insert({ event_id: eventId, user_id: userId })
+      .insert({
+        event_id: eventId,
+        user_id: userId,
+        form_responses: formResponses ?? null,
+      })
       .select()
       .single();
+    if (result.error?.message?.includes('registration_closed')) {
+      throw new BadRequestException('Registration is closed for this event.');
+    }
     return this.unwrap(
       result as { data: Registration | null; error: { message: string } | null },
     );
@@ -128,6 +159,22 @@ export class RegistrationsRepository extends BaseRepository {
     return { chapterId: (data.chapter_id ?? null) as string | null };
   }
 
+  /**
+   * Loads an event's custom registration questions. Returns `[]` when the event
+   * has no custom form (or does not exist) — callers treat that as "nothing to
+   * validate", never as an error.
+   */
+  async findEventFormSchema(eventId: string): Promise<CustomFormField[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (this.db as any)
+      .from('events')
+      .select('custom_form_schema')
+      .eq('id', eventId)
+      .maybeSingle();
+    const schema = (data as { custom_form_schema?: unknown } | null)?.custom_form_schema;
+    return Array.isArray(schema) ? (schema as CustomFormField[]) : [];
+  }
+
   /** Loads registration to get event_id for chapter-scope check. */
   async findRegistrationEventId(regId: string): Promise<string | null> {
     const { data } = await this.db
@@ -138,17 +185,16 @@ export class RegistrationsRepository extends BaseRepository {
     return (data?.event_id ?? null) as string | null;
   }
 
-  async approveRegistration(regId: string): Promise<void> {
-    const qrToken = 'DCN-' + crypto.randomUUID().slice(0, 8).toUpperCase();
-    const { error } = await this.db
-      .from('event_registrations')
-      .update({
-        status:        'approved',
-        approved_at:   new Date().toISOString(),
-        qr_code_token: qrToken,
-      })
-      .eq('id', regId);
+  async approveRegistration(
+    regId: string,
+    organizerId: string,
+  ): Promise<ApproveRegistrationRpcResult> {
+    const { data, error } = await this.db.rpc('approve_registration_with_capacity' as never, {
+      p_registration_id: regId,
+      p_organizer_id:    organizerId,
+    } as never);
     if (error) throw new BadRequestException(error.message);
+    return data as ApproveRegistrationRpcResult;
   }
 
   async rejectRegistration(regId: string): Promise<void> {

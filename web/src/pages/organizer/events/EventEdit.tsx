@@ -158,6 +158,8 @@ export function OrgEventEdit() {
           is_free:           hasDraft ? (draft.is_free           as boolean) ?? (event.is_free           ?? true)                   : event.is_free           ?? true,
           ticket_price_php:  hasDraft ? (draft.ticket_price_php  as number)  ?? (event.ticket_price_php  ?? 0)                     : event.ticket_price_php  ?? 0,
           capacity:          hasDraft ? (draft.capacity          as number | undefined) ?? event.capacity ?? undefined               : event.capacity          ?? undefined,
+          no_show_buffer:    hasDraft ? (draft.no_show_buffer as number) ?? (event.no_show_buffer ?? 10)                  : event.no_show_buffer ?? 10,
+          registration_closed: hasDraft ? (draft.registration_closed as boolean) ?? (event.registration_closed ?? false)  : event.registration_closed ?? false,
           visibility:        (event.visibility ?? 'public') as 'public' | 'unlisted' | 'draft',
         }
       : {
@@ -168,6 +170,8 @@ export function OrgEventEdit() {
           chapter_id:        '',
           is_free:           true,
           ticket_price_php:  0,
+          no_show_buffer:    10,
+          registration_closed: false,
           visibility:        'public',
           tags:              [],
         },
@@ -353,6 +357,8 @@ export function OrgEventEdit() {
         is_free:            data.is_free,
         ticket_price_php:   data.is_free ? 0 : data.ticket_price_php,
         capacity:           data.capacity ?? null,
+        no_show_buffer:     data.no_show_buffer ?? 10,
+        registration_closed: data.registration_closed,
         cover_image_url,
         poster_image_url,
         custom_form_schema: customFields.length > 0 ? customFields as unknown as Json : null,
@@ -711,6 +717,33 @@ export function OrgEventEdit() {
               <label className={labelClass}>Capacity <span className="text-slate-300 normal-case font-normal">optional</span></label>
               <input {...register('capacity')} type="number" min={1} step={1} className={inputClass} placeholder="Unlimited" />
               {errors.capacity && <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>}
+            </div>
+
+            <div>
+              <label className={labelClass}>No-Show Buffer</label>
+              <input {...register('no_show_buffer')} type="number" min={0} step={1} className={inputClass} placeholder="10" />
+              {errors.no_show_buffer && <p className="text-md3-label-md text-red mt-1">{errors.no_show_buffer.message}</p>}
+              <p className="text-md3-label-md text-slate-400 mt-1">
+                Officers can still approve this many registrations past Capacity, to cover expected
+                no-shows. Approvals stop once Capacity + Buffer is reached.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <input
+                {...register('registration_closed')}
+                type="checkbox"
+                id="registration_closed"
+                className="w-4 h-4 accent-blue rounded"
+              />
+              <div>
+                <label htmlFor="registration_closed" className="text-md3-body-md font-semibold text-slate-900 cursor-pointer">
+                  Close Registration
+                </label>
+                <p className="text-md3-label-md text-slate-400 mt-0.5">
+                  Manually stop new registrations immediately, regardless of remaining capacity.
+                </p>
+              </div>
             </div>
           </div>
         </motion.div>

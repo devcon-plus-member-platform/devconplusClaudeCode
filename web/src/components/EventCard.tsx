@@ -7,7 +7,6 @@ import PromotedBadge from './PromotedBadge'
 import FeaturedBadge from './FeaturedBadge'
 import StatusPill from './StatusPill'
 import { formatDate, isEventArchived } from '../lib/dates'
-import { isRegistrationClosed } from '../lib/constants'
 
 function getInitials(name: string): string {
   return name
@@ -37,8 +36,9 @@ function EventCard({
   const externalUrl = event.external_registration_url ?? ''
   const externalIsTba = externalUrl === 'tba' || externalUrl === ''
   const isArchived = isEventArchived(event)
-  // Hotfix kill switch — see CLOSED_EVENT_SLUGS in lib/constants.
-  const isClosed = isRegistrationClosed(event.slug)
+  // Manual organizer close is the only thing that stops new joins — capacity +
+  // no_show_buffer only gates approval, it never blocks registration itself.
+  const isClosed = event.registration_closed
   const dateStr = event.event_date
     ? formatDate.compact(event.event_date)
     : 'Date TBA'

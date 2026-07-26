@@ -323,6 +323,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           is_free:           hasDraft ? (draft.is_free as boolean) ?? (event.is_free ?? true) : (event.is_free ?? true),
           ticket_price_php:  hasDraft ? (draft.ticket_price_php as number) ?? (event.ticket_price_php || undefined) : (event.ticket_price_php || undefined),
           capacity:          hasDraft ? (draft.capacity as number | undefined) ?? (event.capacity ?? undefined) : (event.capacity ?? undefined),
+          no_show_buffer:    hasDraft ? (draft.no_show_buffer as number) ?? (event.no_show_buffer ?? 10) : (event.no_show_buffer ?? 10),
+          registration_closed: hasDraft ? (draft.registration_closed as boolean) ?? (event.registration_closed ?? false) : (event.registration_closed ?? false),
           points_value:      hasDraft ? (draft.points_value as number) ?? (event.points_value ?? 200) : (event.points_value ?? 200),
           volunteer_points:  hasDraft ? (draft.volunteer_points as number) ?? (event.volunteer_points ?? DEFAULT_VOLUNTEER_POINTS) : (event.volunteer_points ?? DEFAULT_VOLUNTEER_POINTS),
           requires_approval: hasDraft ? (draft.requires_approval as boolean) ?? (event.requires_approval ?? false) : (event.requires_approval ?? false),
@@ -344,6 +346,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
           is_free:           (draft.is_free as boolean) ?? true,
           ticket_price_php:  (draft.ticket_price_php as number) ?? undefined,
           capacity:          (draft.capacity as number) ?? undefined,
+          no_show_buffer:    (draft.no_show_buffer as number) ?? 10,
+          registration_closed: (draft.registration_closed as boolean) ?? false,
           visibility:        'public',
           tags:              [],
         },
@@ -516,6 +520,8 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         is_free:                     isExternal ? true : data.is_free,
         ticket_price_php:            isExternal ? 0 : (data.is_free ? 0 : data.ticket_price_php),
         capacity:                    isExternal ? null : (data.capacity ?? null),
+        no_show_buffer:              isExternal ? 0 : (data.no_show_buffer ?? 10),
+        registration_closed:         isExternal ? false : data.registration_closed,
         points_value:                isExternal ? 0 : (isLocked ? (event?.points_value ?? data.points_value) : data.points_value),
         volunteer_points:            isExternal ? 0 : data.volunteer_points,
         requires_approval:           isExternal ? false : (isLocked ? (event?.requires_approval ?? false) : data.requires_approval),
@@ -1047,6 +1053,50 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
             {errors.capacity && (
               <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>
             )}
+          </div>
+        )}
+
+        {/* ── No-Show Buffer ── */}
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <label className={labelClass}>No-Show Buffer</label>
+            <input
+              {...register('no_show_buffer')}
+              type="number"
+              min={0}
+              step={1}
+              className={inputClass}
+              placeholder="10"
+            />
+            {errors.no_show_buffer && (
+              <p className="text-md3-label-md text-red mt-1">{errors.no_show_buffer.message}</p>
+            )}
+            <p className="text-md3-label-md text-slate-400 mt-1">
+              Officers can still approve this many registrations past Capacity, to cover expected
+              no-shows. Approvals stop once Capacity + Buffer is reached.
+            </p>
+          </div>
+        )}
+
+        {/* ── Close Registration ── */}
+        {!isExternal && (
+          <div className="border-t border-slate-100 pt-4 mt-4">
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <input
+                {...register('registration_closed')}
+                type="checkbox"
+                id="registration_closed_admin"
+                className="w-4 h-4 accent-blue rounded"
+              />
+              <div>
+                <label htmlFor="registration_closed_admin" className="text-md3-body-md font-semibold text-slate-900 cursor-pointer">
+                  Close Registration
+                </label>
+                <p className="text-md3-label-md text-slate-400 mt-0.5">
+                  Manually stop new registrations immediately, regardless of remaining capacity.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

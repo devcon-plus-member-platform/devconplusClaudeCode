@@ -11,7 +11,7 @@ import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
 import { formatDate } from '../../lib/dates'
-import { isRegistrationClosed, REGISTRATION_CLOSED_MESSAGE } from '../../lib/constants'
+import { REGISTRATION_CLOSED_MESSAGE } from '../../lib/constants'
 import EventPosterPlaceholder from '../../components/EventPosterPlaceholder'
 
 const VOLUNTEER_FORM_URL =
@@ -63,11 +63,11 @@ export default function EventDetail() {
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== null && event.chapter_id !== user?.chapter_id
   const isExternal = event?.is_external === true
 
-  // Hotfix kill switch — capacity is unenforced server-side, so full events are
-  // closed manually via CLOSED_EVENT_SLUGS. Members who already hold a live
-  // registration keep their pending screen / ticket; only new joins are blocked.
+  // Members who already hold a live registration keep their pending screen or
+  // ticket; only new joins are gated by registration_closed (the organizer's
+  // manual hard stop — there is no capacity-based auto-close).
   const hasLiveReg = !!reg && reg.status !== 'cancelled'
-  const registrationClosed = isRegistrationClosed(event?.slug) && !hasLiveReg
+  const registrationClosed = event?.registration_closed === true && !hasLiveReg
 
   useEffect(() => { void fetchChapters() }, [fetchChapters])
 
@@ -267,7 +267,7 @@ export default function EventDetail() {
                     <img
                       src={event.poster_image_url}
                       alt={event.title}
-                      className="aspect-square w-full rounded-2xl object-cover"
+                      className="aspect-video w-full rounded-2xl object-cover"
                     />
                   ) : (
                     <EventPosterPlaceholder event={event} />

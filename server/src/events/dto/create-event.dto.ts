@@ -2,12 +2,15 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   IsUrl,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
 } from 'class-validator';
 
@@ -70,6 +73,16 @@ export class CreateEventDto {
 
   @IsOptional()
   capacity?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  no_show_buffer?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  registration_closed?: boolean;
 
   @IsOptional()
   points_value?: number | null;
