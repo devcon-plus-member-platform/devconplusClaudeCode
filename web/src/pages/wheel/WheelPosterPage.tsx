@@ -61,7 +61,7 @@ export default function WheelPosterPage() {
   return (
     <div
       className="flex h-screen w-screen items-center justify-center overflow-hidden"
-      style={{ background: '#1E2A56' }}
+      style={{ background: '#05030F' }}
     >
       {status === 'loading' && (
         <div

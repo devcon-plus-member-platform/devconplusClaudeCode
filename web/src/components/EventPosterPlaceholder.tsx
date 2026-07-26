@@ -14,7 +14,7 @@ import {
 import type { Event, EventCategory } from '@devcon-plus/supabase'
 import type { SolarIcon } from '../lib/icons'
 import { formatDate } from '../lib/dates'
-import { STRIPE_COLORS } from './RafflePosterArt'
+import { BrandStripe, DEVCON17_GOLD, PosterBackdrop } from './RafflePosterArt'
 import { useThemeStore } from '../stores/useThemeStore'
 import { resolveEventTheme } from '../lib/eventTheme'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -34,17 +34,6 @@ const CATEGORY_META: Record<EventCategory, { label: string; icon: SolarIcon }> =
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46"><circle cx="0" cy="0" r="14" stroke="white" stroke-width="0.8" stroke-opacity="0.14" fill="none"/><circle cx="46" cy="0" r="14" stroke="white" stroke-width="0.8" stroke-opacity="0.14" fill="none"/><circle cx="0" cy="46" r="14" stroke="white" stroke-width="0.8" stroke-opacity="0.14" fill="none"/><circle cx="46" cy="46" r="14" stroke="white" stroke-width="0.8" stroke-opacity="0.14" fill="none"/><circle cx="23" cy="23" r="14" stroke="white" stroke-width="0.8" stroke-opacity="0.14" fill="none"/></svg>`
 const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
-/** Same brand stripe as RafflePosterArt, horizontal-only (this placeholder is always landscape). */
-function BrandStripe() {
-  return (
-    <div className="flex h-[8px] w-full shrink-0" aria-hidden>
-      {STRIPE_COLORS.map((c) => (
-        <div key={c} className="flex-1" style={{ backgroundColor: c }} />
-      ))}
-    </div>
-  )
-}
-
 /**
  * Branded landscape poster placeholder shown on EventDetail when an event has no
  * uploaded poster_image_url. Themed by the event's DEVCON program (falls back to
@@ -62,14 +51,21 @@ export default function EventPosterPlaceholder({ event }: { event: Event }) {
   return (
     <div
       className="relative flex aspect-video w-full flex-col overflow-hidden rounded-xl text-white md:rounded-2xl"
-      style={{ background: `linear-gradient(155deg, ${theme.hex} 0%, ${theme.darkHex} 100%)` }}
+      // Keeps the program's hue up top but sinks into DEVCON 17 deep space at the
+      // bottom, which is what gives the orbit rings something to glow against.
+      style={{
+        background: `linear-gradient(160deg, ${theme.hex} 0%, ${theme.darkHex} 46%, #120A34 78%, #0B0620 100%)`,
+      }}
     >
-      <BrandStripe />
+      <BrandStripe thickness={8} />
       <div
         className="pointer-events-none absolute inset-0"
-        style={{ backgroundImage: PATTERN_BG, backgroundSize: '46px 46px', opacity: 0.6 }}
+        style={{ backgroundImage: PATTERN_BG, backgroundSize: '46px 46px', opacity: 0.32 }}
         aria-hidden
       />
+      {/* Same key-art atmosphere as the raffle poster, haloed in the event's own theme
+          colour and dialled back so the title stays the loudest thing on the card. */}
+      <PosterBackdrop accent={theme.hex} intensity={0.8} />
       <div className="relative flex flex-1 flex-col items-center justify-center gap-8 px-5 py-3 text-center md:gap-10 md:px-7 md:py-4">
         {/* Watermark icon — top center, scales with available height */}
         <div className="relative flex shrink-0 items-center justify-center">
@@ -82,7 +78,7 @@ export default function EventPosterPlaceholder({ event }: { event: Event }) {
             <img src={logoHorizontal} alt="DEVCON+" className="h-4 w-auto md:h-5" />
             {meta && (
               <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1">
-                <Icon color="#F6B11F" size={11} />
+                <Icon color={DEVCON17_GOLD} size={11} />
                 <span className="text-[9px] font-extrabold uppercase tracking-[0.16em] text-white">
                   {meta.label}
                 </span>
@@ -96,7 +92,7 @@ export default function EventPosterPlaceholder({ event }: { event: Event }) {
 
           <div className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-semibold text-white/90 md:text-[12px]">
             <span className="flex items-center gap-1">
-              <CalendarOutline color="#F6B11F" size={13} />
+              <CalendarOutline color={DEVCON17_GOLD} size={13} />
               {dateLabel}
             </span>
             {event.location && (
@@ -106,13 +102,13 @@ export default function EventPosterPlaceholder({ event }: { event: Event }) {
               </span>
             )}
             <span className="flex items-center gap-1">
-              <StarOutline color="#F8C630" size={13} />
-              +{event.points_value} pts
+              <StarOutline color={DEVCON17_GOLD} size={13} />
+              Earn +{event.points_value} pts
             </span>
           </div>
         </div>
       </div>
-      <BrandStripe />
+      <BrandStripe thickness={8} />
     </div>
   )
 }

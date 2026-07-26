@@ -10,6 +10,7 @@ import { backdrop } from '../../lib/animation'
 import { playWin, setMuted, startSpinTicks, stopSpinTicks } from '../../lib/wheelSounds'
 import NameWheel from '../../components/NameWheel'
 import WheelPoster from '../../components/WheelPoster'
+import { DEVCON17_GOLD, POSTER_BG, PosterBackdrop } from '../../components/RafflePosterArt'
 
 const JUMPSTART_URL = 'https://devcon.ph/jumpstart-internships/'
 
@@ -230,6 +231,27 @@ function parseManualNames(text: string): string[] {
   return names
 }
 
+// ── Background participant refresh (auto-refresh for live raffles) ─────────
+
+/** Applies the pool filter to a raw participant list — shared by the initial
+ *  load and the background refresh so both agree on what counts as "in". */
+function filterParticipantsByPool(participants: EventParticipant[], filter: PoolFilter): string[] {
+  const filtered = participants.filter((p) => {
+    if (filter === 'checked_in') return p.checked_in
+    if (filter === 'approved') return p.status === 'approved'
+    return p.status !== 'cancelled'
+  })
+  return filtered.map((p) => p.name)
+}
+
+/** Count occurrences of each name — lets the refresh diff duplicate anonymized
+ *  names (e.g. two "Juan D."s) correctly instead of just checking presence. */
+function toMultiset(names: string[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
+  return counts
+}
+
 export default function WheelPage() {
   // Deep-link mode: /wheel/:eventId locks the wheel to one event (no picker).
   const { eventId: routeEventId } = useParams<{ eventId?: string }>()
@@ -252,6 +274,9 @@ export default function WheelPage() {
   // currently unlocked so filter changes don't re-prompt.
   const [verifiedEventId, setVerifiedEventId] = useState<string | null>(null)
   const [showPwModal, setShowPwModal] = useState(false)
+  // Kept in-memory only (never persisted) so the background refresh below can
+  // silently re-request the participant list without re-prompting the user.
+  const verifiedPasswordRef = useRef<string | null>(null)
 
   // ── Poster generator ──────────────────────────────────────────────────────
   const [showPoster, setShowPoster] = useState(false)
@@ -266,6 +291,15 @@ export default function WheelPage() {
   const [isSpinning, setIsSpinning] = useState(false)
   const [winner, setWinner] = useState<string | null>(null)
   const pendingWinnerRef = useRef<{ name: string; idx: number } | null>(null)
+
+  // ── Background participant refresh (see refreshParticipants below) ───────
+  const [pulseTick, setPulseTick] = useState(0)
+  const participantsRef = useRef<EventParticipant[]>([])
+  const filterRef = useRef<PoolFilter>(filter)
+  const isSpinningRef = useRef(false)
+  // Set right before a background-driven setParticipants() so the reset effect
+  // below can tell "roster refreshed quietly" apart from "user changed the pool".
+  const skipNextPoolResetRef = useRef(false)
 
   // ── Sound ─────────────────────────────────────────────────────────────────
   const [isMuted, setIsMuted] = useState(false)
@@ -331,6 +365,7 @@ export default function WheelPage() {
       )
       setParticipants(data)
       setVerifiedEventId(id)
+      verifiedPasswordRef.current = password
     },
     [selectedEventId],
   )
@@ -351,22 +386,84 @@ export default function WheelPage() {
   // The full pool for the current source + filter (winners NOT yet removed).
   const fullPool = useMemo(() => {
     if (source === 'manual') return parseManualNames(manualText)
-    const filtered = participants.filter((p) => {
-      if (filter === 'checked_in') return p.checked_in
-      if (filter === 'approved') return p.status === 'approved'
-      return p.status !== 'cancelled'
-    })
-    return filtered.map((p) => p.name)
+    return filterParticipantsByPool(participants, filter)
   }, [source, manualText, participants, filter])
 
-  // Reset the live pool whenever the full pool changes. Skip while a spin is in
-  // flight so the wheel doesn't mutate mid-animation.
+  // Reset the live pool whenever the full pool changes (event/filter/source/manual
+  // list — an intentional pool change). Skip while a spin is in flight so the wheel
+  // doesn't mutate mid-animation, and skip when the change came from the silent
+  // background refresh (refreshParticipants already merged newcomers in directly
+  // without disturbing already-drawn winners — a full reset here would undo that).
   useEffect(() => {
     if (isSpinning) return
+    if (skipNextPoolResetRef.current) {
+      skipNextPoolResetRef.current = false
+      return
+    }
     setEntrants(fullPool)
     setRemovedWinners([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullPool])
+
+  // Keep refs in sync so the interval callback below always reads current
+  // values without needing to tear down and recreate the interval.
+  useEffect(() => {
+    participantsRef.current = participants
+  }, [participants])
+  useEffect(() => {
+    filterRef.current = filter
+  }, [filter])
+  useEffect(() => {
+    isSpinningRef.current = isSpinning
+  }, [isSpinning])
+
+  // Silently re-fetch the event's participants and merge in only the newcomers,
+  // so a live audience sees new registrants join the wheel without any already-
+  // drawn winner reappearing or the wheel resetting mid-session.
+  const refreshParticipants = useCallback(async (id: string, password: string) => {
+    let data: EventParticipant[]
+    try {
+      data = await publicFetch<EventParticipant[]>(
+        `/api/events/${id}/participants`,
+        { method: 'POST', body: JSON.stringify({ password }) },
+      )
+    } catch {
+      return // silent — the next poll retries
+    }
+    if (isSpinningRef.current) return // spin started mid-request; try again next tick
+
+    const prevCounts = toMultiset(filterParticipantsByPool(participantsRef.current, filterRef.current))
+    const nextCounts = toMultiset(filterParticipantsByPool(data, filterRef.current))
+    const added: string[] = []
+    for (const [name, count] of nextCounts) {
+      const extra = count - (prevCounts.get(name) ?? 0)
+      for (let i = 0; i < extra; i++) added.push(name)
+    }
+
+    skipNextPoolResetRef.current = true
+    setParticipants(data)
+
+    if (added.length > 0) {
+      setEntrants((prev) => [...prev, ...added])
+      toast.success(`🎉 ${added.length} more joined the wheel!`)
+      setPulseTick((n) => n + 1)
+    }
+  }, [])
+
+  // Poll every 5s while an event pool is unlocked and on screen — matches the
+  // 5s convention already used for live/on-screen recovery in EventPending /
+  // EventTicket. Not used for manual lists (no server data to refresh).
+  useEffect(() => {
+    if (source !== 'event' || !selectedEventId || selectedEventId !== verifiedEventId) return
+    const password = verifiedPasswordRef.current
+    if (!password) return
+
+    const interval = setInterval(() => {
+      if (isSpinningRef.current) return
+      void refreshParticipants(selectedEventId, password)
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [source, selectedEventId, verifiedEventId, refreshParticipants])
 
   const canSpin = entrants.length >= 2 && !isSpinning
 
@@ -452,41 +549,63 @@ export default function WheelPage() {
   }, [selectedEventId])
 
   return (
-    <div className="flex h-screen flex-col bg-slate-100 p-6 lg:p-8">
+    <div className="flex min-h-screen flex-col bg-slate-100 p-4 sm:p-6 lg:h-screen lg:overflow-hidden lg:p-8">
       <header className="mb-4 shrink-0">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <ConfettiOutline color="rgb(var(--color-primary))" size={22} />
+        <div className="relative overflow-hidden rounded-3xl text-white" style={{ background: POSTER_BG }}>
+          <PosterBackdrop intensity={0.75} rings={false} />
+          <div className="relative flex flex-wrap items-center justify-between gap-x-5 gap-y-3 px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                <ConfettiOutline color={DEVCON17_GOLD} size={22} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-md3-label-lg font-bold uppercase tracking-wide text-white">
+                  DEVCON+ Raffle Wheel
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="translate-y-1.5 text-md3-title-md font-black uppercase tracking-wide text-white sm:translate-y-1.5 sm:text-md3-title-lg">
+                    Celebrating
+                  </span>
+                  <img
+                    src="/devcon17.png"
+                    alt="DEVCON 17"
+                    className="h-5 w-auto shrink-0 object-contain sm:h-6"
+                  />
+                </div>
+              </div>
             </div>
-            <p className="text-md3-label-lg font-bold uppercase tracking-wide text-primary">
-              DEVCON+ Raffle Wheel
-            </p>
+            <div className="ml-auto flex shrink-0 items-center gap-4">
+              <img
+                src="/17.png"
+                alt="DEVCON 17"
+                className="h-9 w-auto shrink-0 object-contain sm:h-11"
+              />
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                aria-label={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
+                aria-pressed={isMuted}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 transition hover:bg-white/20"
+              >
+                {isMuted ? (
+                  <MutedOutline color="#94A3B8" size={20} />
+                ) : (
+                  <SoundwaveOutline color={DEVCON17_GOLD} size={20} />
+                )}
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleToggleMute}
-            aria-label={isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
-            aria-pressed={isMuted}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white transition hover:bg-slate-50"
-          >
-            {isMuted ? (
-              <MutedOutline color="#94A3B8" size={20} />
-            ) : (
-              <SoundwaveOutline color="rgb(var(--color-primary))" size={20} />
-            )}
-          </button>
         </div>
         {selectedEventTitle ? (
-          <h1 className="mt-2 text-md3-headline-lg font-black leading-tight text-slate-900">
+          <h1 className="mt-3 text-md3-headline-lg font-black leading-tight text-slate-900">
             {selectedEventTitle}
           </h1>
         ) : isLocked ? (
-          <h1 className="mt-2 text-md3-headline-lg font-black leading-tight text-slate-400">
+          <h1 className="mt-3 text-md3-headline-lg font-black leading-tight text-slate-400">
             Loading event…
           </h1>
         ) : (
-          <p className="mt-2 text-md3-body-md text-slate-500">
+          <p className="mt-3 text-md3-body-md text-slate-500">
             {source === 'event'
               ? 'Pick an event and spin to draw a random winner from its participants.'
               : 'Add names to the list and spin to draw a random winner.'}
@@ -494,11 +613,11 @@ export default function WheelPage() {
         )}
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid gap-4 sm:gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_340px]">
         {/* ── Wheel column ── */}
-        <div className="flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-6 shadow-card">
+        <div className="flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-card sm:p-6 lg:min-h-0">
           {entrants.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <div className="flex flex-col items-center gap-3 py-12 text-center sm:py-20">
               <UsersGroupRoundedOutline color="#94A3B8" size={40} />
               <p className="text-md3-body-md font-semibold text-slate-700">
                 {needsUnlock ? 'Locked' : 'No participants yet'}
@@ -524,10 +643,7 @@ export default function WheelPage() {
             </div>
           ) : (
             <>
-              <div
-                className="aspect-square w-full"
-                style={{ maxWidth: 'min(100%, calc(100vh - 340px))' }}
-              >
+              <div className="aspect-square w-full max-w-[420px] lg:max-w-[min(100%,calc(100vh-340px))]">
                 <NameWheel
                   entrants={entrants}
                   rotation={rotation}
@@ -537,10 +653,16 @@ export default function WheelPage() {
                   canSpin={canSpin}
                 />
               </div>
-              <p className="mt-3 shrink-0 text-md3-body-sm text-slate-500">
-                {entrants.length} in the wheel
+              <motion.p
+                key={pulseTick}
+                initial={pulseTick > 0 ? { scale: 1.25 } : false}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                className="mt-3 shrink-0 text-md3-body-sm text-slate-500"
+              >
+                Tap the center to spin · {entrants.length} in the wheel
                 {removedWinners.length > 0 && ` · ${removedWinners.length} drawn`}
-              </p>
+              </motion.p>
               {entrants.length === 1 && (
                 <p className="mt-1 text-md3-label-md font-semibold text-slate-700">
                   Only one left — {entrants[0]} wins by default.
@@ -551,7 +673,47 @@ export default function WheelPage() {
         </div>
 
         {/* ── Controls column ── */}
-        <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
+        <div className="space-y-4 sm:space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
+          {/* Reset + winners drawn — kept at the top so they're visible without
+              scrolling past the (less time-critical) source/event/QR setup cards. */}
+          {removedWinners.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500">
+                  Winners drawn
+                </p>
+                <button
+                  type="button"
+                  onClick={handleExportWinners}
+                  className="flex shrink-0 items-center gap-1 text-md3-label-md font-bold text-primary transition hover:opacity-80"
+                >
+                  <DownloadOutline color="rgb(var(--color-primary))" size={15} />
+                  Export CSV
+                </button>
+              </div>
+              <ol className="space-y-1.5">
+                {removedWinners.map((name, i) => (
+                  <li key={`${name}-${i}`} className="flex items-center gap-2 text-md3-body-md text-slate-900">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-md3-label-sm font-bold text-primary">
+                      {removedWinners.length - i}
+                    </span>
+                    {name}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={isSpinning || removedWinners.length === 0}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-md3-label-lg font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <RestartOutline color="#334155" size={18} />
+            Reset pool
+          </button>
+
           {/* Source toggle — hidden in locked (shared-link) mode */}
           {!isLocked && (
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
@@ -716,45 +878,6 @@ export default function WheelPage() {
               </p>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={isSpinning || removedWinners.length === 0}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-md3-label-lg font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RestartOutline color="#334155" size={18} />
-            Reset pool
-          </button>
-
-          {/* Drawn winners list */}
-          {removedWinners.length > 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="text-md3-label-md font-bold uppercase tracking-wide text-slate-500">
-                  Winners drawn
-                </p>
-                <button
-                  type="button"
-                  onClick={handleExportWinners}
-                  className="flex shrink-0 items-center gap-1 text-md3-label-md font-bold text-primary transition hover:opacity-80"
-                >
-                  <DownloadOutline color="rgb(var(--color-primary))" size={15} />
-                  Export CSV
-                </button>
-              </div>
-              <ol className="space-y-1.5">
-                {removedWinners.map((name, i) => (
-                  <li key={`${name}-${i}`} className="flex items-center gap-2 text-md3-body-md text-slate-900">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-md3-label-sm font-bold text-primary">
-                      {removedWinners.length - i}
-                    </span>
-                    {name}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
         </div>
       </div>
 
@@ -798,18 +921,18 @@ export default function WheelPage() {
                 animate="visible"
                 exit="exit"
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg rounded-[2rem] bg-white p-12 text-center shadow-2xl"
+                className="w-full max-w-lg rounded-[2rem] bg-white p-7 text-center shadow-2xl sm:p-12"
               >
-                <div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-gold/20">
+                <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gold/20 sm:h-24 sm:w-24">
                   <CupStarOutline color="#F8C630" size={52} />
                 </div>
                 <p className="text-md3-title-md font-bold uppercase tracking-widest text-slate-400">
                   Winner
                 </p>
-                <p className="mt-2 break-words text-md3-headline-lg font-black leading-tight text-slate-900">
+                <p className="mt-2 break-words text-md3-headline-sm font-black leading-tight text-slate-900 sm:text-md3-headline-lg">
                   {winner}
                 </p>
-                <div className="mt-9 flex gap-3">
+                <div className="mt-7 flex gap-3 sm:mt-9">
                   <button
                     type="button"
                     onClick={handleCloseWinner}
