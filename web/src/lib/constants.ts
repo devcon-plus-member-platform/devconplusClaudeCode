@@ -52,7 +52,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
  * gateway enforces capacity.
  */
 export const CLOSED_EVENT_SLUGS: readonly string[] = [
-  // 'dev-roast-claude-vs-codex-vs-cursor-vs-qwen-coder-367a87d4',
+  'dev-roast-claude-vs-codex-vs-cursor-vs-qwen-coder-367a87d4',
 ]
 
 /** Message shown in place of the join CTA for a closed event. */
