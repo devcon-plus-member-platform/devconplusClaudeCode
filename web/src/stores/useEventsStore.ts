@@ -90,7 +90,11 @@ interface EventsState {
   fetchEventCapacity: (eventId: string) => Promise<EventCapacitySummary>
   subscribeToChanges: () => () => void
   fetchRegistrations: (userId: string) => Promise<void>
-  register: (eventId: string, userId: string) => Promise<void>
+  register: (
+    eventId: string,
+    userId: string,
+    formResponses?: Record<string, string | string[]>
+  ) => Promise<void>
   cancelRegistration: (regId: string) => Promise<void>
   subscribeToRegistration: (
     registrationId: string,
@@ -168,15 +172,22 @@ export const useEventsStore = create<EventsState>((set) => ({
     }
   },
 
-  register: async (eventId, _userId) => {
+  register: async (eventId, _userId, formResponses) => {
     // _userId is ignored — server derives userId from the token.
     const event = useEventsStore.getState().events.find((e) => e.id === eventId)
     if (event?.is_external) {
       throw new Error('This event uses external registration.')
     }
+    // Custom-question answers travel WITH the registration. They must not be
+    // patched in afterwards from the browser: members hold no RLS grant to
+    // update their own registration row, so that write is silently rejected.
     const data = await apiFetch<FullRegistration>('/api/registrations', {
       method: 'POST',
-      body: JSON.stringify({ eventId }),
+      body: JSON.stringify(
+        formResponses && Object.keys(formResponses).length > 0
+          ? { eventId, formResponses }
+          : { eventId }
+      ),
     })
     // Server handles re-registration logic — just update local state
     set((s) => {

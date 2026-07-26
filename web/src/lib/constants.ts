@@ -35,4 +35,4 @@ export const CATEGORY_LABELS: Record<string, string> = {
 }
 
 /** Message shown when an organizer has manually closed registration (events.registration_closed). */
-export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — the organizer has stopped new registrations for this event'
+export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — this event is already full'
