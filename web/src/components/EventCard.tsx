@@ -7,6 +7,7 @@ import PromotedBadge from './PromotedBadge'
 import FeaturedBadge from './FeaturedBadge'
 import StatusPill from './StatusPill'
 import { formatDate, isEventArchived } from '../lib/dates'
+import { isRegistrationClosed } from '../lib/constants'
 
 function getInitials(name: string): string {
   return name
@@ -36,6 +37,8 @@ function EventCard({
   const externalUrl = event.external_registration_url ?? ''
   const externalIsTba = externalUrl === 'tba' || externalUrl === ''
   const isArchived = isEventArchived(event)
+  // Hotfix kill switch — see CLOSED_EVENT_SLUGS in lib/constants.
+  const isClosed = isRegistrationClosed(event.slug)
   const dateStr = event.event_date
     ? formatDate.compact(event.event_date)
     : 'Date TBA'
@@ -108,16 +111,18 @@ function EventCard({
         <div className="flex items-center justify-between gap-3">
           <div
             className={`text-[12px] font-semibold px-[18px] py-[12px] rounded-2xl flex items-center justify-center shrink-0 leading-none shadow-sm ${
-              isExternal && externalIsTba
+              isClosed || (isExternal && externalIsTba)
                 ? 'bg-white/70 text-slate-500'
                 : 'bg-primary text-white'
             }`}
           >
-            {isExternal
-              ? externalIsTba
-                ? 'Registration Coming Soon'
-                : 'Learn More'
-              : 'Register Now'}
+            {isClosed
+              ? 'Registration Closed'
+              : isExternal
+                ? externalIsTba
+                  ? 'Registration Coming Soon'
+                  : 'Learn More'
+                : 'Register Now'}
           </div>
 
           {/* Attendee Summary */}

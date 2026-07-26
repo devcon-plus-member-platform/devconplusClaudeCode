@@ -11,6 +11,7 @@ import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
 import { formatDate } from '../../lib/dates'
+import { isRegistrationClosed, REGISTRATION_CLOSED_MESSAGE } from '../../lib/constants'
 import EventPosterPlaceholder from '../../components/EventPosterPlaceholder'
 
 const VOLUNTEER_FORM_URL =
@@ -61,6 +62,12 @@ export default function EventDetail() {
 
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== null && event.chapter_id !== user?.chapter_id
   const isExternal = event?.is_external === true
+
+  // Hotfix kill switch — capacity is unenforced server-side, so full events are
+  // closed manually via CLOSED_EVENT_SLUGS. Members who already hold a live
+  // registration keep their pending screen / ticket; only new joins are blocked.
+  const hasLiveReg = !!reg && reg.status !== 'cancelled'
+  const registrationClosed = isRegistrationClosed(event?.slug) && !hasLiveReg
 
   useEffect(() => { void fetchChapters() }, [fetchChapters])
 
@@ -274,7 +281,11 @@ export default function EventDetail() {
 
         {/* CTA based on auth + registration state */}
         <div className="order-4 md:order-3 pt-2 space-y-3">
-          {isExternal ? (
+          {registrationClosed ? (
+            <div className="w-full bg-slate-100 border border-slate-200 text-slate-500 font-semibold py-4 rounded-2xl text-center text-md3-body-md">
+              {REGISTRATION_CLOSED_MESSAGE}
+            </div>
+          ) : isExternal ? (
             externalIsTba ? (
               <button
                 disabled

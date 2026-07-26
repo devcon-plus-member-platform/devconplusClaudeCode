@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { buildRegistrationConfirmationEmail } from '../../lib/emailTemplates'
 import { useFormDraft } from '../../hooks/useFormDraft'
+import { isRegistrationClosed } from '../../lib/constants'
 
 // ── Custom form field types ───────────────────────────────────────────────────
 
@@ -256,6 +257,10 @@ export default function EventRegister() {
     event.chapter_id !== null &&
     event.chapter_id !== user.chapter_id
   )
+  // Hotfix kill switch — see CLOSED_EVENT_SLUGS. Blocks the direct /register URL
+  // for manually-closed (full) events; existing registrants fall through to their
+  // ticket/pending redirect below.
+  const isClosed = isRegistrationClosed(slug) && !existingReg
   const hasSchoolOnProfile = !!user?.school_or_company?.trim()
 
   useEffect(() => {
@@ -267,7 +272,7 @@ export default function EventRegister() {
       navigate(`/events/${slug}`, { replace: true })
       return
     }
-    if (isChapterBlocked) {
+    if (isChapterBlocked || isClosed) {
       navigate(`/events/${slug}`, { replace: true })
       return
     }
@@ -279,10 +284,10 @@ export default function EventRegister() {
           : `/events/${slug}/pending`
       navigate(destination, { replace: true })
     }
-  }, [isChapterBlocked, existingReg, event, user, slug, navigate, externalUrl])
+  }, [isChapterBlocked, isClosed, existingReg, event, user, slug, navigate, externalUrl])
 
   if (!event || !user) return null
-  if (isExternal || isChapterBlocked || existingReg) return null
+  if (isExternal || isChapterBlocked || isClosed || existingReg) return null
 
   const setResponse = (fieldId: string, value: string | string[]) => {
     const next = { ...formResponses, [fieldId]: value }
