@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Event, EventCategory, EventRegistration, DevconCategory, Json } from '@devcon-plus/supabase'
+import type { Event, EventCategory, EventRegistration, EventCapacitySummary, DevconCategory, Json } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
 import { apiFetch, publicFetch } from '../lib/api'
 
@@ -35,6 +35,8 @@ interface CreateEventPayload {
   is_free: boolean
   ticket_price_php: number
   capacity: number | null
+  no_show_buffer?: number
+  registration_closed?: boolean
   points_value: number
   volunteer_points: number
   requires_approval: boolean
@@ -61,6 +63,8 @@ export interface UpdateEventPayload {
   is_free?: boolean
   ticket_price_php?: number
   capacity?: number | null
+  no_show_buffer?: number
+  registration_closed?: boolean
   points_value?: number
   volunteer_points?: number
   requires_approval?: boolean
@@ -83,6 +87,7 @@ interface EventsState {
   createEvent: (payload: CreateEventPayload) => Promise<Event>
   deleteEvent: (id: string) => Promise<void>
   updateEvent: (id: string, payload: UpdateEventPayload) => Promise<Event>
+  fetchEventCapacity: (eventId: string) => Promise<EventCapacitySummary>
   subscribeToChanges: () => () => void
   fetchRegistrations: (userId: string) => Promise<void>
   register: (eventId: string, userId: string) => Promise<void>
@@ -135,6 +140,10 @@ export const useEventsStore = create<EventsState>((set) => ({
       events: sortByEventDate(s.events.map((e) => (e.id === id ? updated : e))),
     }))
     return updated
+  },
+
+  fetchEventCapacity: (eventId) => {
+    return publicFetch<EventCapacitySummary>(`/api/events/${eventId}/capacity`)
   },
 
   // Neutralized 2026-06-14: the always-on, global, unfiltered `events` realtime

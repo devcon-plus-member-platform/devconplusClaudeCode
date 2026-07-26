@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import * as crypto from 'crypto';
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Registration, RegistrantWithProfile } from '../supabase/types';
@@ -8,6 +7,11 @@ interface ManualCheckinRpcResult {
   success: boolean;
   member_name: string;
   points_awarded: number;
+  error?: string;
+}
+
+interface ApproveRegistrationRpcResult {
+  success: boolean;
   error?: string;
 }
 
@@ -60,6 +64,9 @@ export class RegistrationsRepository extends BaseRepository {
       .insert({ event_id: eventId, user_id: userId })
       .select()
       .single();
+    if (result.error?.message?.includes('registration_closed')) {
+      throw new BadRequestException('Registration is closed for this event.');
+    }
     return this.unwrap(
       result as { data: Registration | null; error: { message: string } | null },
     );
@@ -138,17 +145,16 @@ export class RegistrationsRepository extends BaseRepository {
     return (data?.event_id ?? null) as string | null;
   }
 
-  async approveRegistration(regId: string): Promise<void> {
-    const qrToken = 'DCN-' + crypto.randomUUID().slice(0, 8).toUpperCase();
-    const { error } = await this.db
-      .from('event_registrations')
-      .update({
-        status:        'approved',
-        approved_at:   new Date().toISOString(),
-        qr_code_token: qrToken,
-      })
-      .eq('id', regId);
+  async approveRegistration(
+    regId: string,
+    organizerId: string,
+  ): Promise<ApproveRegistrationRpcResult> {
+    const { data, error } = await this.db.rpc('approve_registration_with_capacity' as never, {
+      p_registration_id: regId,
+      p_organizer_id:    organizerId,
+    } as never);
     if (error) throw new BadRequestException(error.message);
+    return data as ApproveRegistrationRpcResult;
   }
 
   async rejectRegistration(regId: string): Promise<void> {

@@ -38,7 +38,14 @@ export class RegistrationsService {
 
   async approveRegistration(user: AuthenticatedUser, regId: string): Promise<void> {
     await this.assertRegChapterScope(user, regId);
-    await this.repo.approveRegistration(regId);
+    const result = await this.repo.approveRegistration(regId, user.profileId);
+    if (!result?.success) {
+      const message =
+        result?.error === 'capacity_full'
+          ? 'Cannot approve — this event has reached its no-show buffer capacity.'
+          : (result?.error ?? 'Approval failed');
+      throw new BadRequestException(message);
+    }
   }
 
   async rejectRegistration(user: AuthenticatedUser, regId: string): Promise<void> {

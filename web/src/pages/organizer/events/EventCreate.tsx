@@ -128,6 +128,8 @@ export function OrgEventCreate() {
       is_free:           (draft.is_free            as boolean) ?? true,
       ticket_price_php:  (draft.ticket_price_php   as number)  ?? 0,
       capacity:          (draft.capacity           as number)  ?? undefined,
+      no_show_buffer:    (draft.no_show_buffer     as number)  ?? 10,
+      registration_closed: (draft.registration_closed as boolean) ?? false,
       chapter_id:        isAdmin ? ((draft.chapter_id as string) ?? '') : (user?.chapter_id ?? ''),
       visibility:        'public',
       tags:              [],
@@ -300,6 +302,8 @@ export function OrgEventCreate() {
         is_free:                     isExternal ? true : data.is_free,
         ticket_price_php:            isExternal ? 0 : (data.is_free ? 0 : data.ticket_price_php),
         capacity:                    isExternal ? null : (data.capacity ?? null),
+        no_show_buffer:              isExternal ? 0 : (data.no_show_buffer ?? 10),
+        registration_closed:         isExternal ? false : data.registration_closed,
         points_value:                isExternal ? 0 : data.points_value,
         volunteer_points:            isExternal ? 0 : data.volunteer_points,
         requires_approval:           data.requires_approval,
@@ -800,6 +804,51 @@ export function OrgEventCreate() {
                 {errors.capacity && (
                   <p className="text-md3-label-md text-red mt-1">{errors.capacity.message}</p>
                 )}
+              </div>
+            )}
+
+            {/* No-Show Buffer — how far past Capacity an officer may still approve */}
+            {!isExternal && (
+              <div>
+                <label className={labelClass}>No-Show Buffer</label>
+                <input
+                  {...register('no_show_buffer')}
+                  type="number"
+                  min={0}
+                  step={1}
+                  className={inputClass}
+                  placeholder="10"
+                />
+                {errors.no_show_buffer && (
+                  <p className="text-md3-label-md text-red mt-1">{errors.no_show_buffer.message}</p>
+                )}
+                <p className="text-md3-label-md text-slate-400 mt-1">
+                  Officers can still approve this many registrations past Capacity, to cover expected
+                  no-shows. New joins beyond Capacity + Buffer are placed on a waitlist.
+                </p>
+              </div>
+            )}
+
+            {/* Close Registration toggle — manual hard stop, independent of capacity */}
+            {!isExternal && (
+              <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <input
+                  {...register('registration_closed')}
+                  type="checkbox"
+                  id="registration_closed"
+                  className="w-4 h-4 accent-blue rounded"
+                />
+                <div>
+                  <label
+                    htmlFor="registration_closed"
+                    className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+                  >
+                    Close Registration
+                  </label>
+                  <p className="text-md3-label-md text-slate-400 mt-0.5">
+                    Manually stop new registrations immediately, regardless of remaining capacity.
+                  </p>
+                </div>
               </div>
             )}
           </div>

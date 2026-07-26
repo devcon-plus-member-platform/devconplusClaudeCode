@@ -77,6 +77,11 @@ export function makeEventSchema(xpMax: number) {
       (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
       z.number().int().positive().max(100000, 'Capacity cannot exceed 100,000').optional()
     ),
+    no_show_buffer: z.preprocess(
+      (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
+      z.number().int().min(0).max(10000, 'Buffer cannot exceed 10,000').optional()
+    ).default(10),
+    registration_closed: z.boolean().default(false),
     points_value: z
       .number({ coerce: true })
       .min(1, 'Minimum 1 XP')
