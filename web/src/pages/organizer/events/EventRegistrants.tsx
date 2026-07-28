@@ -589,13 +589,6 @@ export function OrgEventRegistrants() {
             <p className="text-white/70 text-[13px] font-proxima truncate leading-none">
               {event?.title ?? 'Event'}
             </p>
-            {capacitySummary?.capacity != null && (
-              <p className="text-white/60 text-[11px] font-proxima truncate leading-none mt-1.5">
-                {capacitySummary.approved_count}/{capacitySummary.capacity} approved
-                {' · '}{capacitySummary.pending_count} pending
-                {' · '}+{capacitySummary.no_show_buffer} buffer
-              </p>
-            )}
           </div>
         </div>
       </header>
@@ -634,6 +627,90 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
+              {/* Capacity summary — declared capacity vs. attendees so far, with a % bar */}
+              {capacitySummary && (
+                <motion.div
+                  variants={fadeUp}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-card p-4 mb-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-md3-label-md font-bold text-slate-500 flex items-center gap-1.5">
+                      <UsersGroupRoundedOutline color="#94A3B8" width={14} height={14} />
+                      Capacity
+                    </p>
+                    <p className="text-md3-body-md font-bold text-slate-900">
+                      {capacitySummary.approved_count}
+                      {capacitySummary.capacity != null && (
+                        <span className="text-slate-400 font-semibold"> / {capacitySummary.capacity}</span>
+                      )}
+                      {capacitySummary.capacity != null && capacitySummary.no_show_buffer > 0 && (
+                        <span className="text-slate-400 font-medium">
+                          {' '}({capacitySummary.effective_cap ?? capacitySummary.capacity + capacitySummary.no_show_buffer} w/ buffer)
+                        </span>
+                      )}
+                      <span className="text-slate-400 font-medium"> attendees</span>
+                    </p>
+                  </div>
+
+                  {capacitySummary.capacity != null && (() => {
+                    const capacity = capacitySummary.capacity
+                    const buffer = capacitySummary.no_show_buffer
+                    const effectiveCap = capacitySummary.effective_cap ?? capacity + buffer
+                    const approved = capacitySummary.approved_count
+
+                    // One continuous bar spanning effective_cap (capacity + buffer).
+                    // Blue fills 0→capacity as approvals come in — hitting the capacity
+                    // mark IS "100%". Only once approved passes capacity does the amber
+                    // buffer segment start filling, continuing from that same mark to
+                    // the true end of the bar (effective_cap).
+                    const capacityMarkPct = effectiveCap > 0 ? (capacity / effectiveCap) * 100 : 100
+                    const approvedInCapacity = Math.min(approved, capacity)
+                    const approvedInBuffer = Math.max(0, Math.min(approved, effectiveCap) - capacity)
+                    const approvedPct = effectiveCap > 0 ? (approvedInCapacity / effectiveCap) * 100 : 0
+                    const bufferPct = effectiveCap > 0 ? (approvedInBuffer / effectiveCap) * 100 : 0
+                    const isOverCapacity = approved > capacity
+                    const percent = Math.round((approved / capacity) * 100)
+
+                    return (
+                      <>
+                        <div className="relative w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          {buffer > 0 && (
+                            <div
+                              className="absolute inset-y-0 w-1 rounded-full bg-white z-10"
+                              style={{ left: `${capacityMarkPct}%`, transform: 'translateX(-50%)' }}
+                            />
+                          )}
+                          <motion.div
+                            className={`absolute inset-y-0 left-0 bg-blue ${isOverCapacity ? '' : 'rounded-r-full'}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${approvedPct}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                          />
+                          {buffer > 0 && (
+                            <motion.div
+                              className={`absolute inset-y-0 bg-amber ${isOverCapacity ? 'rounded-r-full' : ''}`}
+                              style={{ left: `${capacityMarkPct}%` }}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${bufferPct}%` }}
+                              transition={{ duration: 0.6, ease: 'easeOut' }}
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-md3-label-md text-slate-400">
+                            {approvedInCapacity} approved
+                            {buffer > 0 && <> · {approvedInBuffer} approved in buffer</>}
+                          </p>
+                          <p className={`text-md3-label-md font-bold ${percent >= 90 ? 'text-red' : 'text-slate-500'}`}>
+                            {percent}%
+                          </p>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </motion.div>
+              )}
+
               {/* Search by name, email, or school/company */}
               <div className="relative mb-4">
                 <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />

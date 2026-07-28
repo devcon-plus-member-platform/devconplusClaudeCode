@@ -7,6 +7,7 @@ import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { publicFetch } from '../../lib/api'
 import { useChaptersStore } from '../../stores/useChaptersStore'
+import type { EventCapacitySummary } from '@devcon-plus/supabase'
 import NotFound from '../NotFound'
 import { MarkdownContent } from '../../components/MarkdownContent'
 import { slideUp, backdrop } from '../../lib/animation'
@@ -24,7 +25,7 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export default function EventDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const { events, registrations } = useEventsStore()
+  const { events, registrations, fetchEventCapacity } = useEventsStore()
   const { user } = useAuthStore()
   const { getChapterById, fetchChapters } = useChaptersStore()
   // const { loadApplications, getApplicationByEventId } = useVolunteerStore() // disabled: volunteer-for-event feature
@@ -58,6 +59,12 @@ export default function EventDetail() {
 
   const eventId = event?.id
   const reg = registrations.find((r) => r.event_id === eventId)
+
+  const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
+  useEffect(() => {
+    if (!eventId) return
+    fetchEventCapacity(eventId).then(setCapacitySummary).catch(() => setCapacitySummary(null))
+  }, [eventId, fetchEventCapacity])
   // const volunteerApp = user && eventId ? getApplicationByEventId(eventId) : undefined // disabled: volunteer-for-event feature
 
   const isChapterLocked = event?.is_chapter_locked === true && event.chapter_id !== null && event.chapter_id !== user?.chapter_id
@@ -243,6 +250,20 @@ export default function EventDetail() {
                     <MapPointOutline color="#64748B" width={20} height={20} />
                   </div>
                   <p className="text-md3-body-md font-semibold text-slate-900">{event.location}</p>
+                </div>
+              )}
+
+              {!isExternal && capacitySummary && (
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                    <UsersGroupRoundedOutline color="#64748B" width={20} height={20} />
+                  </div>
+                  <p className="text-md3-body-md font-semibold text-slate-900">
+                    {capacitySummary.approved_count} attending
+                    {capacitySummary.capacity != null && (
+                      <span className="text-slate-400 font-medium"> · {capacitySummary.capacity} capacity</span>
+                    )}
+                  </p>
                 </div>
               )}
             </div>
