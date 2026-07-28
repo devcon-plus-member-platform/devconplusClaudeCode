@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
@@ -319,11 +319,14 @@ export function OrgEventRegistrants() {
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [search, setSearch]           = useState('')
+  const [sortOrder, setSortOrder]     = useState<'asc' | 'desc'>('desc')
   const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
   const [volunteersLoading, setVolunteersLoading] = useState(false)
+  const [volunteerSortOrder, setVolunteerSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedRegistrant, setSelectedRegistrant] = useState<RegistrantWithResponses | null>(null)
 
   // Custom form schema comes from the event's custom_form_schema (JSONB array),
@@ -506,7 +509,19 @@ export function OrgEventRegistrants() {
     downloadCsv(`registrants-${dateStamp}${label}${suffix}.csv`, csv)
   }
 
-  const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const statusFiltered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const query = search.trim().toLowerCase()
+  const searched = query
+    ? statusFiltered.filter((r) =>
+        r.member_name.toLowerCase().includes(query) ||
+        r.member_email.toLowerCase().includes(query) ||
+        (r.school_or_company ?? '').toLowerCase().includes(query)
+      )
+    : statusFiltered
+  const filtered = [...searched].sort((a, b) => {
+    const diff = new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
+    return sortOrder === 'asc' ? diff : -diff
+  })
 
   const counts = {
     all:      registrants.length,
@@ -514,6 +529,11 @@ export function OrgEventRegistrants() {
     approved: registrants.filter((r) => r.status === 'approved').length,
     rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
+
+  const sortedVolunteers = [...volunteers].sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return volunteerSortOrder === 'asc' ? diff : -diff
+  })
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -614,21 +634,47 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
-              {/* Status filter sub-tabs */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5 flex-wrap">
-                {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
-                      filter === f
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {f} ({counts[f]})
-                  </button>
-                ))}
+              {/* Search by name, email, or school/company */}
+              <div className="relative mb-4">
+                <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  placeholder="Search by name, email, or school/company…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+                />
+              </div>
+
+              {/* Status filter sub-tabs + sort order toggle */}
+              <div className="flex items-start justify-between gap-2 mb-5">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
+                  {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
+                        filter === f
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {f} ({counts[f]})
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                  title={sortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                  className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                >
+                  {sortOrder === 'desc' ? (
+                    <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                  ) : (
+                    <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                  )}
+                  {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                </button>
               </div>
 
               {isLoading ? (
@@ -674,7 +720,9 @@ export function OrgEventRegistrants() {
                       </div>
                       <p className="text-md3-body-lg font-bold text-slate-700">No registrants found</p>
                       <p className="text-md3-body-md text-slate-400 mt-1">
-                        {filter === 'all' ? 'No one has registered yet.' : `No ${filter} registrations.`}
+                        {query
+                          ? `No results for "${search.trim()}".`
+                          : filter === 'all' ? 'No one has registered yet.' : `No ${filter} registrations.`}
                       </p>
                     </motion.div>
                   ) : (
@@ -707,6 +755,22 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
+              {volunteers.length > 0 && (
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setVolunteerSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                    title={volunteerSortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                    className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                  >
+                    {volunteerSortOrder === 'desc' ? (
+                      <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                    ) : (
+                      <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                    )}
+                    {volunteerSortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                  </button>
+                </div>
+              )}
               {volunteersLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -741,7 +805,7 @@ export function OrgEventRegistrants() {
                   initial="hidden"
                   animate="visible"
                 >
-                  {volunteers.map((app) => (
+                  {sortedVolunteers.map((app) => (
                     <motion.div
                       key={app.id}
                       variants={cardItem}

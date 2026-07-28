@@ -94,6 +94,8 @@ declare module 'solar-icon-set' {
   export const ShareOutline: SolarIcon
   export const ShieldCheckOutline: SolarIcon
   export const ShieldOutline: SolarIcon
+  export const SortFromBottomToTopOutline: SolarIcon
+  export const SortFromTopToBottomOutline: SolarIcon
   export const SoundwaveOutline: SolarIcon
   export const SquareAcademicCapOutline: SolarIcon
   export const StarOutline: SolarIcon
