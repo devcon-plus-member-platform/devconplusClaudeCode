@@ -138,15 +138,12 @@ export class RegistrationsService {
    * Batch send: emails every un-notified approved registrant a "Slot
    * Confirmed" notice (BCC) and every un-notified pending/rejected registrant
    * a "Slots Are Full" notice (BCC). Skips anyone already marked `notified_at`
-   * so re-clicking the button never double-emails a registrant — unless
-   * `force` is set, which resends to everyone regardless of prior state
-   * (the organizer explicitly confirmed a resend).
+   * so re-clicking the button never double-emails a registrant.
    */
   async sendBatchNotifications(
     user: AuthenticatedUser,
     eventId: string,
-    force = false,
-  ): Promise<{ confirmedSent: number; fullSent: number; alreadyNotified: number }> {
+  ): Promise<{ confirmedSent: number; fullSent: number }> {
     await this.assertEventChapterScope(user, eventId);
     const event = await this.repo.findEventForNotification(eventId);
     if (!event) throw new NotFoundException('Event not found');
@@ -156,17 +153,12 @@ export class RegistrationsService {
       );
     }
 
-    const allRows = await this.repo.findNotifiableForEvent(eventId);
-    const alreadyNotified = allRows.filter((r) => r.notified_at !== null).length;
-    const rows = force ? allRows : allRows.filter((r) => r.notified_at === null);
-
+    const rows = await this.repo.findUnnotifiedForEvent(eventId);
     const confirmed = rows.filter((r) => r.status === 'approved');
     const full = rows.filter((r) => r.status !== 'approved');
     if (confirmed.length === 0 && full.length === 0) {
       throw new BadRequestException(
-        allRows.length === 0
-          ? 'No registrants to notify for this event yet.'
-          : 'No new registrants to notify — everyone has already been emailed.',
+        'No new registrants to notify — everyone has already been emailed.',
       );
     }
 
@@ -184,7 +176,7 @@ export class RegistrationsService {
       await this.repo.markNotified(full.map((r) => r.id));
     }
 
-    return { confirmedSent: confirmed.length, fullSent: full.length, alreadyNotified };
+    return { confirmedSent: confirmed.length, fullSent: full.length };
   }
 
   /**

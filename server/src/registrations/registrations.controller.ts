@@ -94,21 +94,13 @@ export class RegistrationsController {
     return this.service.manualCheckin(user, id);
   }
 
-  /**
-   * POST /api/registrations/event/:id/notify — batch-email approved + pending/rejected
-   * registrants (BCC). Skips anyone already notified unless ?force=true, which resends
-   * to everyone (used when the organizer confirms a resend from the "already emailed" prompt).
-   */
+  /** POST /api/registrations/event/:id/notify — batch-email approved + pending/rejected registrants (BCC) */
   @Post('event/:id/notify')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
   @Roles('chapter_officer')
-  notifyRegistrants(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param() { id }: IdParamDto,
-    @Query('force') force?: string,
-  ) {
-    return this.service.sendBatchNotifications(user, id, force === 'true');
+  notifyRegistrants(@CurrentUser() user: AuthenticatedUser, @Param() { id }: IdParamDto) {
+    return this.service.sendBatchNotifications(user, id);
   }
 
   /** POST /api/registrations/:id/notify — (re)send one registrant's slot email on demand */

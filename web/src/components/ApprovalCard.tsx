@@ -12,7 +12,6 @@ export interface Registration {
   registered_at: string
   status: 'pending' | 'approved' | 'rejected'
   checked_in?: boolean
-  notified_at?: string | null
 }
 
 interface ApprovalCardProps {

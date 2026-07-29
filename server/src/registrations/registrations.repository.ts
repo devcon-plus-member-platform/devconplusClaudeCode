@@ -142,18 +142,18 @@ export class RegistrationsRepository extends BaseRepository {
   }
 
   /**
-   * All non-cancelled registrants eligible for a batch slot-notification send
-   * (approved / pending / rejected), including their `notified_at` state. The
-   * caller decides whether to skip already-notified rows or force-resend to
-   * everyone, and splits into "confirmed" (approved) vs "full" (pending/rejected).
+   * Registrants eligible for a batch slot-notification send: not cancelled,
+   * not already notified. Split into "confirmed" (approved) vs "full"
+   * (pending/rejected) buckets by the caller.
    */
-  async findNotifiableForEvent(eventId: string): Promise<RegistrantWithProfile[]> {
+  async findUnnotifiedForEvent(eventId: string): Promise<RegistrantWithProfile[]> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (this.db as any)
       .from('event_registrations')
       .select('id, status, registered_at, checked_in, approved_at, notified_at, qr_code_token, form_responses, user_id, event_id, profiles(full_name, email, school_or_company)')
       .eq('event_id', eventId)
-      .in('status', ['approved', 'pending', 'rejected']);
+      .in('status', ['approved', 'pending', 'rejected'])
+      .is('notified_at', null);
 
     if (error) throw new BadRequestException((error as { message: string }).message);
 
