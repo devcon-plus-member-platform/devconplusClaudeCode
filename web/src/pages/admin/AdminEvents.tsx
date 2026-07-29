@@ -33,6 +33,7 @@ import {
   TAG_MAX_LENGTH,
   CustomFieldsBuilder,
   TicketPriceField,
+  NoShowBufferField,
 } from '../organizer/events/eventFormConstants'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1059,22 +1060,7 @@ function EventSlideOverForm({ mode, event, chapters, onClose, onSaved }: SlideOv
         {/* ── No-Show Buffer ── */}
         {!isExternal && (
           <div className="border-t border-slate-100 pt-4 mt-4">
-            <label className={labelClass}>No-Show Buffer</label>
-            <input
-              {...register('no_show_buffer')}
-              type="number"
-              min={0}
-              step={1}
-              className={inputClass}
-              placeholder="10"
-            />
-            {errors.no_show_buffer && (
-              <p className="text-md3-label-md text-red mt-1">{errors.no_show_buffer.message}</p>
-            )}
-            <p className="text-md3-label-md text-slate-400 mt-1">
-              Officers can still approve this many registrations past Capacity, to cover expected
-              no-shows. Approvals stop once Capacity + Buffer is reached.
-            </p>
+            <NoShowBufferField register={register} errors={errors} watch={watch} setValue={setValue} />
           </div>
         )}
 
@@ -1216,6 +1202,21 @@ export default function AdminEvents() {
       navigate(location.pathname, { replace: true, state: null })
     }
   }, [location.state, location.pathname, navigate])
+
+  // Auto-open the edit slide-over for a specific event when arriving from the
+  // "Manage Event" button on the (shared organizer/admin) Registrants page —
+  // navigate('/admin/events', { state: { openEditEventId } }). Waits for the
+  // events list to finish loading so the target event object is available;
+  // clears the router state afterwards so a refresh/back doesn't reopen it.
+  useEffect(() => {
+    const openEditEventId = (location.state as { openEditEventId?: string } | null)?.openEditEventId
+    if (!openEditEventId || events.length === 0) return
+    const target = events.find((e) => e.id === openEditEventId)
+    if (target) {
+      setSlideOver({ mode: 'edit', event: target })
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, location.pathname, navigate, events])
 
   // Table tab (DEVCON vs external), search + sort (separate from the export
   // dialog's `eventSearch`).

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline } from 'solar-icon-set'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, PenOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
@@ -311,6 +311,13 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventRegistrants() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  // This screen is shared verbatim between /organizer/events/:id/registrants
+  // and /admin/events/:id/registrants (see AdminEventRegistrants.tsx) — route
+  // "Manage Event" to whichever edit surface matches the current session.
+  // Organizer edit is its own route; admin edit is a slide-over on the events
+  // list, so we hand it the target id via router state instead.
+  const isAdminContext = location.pathname.startsWith('/admin')
   const { events, fetchEvents, fetchEventCapacity } = useEventsStore()
 
   const event = events.find((e) => e.id === id)
@@ -319,11 +326,14 @@ export function OrgEventRegistrants() {
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [search, setSearch]           = useState('')
+  const [sortOrder, setSortOrder]     = useState<'asc' | 'desc'>('desc')
   const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
   const [volunteersLoading, setVolunteersLoading] = useState(false)
+  const [volunteerSortOrder, setVolunteerSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedRegistrant, setSelectedRegistrant] = useState<RegistrantWithResponses | null>(null)
 
   // Custom form schema comes from the event's custom_form_schema (JSONB array),
@@ -465,6 +475,15 @@ export function OrgEventRegistrants() {
     } catch { return false }
   }
 
+  const handleManageEvent = () => {
+    if (!id) return
+    if (isAdminContext) {
+      navigate('/admin/events', { state: { openEditEventId: id } })
+    } else {
+      navigate(`/organizer/events/${id}/edit`)
+    }
+  }
+
   const handleExportCsv = () => {
     const baseHeaders = [
       'member_name',
@@ -506,7 +525,19 @@ export function OrgEventRegistrants() {
     downloadCsv(`registrants-${dateStamp}${label}${suffix}.csv`, csv)
   }
 
-  const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const statusFiltered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const query = search.trim().toLowerCase()
+  const searched = query
+    ? statusFiltered.filter((r) =>
+        r.member_name.toLowerCase().includes(query) ||
+        r.member_email.toLowerCase().includes(query) ||
+        (r.school_or_company ?? '').toLowerCase().includes(query)
+      )
+    : statusFiltered
+  const filtered = [...searched].sort((a, b) => {
+    const diff = new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
+    return sortOrder === 'asc' ? diff : -diff
+  })
 
   const counts = {
     all:      registrants.length,
@@ -514,6 +545,11 @@ export function OrgEventRegistrants() {
     approved: registrants.filter((r) => r.status === 'approved').length,
     rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
+
+  const sortedVolunteers = [...volunteers].sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return volunteerSortOrder === 'asc' ? diff : -diff
+  })
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -569,13 +605,6 @@ export function OrgEventRegistrants() {
             <p className="text-white/70 text-[13px] font-proxima truncate leading-none">
               {event?.title ?? 'Event'}
             </p>
-            {capacitySummary?.capacity != null && (
-              <p className="text-white/60 text-[11px] font-proxima truncate leading-none mt-1.5">
-                {capacitySummary.approved_count}/{capacitySummary.capacity} approved
-                {' · '}{capacitySummary.pending_count} pending
-                {' · '}+{capacitySummary.no_show_buffer} buffer
-              </p>
-            )}
           </div>
         </div>
       </header>
@@ -586,23 +615,34 @@ export function OrgEventRegistrants() {
         initial="hidden"
         animate="visible"
       >
-        {/* Main tab switcher: Registrants | Volunteers */}
-        <motion.div variants={fadeUp} className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5">
-          {(['registrants', 'volunteers'] as MainTab[]).map((tab) => (
+        {/* Main tab switcher: Registrants | Volunteers, + Manage Event shortcut */}
+        <motion.div variants={fadeUp} className="flex items-center justify-between gap-2 mb-5">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+            {(['registrants', 'volunteers'] as MainTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMainTab(tab)}
+                className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize flex items-center gap-1.5 ${
+                  mainTab === tab
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab === 'volunteers' && <UsersGroupRoundedOutline className="w-3.5 h-3.5" />}
+                {tab === 'registrants' && <ClipboardListOutline className="w-3.5 h-3.5" />}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+          {event && (
             <button
-              key={tab}
-              onClick={() => setMainTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize flex items-center gap-1.5 ${
-                mainTab === tab
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              onClick={handleManageEvent}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue/30 text-blue text-md3-body-md font-bold hover:bg-blue/5 transition-colors shrink-0"
             >
-              {tab === 'volunteers' && <UsersGroupRoundedOutline className="w-3.5 h-3.5" />}
-              {tab === 'registrants' && <ClipboardListOutline className="w-3.5 h-3.5" />}
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              <PenOutline className="w-3.5 h-3.5" />
+              Manage Event
             </button>
-          ))}
+          )}
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -614,21 +654,131 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
-              {/* Status filter sub-tabs */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5 flex-wrap">
-                {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
-                      filter === f
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {f} ({counts[f]})
-                  </button>
-                ))}
+              {/* Capacity summary — declared capacity vs. attendees so far, with a % bar */}
+              {capacitySummary && (
+                <motion.div
+                  variants={fadeUp}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-card p-4 mb-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-md3-label-md font-bold text-slate-500 flex items-center gap-1.5">
+                      <UsersGroupRoundedOutline color="#94A3B8" width={14} height={14} />
+                      Capacity
+                    </p>
+                    <p className="text-md3-body-md font-bold text-slate-900">
+                      {capacitySummary.approved_count}
+                      {capacitySummary.capacity != null && (
+                        <span className="text-slate-400 font-semibold"> / {capacitySummary.capacity}</span>
+                      )}
+                      {capacitySummary.capacity != null && capacitySummary.no_show_buffer > 0 && (
+                        <span className="text-slate-400 font-medium">
+                          {' '}({capacitySummary.effective_cap ?? capacitySummary.capacity + capacitySummary.no_show_buffer} w/ buffer)
+                        </span>
+                      )}
+                      <span className="text-slate-400 font-medium"> attendees</span>
+                    </p>
+                  </div>
+
+                  {capacitySummary.capacity != null && (() => {
+                    const capacity = capacitySummary.capacity
+                    const buffer = capacitySummary.no_show_buffer
+                    const effectiveCap = capacitySummary.effective_cap ?? capacity + buffer
+                    const approved = capacitySummary.approved_count
+
+                    // One continuous bar spanning effective_cap (capacity + buffer).
+                    // Blue fills 0→capacity as approvals come in — hitting the capacity
+                    // mark IS "100%". Only once approved passes capacity does the amber
+                    // buffer segment start filling, continuing from that same mark to
+                    // the true end of the bar (effective_cap).
+                    const capacityMarkPct = effectiveCap > 0 ? (capacity / effectiveCap) * 100 : 100
+                    const approvedInCapacity = Math.min(approved, capacity)
+                    const approvedInBuffer = Math.max(0, Math.min(approved, effectiveCap) - capacity)
+                    const approvedPct = effectiveCap > 0 ? (approvedInCapacity / effectiveCap) * 100 : 0
+                    const bufferPct = effectiveCap > 0 ? (approvedInBuffer / effectiveCap) * 100 : 0
+                    const isOverCapacity = approved > capacity
+                    const percent = Math.round((approved / capacity) * 100)
+
+                    return (
+                      <>
+                        <div className="relative w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          {buffer > 0 && (
+                            <div
+                              className="absolute inset-y-0 w-1 rounded-full bg-white z-10"
+                              style={{ left: `${capacityMarkPct}%`, transform: 'translateX(-50%)' }}
+                            />
+                          )}
+                          <motion.div
+                            className={`absolute inset-y-0 left-0 bg-blue ${isOverCapacity ? '' : 'rounded-r-full'}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${approvedPct}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                          />
+                          {buffer > 0 && (
+                            <motion.div
+                              className={`absolute inset-y-0 bg-amber ${isOverCapacity ? 'rounded-r-full' : ''}`}
+                              style={{ left: `${capacityMarkPct}%` }}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${bufferPct}%` }}
+                              transition={{ duration: 0.6, ease: 'easeOut' }}
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-md3-label-md text-slate-400">
+                            {approvedInCapacity} approved
+                            {buffer > 0 && <> · {approvedInBuffer} approved in buffer</>}
+                          </p>
+                          <p className={`text-md3-label-md font-bold ${percent >= 90 ? 'text-red' : 'text-slate-500'}`}>
+                            {percent}%
+                          </p>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </motion.div>
+              )}
+
+              {/* Search by name, email, or school/company */}
+              <div className="relative mb-4">
+                <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  placeholder="Search by name, email, or school/company…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+                />
+              </div>
+
+              {/* Status filter sub-tabs + sort order toggle */}
+              <div className="flex items-start justify-between gap-2 mb-5">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
+                  {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
+                        filter === f
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {f} ({counts[f]})
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                  title={sortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                  className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                >
+                  {sortOrder === 'desc' ? (
+                    <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                  ) : (
+                    <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                  )}
+                  {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                </button>
               </div>
 
               {isLoading ? (
@@ -674,7 +824,9 @@ export function OrgEventRegistrants() {
                       </div>
                       <p className="text-md3-body-lg font-bold text-slate-700">No registrants found</p>
                       <p className="text-md3-body-md text-slate-400 mt-1">
-                        {filter === 'all' ? 'No one has registered yet.' : `No ${filter} registrations.`}
+                        {query
+                          ? `No results for "${search.trim()}".`
+                          : filter === 'all' ? 'No one has registered yet.' : `No ${filter} registrations.`}
                       </p>
                     </motion.div>
                   ) : (
@@ -707,6 +859,22 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
+              {volunteers.length > 0 && (
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setVolunteerSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                    title={volunteerSortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                    className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                  >
+                    {volunteerSortOrder === 'desc' ? (
+                      <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                    ) : (
+                      <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                    )}
+                    {volunteerSortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                  </button>
+                </div>
+              )}
               {volunteersLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -741,7 +909,7 @@ export function OrgEventRegistrants() {
                   initial="hidden"
                   animate="visible"
                 >
-                  {volunteers.map((app) => (
+                  {sortedVolunteers.map((app) => (
                     <motion.div
                       key={app.id}
                       variants={cardItem}

@@ -90,16 +90,19 @@ export default function EventPending() {
         >
           <CloseCircleOutline className="w-10 h-10" color="#EF4444" />
         </motion.div>
-        <h1 className="text-md3-title-lg font-bold text-slate-900 mb-2">Registration Declined</h1>
+        <h1 className="text-md3-title-lg font-bold text-slate-900 mb-2">Event is Full</h1>
+        <p className="text-md3-body-md text-slate-500 mb-1">
+          All slots for <strong>{event?.title}</strong> have been taken.
+        </p>
         <p className="text-md3-body-md text-slate-500 mb-8">
-          Your registration for <strong>{event?.title}</strong> was not approved by the chapter officer.
+          See you at the next one!
         </p>
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => navigate('/events')}
           className="w-full max-w-xs bg-primary text-white font-bold py-3 rounded-full shadow-sm"
         >
-          Back to Events
+          Browse Events
         </motion.button>
       </div>
     )
