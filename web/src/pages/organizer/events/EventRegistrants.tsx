@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, LetterOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
@@ -14,7 +14,6 @@ import { ApprovalCard, type Registration } from '../../../components/ApprovalCar
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
-import SendSlotEmailsSheet from '../../../components/SendSlotEmailsSheet'
 import type { EventCapacitySummary } from '@devcon-plus/supabase'
 
 // ── Custom form field types ───────────────────────────────────────────────────
@@ -59,29 +58,24 @@ interface RegistrantDetailViewProps {
   registration: RegistrantWithResponses
   formSchema: CustomFormField[]
   eventTitle: string
-  requiresApproval: boolean
   onClose: () => void
   onApprove: (id: string) => Promise<boolean>
   onReject: (id: string) => Promise<boolean>
   onRevert: (id: string) => Promise<boolean>
   onCheckIn: (id: string) => Promise<boolean>
-  onSendEmail: (id: string) => Promise<boolean>
 }
 
 function RegistrantDetailView({
   registration,
   formSchema,
   eventTitle,
-  requiresApproval,
   onClose,
   onApprove,
   onReject,
   onRevert,
   onCheckIn,
-  onSendEmail,
 }: RegistrantDetailViewProps) {
   const [localReg, setLocalReg] = useState(registration)
-  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   const initials = localReg.member_name
     .split(' ')
@@ -128,11 +122,6 @@ function RegistrantDetailView({
   const handleCheckInClick = async () => {
     const ok = await onCheckIn(localReg.id)
     if (ok) setLocalReg(prev => ({ ...prev, checked_in: true }))
-  }
-  const handleSendEmailClick = async () => {
-    setIsSendingEmail(true)
-    await onSendEmail(localReg.id)
-    setIsSendingEmail(false)
   }
 
   return (
@@ -297,22 +286,6 @@ function RegistrantDetailView({
             </motion.button>
           </div>
         )}
-        {requiresApproval && (
-          <motion.button
-            onClick={handleSendEmailClick}
-            disabled={isSendingEmail}
-            className="w-full mt-2 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          >
-            <LetterOutline color="currentColor" size={14} />
-            {isSendingEmail
-              ? 'Sending…'
-              : localReg.status === 'approved'
-                ? 'Send Slot Confirmed Email'
-                : 'Send Slots Are Full Email'}
-          </motion.button>
-        )}
       </div>
     </motion.div>
   )
@@ -350,7 +323,6 @@ export function OrgEventRegistrants() {
   const [sortOrder, setSortOrder]     = useState<'asc' | 'desc'>('desc')
   const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
-  const [showNotify, setShowNotify] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
   const [volunteersLoading, setVolunteersLoading] = useState(false)
@@ -483,17 +455,6 @@ export function OrgEventRegistrants() {
     return true
   }
 
-  const handleSendEmail = async (regId: string): Promise<boolean> => {
-    try {
-      await apiFetch(`/api/registrations/${regId}/notify`, { method: 'POST' })
-      toast.success('Email sent')
-      return true
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send email.')
-      return false
-    }
-  }
-
   const handleCheckIn = async (regId: string): Promise<boolean> => {
     if (!organizerUser?.id) return false
     try {
@@ -620,16 +581,6 @@ export function OrgEventRegistrants() {
                 >
                   <UserSpeakOutline className="w-3.5 h-3.5" color="white" />
                   Announce
-                </button>
-              )}
-              {event?.requires_approval && (
-                <button
-                  onClick={() => setShowNotify(true)}
-                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
-                             text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
-                >
-                  <LetterOutline className="w-3.5 h-3.5" color="white" />
-                  Notify
                 </button>
               )}
             </div>
@@ -988,15 +939,6 @@ export function OrgEventRegistrants() {
         />
       )}
 
-      {event?.requires_approval && (
-        <SendSlotEmailsSheet
-          eventId={event.id}
-          eventTitle={event.title}
-          isOpen={showNotify}
-          onClose={() => setShowNotify(false)}
-        />
-      )}
-
       <AnimatePresence>
         {selectedRegistrant && (
           <RegistrantDetailView
@@ -1004,13 +946,11 @@ export function OrgEventRegistrants() {
             registration={selectedRegistrant}
             formSchema={formSchema}
             eventTitle={event?.title ?? ''}
-            requiresApproval={event?.requires_approval ?? false}
             onClose={() => setSelectedRegistrant(null)}
             onApprove={handleApprove}
             onReject={handleReject}
             onRevert={handleRevert}
             onCheckIn={handleCheckIn}
-            onSendEmail={handleSendEmail}
           />
         )}
       </AnimatePresence>

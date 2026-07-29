@@ -115,7 +115,6 @@ export interface Registration {
   checked_in: boolean;
   registered_at: string | null;
   approved_at: string | null;
-  notified_at: string | null;
 }
 
 export interface RegistrantWithProfile extends Registration {

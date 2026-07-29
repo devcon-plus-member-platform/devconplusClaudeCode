@@ -114,7 +114,7 @@ export class RegistrationsRepository extends BaseRepository {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (this.db as any)
       .from('event_registrations')
-      .select('id, status, registered_at, checked_in, approved_at, notified_at, qr_code_token, form_responses, user_id, event_id, profiles(full_name, email, school_or_company)')
+      .select('id, status, registered_at, checked_in, approved_at, qr_code_token, form_responses, user_id, event_id, profiles(full_name, email, school_or_company)')
       .eq('event_id', eventId)
       .neq('status', 'cancelled');
 
@@ -132,116 +132,12 @@ export class RegistrationsRepository extends BaseRepository {
         checked_in:        Boolean(row.checked_in),
         registered_at:     (row.registered_at ?? null) as string | null,
         approved_at:       (row.approved_at ?? null) as string | null,
-        notified_at:       (row.notified_at ?? null) as string | null,
         member_name:       pObj?.full_name ?? 'Unknown',
         member_email:      pObj?.email ?? '',
         school_or_company: pObj?.school_or_company ?? '',
         form_responses:    (row.form_responses ?? null) as Record<string, unknown> | null,
       } satisfies RegistrantWithProfile;
     });
-  }
-
-  /**
-   * Registrants eligible for a batch slot-notification send: not cancelled,
-   * not already notified. Split into "confirmed" (approved) vs "full"
-   * (pending/rejected) buckets by the caller.
-   */
-  async findUnnotifiedForEvent(eventId: string): Promise<RegistrantWithProfile[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (this.db as any)
-      .from('event_registrations')
-      .select('id, status, registered_at, checked_in, approved_at, notified_at, qr_code_token, form_responses, user_id, event_id, profiles(full_name, email, school_or_company)')
-      .eq('event_id', eventId)
-      .in('status', ['approved', 'pending', 'rejected'])
-      .is('notified_at', null);
-
-    if (error) throw new BadRequestException((error as { message: string }).message);
-
-    return (data ?? []).map((row: Record<string, unknown>) => {
-      const p = Array.isArray(row.profiles) ? (row.profiles as unknown[])[0] : row.profiles;
-      const pObj = p as { full_name?: string; email?: string; school_or_company?: string } | null;
-      return {
-        id:                (row.id ?? '') as string,
-        event_id:          (row.event_id ?? '') as string,
-        user_id:           (row.user_id ?? '') as string,
-        status:            (row.status ?? 'pending') as Registration['status'],
-        qr_code_token:     (row.qr_code_token ?? null) as string | null,
-        checked_in:        Boolean(row.checked_in),
-        registered_at:     (row.registered_at ?? null) as string | null,
-        approved_at:       (row.approved_at ?? null) as string | null,
-        notified_at:       (row.notified_at ?? null) as string | null,
-        member_name:       pObj?.full_name ?? 'Unknown',
-        member_email:      pObj?.email ?? '',
-        school_or_company: pObj?.school_or_company ?? '',
-        form_responses:    (row.form_responses ?? null) as Record<string, unknown> | null,
-      } satisfies RegistrantWithProfile;
-    });
-  }
-
-  /** Single registration's status + member contact, for the per-registrant notify button. */
-  async findRegistrationForNotify(
-    regId: string,
-  ): Promise<{ status: Registration['status']; event_id: string; member_email: string; member_name: string } | null> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (this.db as any)
-      .from('event_registrations')
-      .select('status, event_id, profiles(full_name, email)')
-      .eq('id', regId)
-      .maybeSingle();
-
-    if (error) throw new BadRequestException((error as { message: string }).message);
-    if (!data) return null;
-
-    const p = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
-    const pObj = p as { full_name?: string; email?: string } | null;
-    return {
-      status: (data.status ?? 'pending') as Registration['status'],
-      event_id: data.event_id as string,
-      member_email: pObj?.email ?? '',
-      member_name: pObj?.full_name ?? 'Unknown',
-    };
-  }
-
-  /** Loads event fields needed to compose a slot-notification email, incl. chapter name. */
-  async findEventForNotification(eventId: string): Promise<{
-    title: string;
-    description: string | null;
-    location: string | null;
-    event_date: string | null;
-    end_time: string | null;
-    requires_approval: boolean;
-    chapter_name: string | null;
-  } | null> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (this.db as any)
-      .from('events')
-      .select('title, description, location, event_date, end_time, requires_approval, chapter_id, chapters(name)')
-      .eq('id', eventId)
-      .maybeSingle();
-
-    if (error) throw new BadRequestException((error as { message: string }).message);
-    if (!data) return null;
-
-    const chapter = Array.isArray(data.chapters) ? data.chapters[0] : data.chapters;
-    return {
-      title: data.title as string,
-      description: (data.description ?? null) as string | null,
-      location: (data.location ?? null) as string | null,
-      event_date: (data.event_date ?? null) as string | null,
-      end_time: (data.end_time ?? null) as string | null,
-      requires_approval: Boolean(data.requires_approval),
-      chapter_name: (chapter?.name ?? null) as string | null,
-    };
-  }
-
-  /** Marks the given registrations as having been sent a slot-notification email. */
-  async markNotified(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    const { error } = await this.db
-      .from('event_registrations')
-      .update({ notified_at: new Date().toISOString() })
-      .in('id', ids);
-    if (error) throw new BadRequestException(error.message);
   }
 
   /**

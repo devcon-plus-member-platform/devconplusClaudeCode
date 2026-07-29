@@ -93,22 +93,4 @@ export class RegistrationsController {
   manualCheckin(@CurrentUser() user: AuthenticatedUser, @Param() { id }: IdParamDto) {
     return this.service.manualCheckin(user, id);
   }
-
-  /** POST /api/registrations/event/:id/notify — batch-email approved + pending/rejected registrants (BCC) */
-  @Post('event/:id/notify')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles('chapter_officer')
-  notifyRegistrants(@CurrentUser() user: AuthenticatedUser, @Param() { id }: IdParamDto) {
-    return this.service.sendBatchNotifications(user, id);
-  }
-
-  /** POST /api/registrations/:id/notify — (re)send one registrant's slot email on demand */
-  @Post(':id/notify')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RolesGuard)
-  @Roles('chapter_officer')
-  notifyRegistrant(@CurrentUser() user: AuthenticatedUser, @Param() { id }: IdParamDto) {
-    return this.service.sendSingleNotification(user, id);
-  }
 }
