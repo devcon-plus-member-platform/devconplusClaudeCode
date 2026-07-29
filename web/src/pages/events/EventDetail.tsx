@@ -259,7 +259,9 @@ export default function EventDetail() {
                     <UsersGroupRoundedOutline color="#64748B" width={20} height={20} />
                   </div>
                   <p className="text-md3-body-md font-semibold text-slate-900">
-                    {capacitySummary.approved_count} attending
+                    {capacitySummary.capacity != null
+                      ? Math.min(capacitySummary.approved_count, capacitySummary.capacity)
+                      : capacitySummary.approved_count} attending
                     {capacitySummary.capacity != null && (
                       <span className="text-slate-400 font-medium"> · {capacitySummary.capacity} capacity</span>
                     )}
