@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, PenOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, PenOutline, LetterOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
 import { apiFetch } from '../../../lib/api'
 import { buildRegistrationApprovedEmail } from '../../../lib/emailTemplates'
+import { buildRegistrantMailtoUrl } from '../../../lib/registrantMailto'
 import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
 
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
+import { useChaptersStore } from '../../../stores/useChaptersStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
@@ -63,6 +65,7 @@ interface RegistrantDetailViewProps {
   onReject: (id: string) => Promise<boolean>
   onRevert: (id: string) => Promise<boolean>
   onCheckIn: (id: string) => Promise<boolean>
+  buildMailto: (reg: RegistrantWithResponses) => string | null
 }
 
 function RegistrantDetailView({
@@ -74,6 +77,7 @@ function RegistrantDetailView({
   onReject,
   onRevert,
   onCheckIn,
+  buildMailto,
 }: RegistrantDetailViewProps) {
   const [localReg, setLocalReg] = useState(registration)
 
@@ -286,6 +290,15 @@ function RegistrantDetailView({
             </motion.button>
           </div>
         )}
+        {(localReg.status === 'approved' || localReg.status === 'rejected') && buildMailto(localReg) && (
+          <a
+            href={buildMailto(localReg)!}
+            className="w-full mt-2 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5"
+          >
+            <LetterOutline color="currentColor" size={14} />
+            Email Registrant
+          </a>
+        )}
       </div>
     </motion.div>
   )
@@ -322,6 +335,7 @@ export function OrgEventRegistrants() {
 
   const event = events.find((e) => e.id === id)
   const organizerUser = useOrganizerUser()
+  const { getChapterById, fetchChapters } = useChaptersStore()
   const [registrants, setRegistrants] = useState<RegistrantWithResponses[]>([])
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
@@ -351,6 +365,8 @@ export function OrgEventRegistrants() {
   useEffect(() => {
     if (!event && id) void fetchEvents()
   }, [event, id, fetchEvents])
+
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
 
   // Fetch registrations with joined member profile data + form_responses
   useEffect(() => {
@@ -473,6 +489,25 @@ export function OrgEventRegistrants() {
       toast.success(`${result.member_name} checked in — +${result.points_awarded} pts`)
       return true
     } catch { return false }
+  }
+
+  const chapterLabel = event?.chapter_id
+    ? `${(getChapterById(event.chapter_id)?.name ?? '').trim()} Chapter`
+    : 'HQ'
+
+  const getMailtoUrl = (reg: RegistrantWithResponses): string | null => {
+    if (!event) return null
+    return buildRegistrantMailtoUrl(
+      reg,
+      {
+        title: event.title,
+        event_date: event.event_date,
+        location: event.location,
+        points_value: event.points_value,
+        chapterLabel,
+      },
+      organizerUser?.email,
+    )
   }
 
   const handleManageEvent = () => {
@@ -843,6 +878,7 @@ export function OrgEventRegistrants() {
                           <ApprovalCard
                             registration={reg}
                             onClick={() => setSelectedRegistrant(reg)}
+                            mailtoHref={getMailtoUrl(reg)}
                           />
                         </motion.div>
                       ))}
@@ -978,6 +1014,7 @@ export function OrgEventRegistrants() {
             onReject={handleReject}
             onRevert={handleRevert}
             onCheckIn={handleCheckIn}
+            buildMailto={getMailtoUrl}
           />
         )}
       </AnimatePresence>
