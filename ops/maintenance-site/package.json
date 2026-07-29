@@ -1,0 +1,16 @@
+{
+  "name": "devcon-plus-maintenance-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Vercel project serving the DEVCON+ maintenance page with HTTP 503",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.2.0",
+    "typescript": "^5.5.0"
+  }
+}
