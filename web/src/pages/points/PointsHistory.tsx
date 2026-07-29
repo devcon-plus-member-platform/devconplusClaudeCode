@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, BoltOutline, StarOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, BoltOutline, SortFromBottomToTopOutline, SortFromTopToBottomOutline, StarOutline } from 'solar-icon-set'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { usePointsStore } from '../../stores/usePointsStore'
 import TransactionRow from '../../components/TransactionRow'
@@ -59,6 +59,7 @@ export default function PointsHistory() {
   } = usePointsStore()
 
   const [activeFilter, setActiveFilter] = useState<SourceFilter>('all')
+  const [sortOrder, setSortOrder]       = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     if (user?.id) {
@@ -67,9 +68,10 @@ export default function PointsHistory() {
     }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sorted = [...transactions].sort(
-    (a, b) => new Date(b.created_at ?? '').getTime() - new Date(a.created_at ?? '').getTime()
-  )
+  const sorted = [...transactions].sort((a, b) => {
+    const diff = new Date(a.created_at ?? '').getTime() - new Date(b.created_at ?? '').getTime()
+    return sortOrder === 'asc' ? diff : -diff
+  })
 
   const filtered =
     activeFilter === 'all'
@@ -160,20 +162,34 @@ export default function PointsHistory() {
 
         {/* ── Tabs Wrapper ── */}
         <div className="pt-4 pb-2 px-4 pointer-events-auto">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
-            {FILTER_CHIPS.map((chip) => (
-              <button
-                key={chip.id}
-                onClick={() => setActiveFilter(chip.id)}
-                className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
-                  activeFilter === chip.id
-                    ? 'bg-white text-primary font-semibold border-primary'
-                    : 'bg-white text-slate-500 font-medium border-slate-200'
-                }`}
-              >
-                {chip.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar flex-1 min-w-0">
+              {FILTER_CHIPS.map((chip) => (
+                <button
+                  key={chip.id}
+                  onClick={() => setActiveFilter(chip.id)}
+                  className={`whitespace-nowrap px-4 h-[30px] flex items-center justify-center rounded-full text-[12px] font-proxima transition-all shrink-0 border ${
+                    activeFilter === chip.id
+                      ? 'bg-white text-primary font-semibold border-primary'
+                      : 'bg-white text-slate-500 font-medium border-slate-200'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+              title={sortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+              className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-[30px] rounded-full text-[12px] font-proxima font-medium text-slate-500 bg-white border border-slate-200"
+            >
+              {sortOrder === 'desc' ? (
+                <SortFromTopToBottomOutline className="w-3.5 h-3.5" color="#64748B" />
+              ) : (
+                <SortFromBottomToTopOutline className="w-3.5 h-3.5" color="#64748B" />
+              )}
+              {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+            </button>
           </div>
         </div>
       </header>

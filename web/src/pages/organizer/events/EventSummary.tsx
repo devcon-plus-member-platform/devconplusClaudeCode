@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline, DownloadOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, PenOutline, ClipboardListOutline, MapPointOutline, ConfettiOutline, GalleryAddOutline, QRCodeOutline, DownloadOutline, MagniferOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { apiFetch } from '../../../lib/api'
 import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
@@ -25,6 +25,7 @@ export function OrgEventSummary() {
   const [registrants, setRegistrants] = useState<Registration[]>([])
   const [isLoading, setIsLoading]     = useState(true)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [search, setSearch]           = useState('')
   const [showPoster, setShowPoster]   = useState(false)
   const [showQr, setShowQr]           = useState(false)
   
@@ -84,7 +85,15 @@ export function OrgEventSummary() {
     rejected: funnel.rejected,
   }
 
-  const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const statusFiltered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const query = search.trim().toLowerCase()
+  const filtered = query
+    ? statusFiltered.filter((r) =>
+        r.member_name.toLowerCase().includes(query) ||
+        r.member_email.toLowerCase().includes(query) ||
+        (r.school_or_company ?? '').toLowerCase().includes(query)
+      )
+    : statusFiltered
 
   const handleExportCsv = () => {
     const headers = [
@@ -241,6 +250,18 @@ export function OrgEventSummary() {
           </button>
         </motion.div>
 
+        {/* ── Search by name, email, or school/company ── */}
+        <motion.div variants={fadeUp} className="relative mb-4">
+          <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            placeholder="Search by name, email, or school/company…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+          />
+        </motion.div>
+
         {/* ── Filter tabs ── */}
         <motion.div variants={fadeUp} className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5">
           {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
@@ -289,7 +310,9 @@ export function OrgEventSummary() {
                 </div>
                 <p className="text-md3-body-lg font-bold text-slate-700">No registrants found</p>
                 <p className="text-md3-body-md text-slate-400 mt-1">
-                  {filter === 'all' ? 'No one registered for this event.' : `No ${filter} registrations.`}
+                  {query
+                    ? `No results for "${search.trim()}".`
+                    : filter === 'all' ? 'No one registered for this event.' : `No ${filter} registrations.`}
                 </p>
               </motion.div>
             ) : (

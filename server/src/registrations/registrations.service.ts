@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { assertEventScope } from '../common/authz/chapter-scope';
+import { EmailService, type EventNotifyInfo } from '../email/email.service';
 import type { Registration, RegistrantWithProfile } from '../supabase/types';
 import { RegistrationsRepository, type CustomFormField } from './registrations.repository';
 
@@ -25,7 +26,10 @@ function isBlankAnswer(value: unknown): boolean {
 
 @Injectable()
 export class RegistrationsService {
-  constructor(private readonly repo: RegistrationsRepository) {}
+  constructor(
+    private readonly repo: RegistrationsRepository,
+    private readonly email: EmailService,
+  ) {}
 
   // ── Member ────────────────────────────────────────────────────────────────
 
@@ -126,6 +130,134 @@ export class RegistrationsService {
       throw new BadRequestException(result?.error ?? 'Check-in failed');
     }
     return result;
+  }
+
+  // ── Slot notification emails (requires_approval events only) ────────────────
+
+  /**
+   * Batch send: emails every un-notified approved registrant a "Slot
+   * Confirmed" notice (BCC) and every un-notified pending/rejected registrant
+   * a "Slots Are Full" notice (BCC). Skips anyone already marked `notified_at`
+   * so re-clicking the button never double-emails a registrant.
+   */
+  async sendBatchNotifications(
+    user: AuthenticatedUser,
+    eventId: string,
+  ): Promise<{ confirmedSent: number; fullSent: number }> {
+    await this.assertEventChapterScope(user, eventId);
+    const event = await this.repo.findEventForNotification(eventId);
+    if (!event) throw new NotFoundException('Event not found');
+    if (!event.requires_approval) {
+      throw new BadRequestException(
+        'This action is only available for events that require approval.',
+      );
+    }
+
+    const rows = await this.repo.findUnnotifiedForEvent(eventId);
+    const confirmed = rows.filter((r) => r.status === 'approved');
+    const full = rows.filter((r) => r.status !== 'approved');
+    if (confirmed.length === 0 && full.length === 0) {
+      throw new BadRequestException(
+        'No new registrants to notify — everyone has already been emailed.',
+      );
+    }
+
+    const info = this.buildEventNotifyInfo(event);
+
+    if (confirmed.length > 0) {
+      await this.email.sendSlotConfirmedEmail(
+        { bcc: confirmed.map((r) => r.member_email) },
+        info,
+      );
+      await this.repo.markNotified(confirmed.map((r) => r.id));
+    }
+    if (full.length > 0) {
+      await this.email.sendSlotsFullEmail({ bcc: full.map((r) => r.member_email) }, info);
+      await this.repo.markNotified(full.map((r) => r.id));
+    }
+
+    return { confirmedSent: confirmed.length, fullSent: full.length };
+  }
+
+  /**
+   * Per-registrant send: always (re)sends to this one registrant regardless
+   * of prior `notified_at` state — an explicit single click is a deliberate
+   * manual resend, unlike the batch path which skips already-notified rows.
+   */
+  async sendSingleNotification(
+    user: AuthenticatedUser,
+    regId: string,
+  ): Promise<{ sent: boolean; status: Registration['status'] }> {
+    await this.assertRegChapterScope(user, regId);
+    const reg = await this.repo.findRegistrationForNotify(regId);
+    if (!reg) throw new NotFoundException('Registration not found');
+
+    const event = await this.repo.findEventForNotification(reg.event_id);
+    if (!event) throw new NotFoundException('Event not found');
+    if (!event.requires_approval) {
+      throw new BadRequestException(
+        'This action is only available for events that require approval.',
+      );
+    }
+
+    const info = this.buildEventNotifyInfo(event);
+    if (reg.status === 'approved') {
+      await this.email.sendSlotConfirmedEmail({ to: reg.member_email }, info);
+    } else {
+      await this.email.sendSlotsFullEmail({ to: reg.member_email }, info);
+    }
+    await this.repo.markNotified([regId]);
+
+    return { sent: true, status: reg.status };
+  }
+
+  private buildEventNotifyInfo(event: {
+    title: string;
+    description: string | null;
+    location: string | null;
+    event_date: string | null;
+    end_time: string | null;
+    chapter_name: string | null;
+  }): EventNotifyInfo {
+    const date = event.event_date ? new Date(event.event_date) : null;
+    const dayLabel = date
+      ? date.toLocaleDateString('en-PH', { weekday: 'long', timeZone: 'Asia/Manila' })
+      : 'TBA';
+    const dateLabel = date
+      ? date.toLocaleDateString('en-PH', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+          timeZone: 'Asia/Manila',
+        })
+      : 'Date TBA';
+    const startTime = date
+      ? date.toLocaleTimeString('en-PH', {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: 'Asia/Manila',
+        })
+      : null;
+    const endTime = event.end_time ? this.formatTimeOfDay(event.end_time) : null;
+    const timeLabel = startTime ? (endTime ? `${startTime} – ${endTime}` : startTime) : 'Time TBA';
+
+    return {
+      title: event.title,
+      description: event.description,
+      location: event.location,
+      dayLabel,
+      dateLabel,
+      timeLabel,
+      organizerName: event.chapter_name ?? 'DEVCON+ HQ',
+    };
+  }
+
+  /** Formats a Postgres `time` column value (e.g. "17:00:00") as "5:00 PM". */
+  private formatTimeOfDay(time: string): string {
+    const [hh, mm] = time.split(':');
+    const d = new Date();
+    d.setHours(Number(hh), Number(mm), 0, 0);
+    return d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
   }
 
   // ── Chapter scope helpers ─────────────────────────────────────────────────

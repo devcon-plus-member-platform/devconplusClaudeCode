@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, LetterOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
@@ -14,6 +14,7 @@ import { ApprovalCard, type Registration } from '../../../components/ApprovalCar
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
+import SendSlotEmailsSheet from '../../../components/SendSlotEmailsSheet'
 import type { EventCapacitySummary } from '@devcon-plus/supabase'
 
 // ── Custom form field types ───────────────────────────────────────────────────
@@ -58,24 +59,29 @@ interface RegistrantDetailViewProps {
   registration: RegistrantWithResponses
   formSchema: CustomFormField[]
   eventTitle: string
+  requiresApproval: boolean
   onClose: () => void
   onApprove: (id: string) => Promise<boolean>
   onReject: (id: string) => Promise<boolean>
   onRevert: (id: string) => Promise<boolean>
   onCheckIn: (id: string) => Promise<boolean>
+  onSendEmail: (id: string) => Promise<boolean>
 }
 
 function RegistrantDetailView({
   registration,
   formSchema,
   eventTitle,
+  requiresApproval,
   onClose,
   onApprove,
   onReject,
   onRevert,
   onCheckIn,
+  onSendEmail,
 }: RegistrantDetailViewProps) {
   const [localReg, setLocalReg] = useState(registration)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   const initials = localReg.member_name
     .split(' ')
@@ -122,6 +128,11 @@ function RegistrantDetailView({
   const handleCheckInClick = async () => {
     const ok = await onCheckIn(localReg.id)
     if (ok) setLocalReg(prev => ({ ...prev, checked_in: true }))
+  }
+  const handleSendEmailClick = async () => {
+    setIsSendingEmail(true)
+    await onSendEmail(localReg.id)
+    setIsSendingEmail(false)
   }
 
   return (
@@ -286,6 +297,22 @@ function RegistrantDetailView({
             </motion.button>
           </div>
         )}
+        {requiresApproval && (
+          <motion.button
+            onClick={handleSendEmailClick}
+            disabled={isSendingEmail}
+            className="w-full mt-2 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          >
+            <LetterOutline color="currentColor" size={14} />
+            {isSendingEmail
+              ? 'Sending…'
+              : localReg.status === 'approved'
+                ? 'Send Slot Confirmed Email'
+                : 'Send Slots Are Full Email'}
+          </motion.button>
+        )}
       </div>
     </motion.div>
   )
@@ -319,11 +346,15 @@ export function OrgEventRegistrants() {
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  const [search, setSearch]           = useState('')
+  const [sortOrder, setSortOrder]     = useState<'asc' | 'desc'>('desc')
   const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
+  const [showNotify, setShowNotify] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
   const [volunteersLoading, setVolunteersLoading] = useState(false)
+  const [volunteerSortOrder, setVolunteerSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedRegistrant, setSelectedRegistrant] = useState<RegistrantWithResponses | null>(null)
 
   // Custom form schema comes from the event's custom_form_schema (JSONB array),
@@ -452,6 +483,17 @@ export function OrgEventRegistrants() {
     return true
   }
 
+  const handleSendEmail = async (regId: string): Promise<boolean> => {
+    try {
+      await apiFetch(`/api/registrations/${regId}/notify`, { method: 'POST' })
+      toast.success('Email sent')
+      return true
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send email.')
+      return false
+    }
+  }
+
   const handleCheckIn = async (regId: string): Promise<boolean> => {
     if (!organizerUser?.id) return false
     try {
@@ -506,7 +548,19 @@ export function OrgEventRegistrants() {
     downloadCsv(`registrants-${dateStamp}${label}${suffix}.csv`, csv)
   }
 
-  const filtered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const statusFiltered = filter === 'all' ? registrants : registrants.filter((r) => r.status === filter)
+  const query = search.trim().toLowerCase()
+  const searched = query
+    ? statusFiltered.filter((r) =>
+        r.member_name.toLowerCase().includes(query) ||
+        r.member_email.toLowerCase().includes(query) ||
+        (r.school_or_company ?? '').toLowerCase().includes(query)
+      )
+    : statusFiltered
+  const filtered = [...searched].sort((a, b) => {
+    const diff = new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
+    return sortOrder === 'asc' ? diff : -diff
+  })
 
   const counts = {
     all:      registrants.length,
@@ -514,6 +568,11 @@ export function OrgEventRegistrants() {
     approved: registrants.filter((r) => r.status === 'approved').length,
     rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
+
+  const sortedVolunteers = [...volunteers].sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return volunteerSortOrder === 'asc' ? diff : -diff
+  })
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -563,19 +622,22 @@ export function OrgEventRegistrants() {
                   Announce
                 </button>
               )}
+              {event?.requires_approval && (
+                <button
+                  onClick={() => setShowNotify(true)}
+                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                             text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
+                >
+                  <LetterOutline className="w-3.5 h-3.5" color="white" />
+                  Notify
+                </button>
+              )}
             </div>
           </div>
           <div className="px-[76px] pb-4">
             <p className="text-white/70 text-[13px] font-proxima truncate leading-none">
               {event?.title ?? 'Event'}
             </p>
-            {capacitySummary?.capacity != null && (
-              <p className="text-white/60 text-[11px] font-proxima truncate leading-none mt-1.5">
-                {capacitySummary.approved_count}/{capacitySummary.capacity} approved
-                {' · '}{capacitySummary.pending_count} pending
-                {' · '}+{capacitySummary.no_show_buffer} buffer
-              </p>
-            )}
           </div>
         </div>
       </header>
@@ -614,21 +676,131 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
-              {/* Status filter sub-tabs */}
-              <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5 flex-wrap">
-                {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
-                      filter === f
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {f} ({counts[f]})
-                  </button>
-                ))}
+              {/* Capacity summary — declared capacity vs. attendees so far, with a % bar */}
+              {capacitySummary && (
+                <motion.div
+                  variants={fadeUp}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-card p-4 mb-4"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-md3-label-md font-bold text-slate-500 flex items-center gap-1.5">
+                      <UsersGroupRoundedOutline color="#94A3B8" width={14} height={14} />
+                      Capacity
+                    </p>
+                    <p className="text-md3-body-md font-bold text-slate-900">
+                      {capacitySummary.approved_count}
+                      {capacitySummary.capacity != null && (
+                        <span className="text-slate-400 font-semibold"> / {capacitySummary.capacity}</span>
+                      )}
+                      {capacitySummary.capacity != null && capacitySummary.no_show_buffer > 0 && (
+                        <span className="text-slate-400 font-medium">
+                          {' '}({capacitySummary.effective_cap ?? capacitySummary.capacity + capacitySummary.no_show_buffer} w/ buffer)
+                        </span>
+                      )}
+                      <span className="text-slate-400 font-medium"> attendees</span>
+                    </p>
+                  </div>
+
+                  {capacitySummary.capacity != null && (() => {
+                    const capacity = capacitySummary.capacity
+                    const buffer = capacitySummary.no_show_buffer
+                    const effectiveCap = capacitySummary.effective_cap ?? capacity + buffer
+                    const approved = capacitySummary.approved_count
+
+                    // One continuous bar spanning effective_cap (capacity + buffer).
+                    // Blue fills 0→capacity as approvals come in — hitting the capacity
+                    // mark IS "100%". Only once approved passes capacity does the amber
+                    // buffer segment start filling, continuing from that same mark to
+                    // the true end of the bar (effective_cap).
+                    const capacityMarkPct = effectiveCap > 0 ? (capacity / effectiveCap) * 100 : 100
+                    const approvedInCapacity = Math.min(approved, capacity)
+                    const approvedInBuffer = Math.max(0, Math.min(approved, effectiveCap) - capacity)
+                    const approvedPct = effectiveCap > 0 ? (approvedInCapacity / effectiveCap) * 100 : 0
+                    const bufferPct = effectiveCap > 0 ? (approvedInBuffer / effectiveCap) * 100 : 0
+                    const isOverCapacity = approved > capacity
+                    const percent = Math.round((approved / capacity) * 100)
+
+                    return (
+                      <>
+                        <div className="relative w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          {buffer > 0 && (
+                            <div
+                              className="absolute inset-y-0 w-1 rounded-full bg-white z-10"
+                              style={{ left: `${capacityMarkPct}%`, transform: 'translateX(-50%)' }}
+                            />
+                          )}
+                          <motion.div
+                            className={`absolute inset-y-0 left-0 bg-blue ${isOverCapacity ? '' : 'rounded-r-full'}`}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${approvedPct}%` }}
+                            transition={{ duration: 0.6, ease: 'easeOut' }}
+                          />
+                          {buffer > 0 && (
+                            <motion.div
+                              className={`absolute inset-y-0 bg-amber ${isOverCapacity ? 'rounded-r-full' : ''}`}
+                              style={{ left: `${capacityMarkPct}%` }}
+                              initial={{ width: 0 }}
+                              animate={{ width: `${bufferPct}%` }}
+                              transition={{ duration: 0.6, ease: 'easeOut' }}
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-md3-label-md text-slate-400">
+                            {approvedInCapacity} approved
+                            {buffer > 0 && <> · {approvedInBuffer} approved in buffer</>}
+                          </p>
+                          <p className={`text-md3-label-md font-bold ${percent >= 90 ? 'text-red' : 'text-slate-500'}`}>
+                            {percent}%
+                          </p>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </motion.div>
+              )}
+
+              {/* Search by name, email, or school/company */}
+              <div className="relative mb-4">
+                <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  placeholder="Search by name, email, or school/company…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
+                />
+              </div>
+
+              {/* Status filter sub-tabs + sort order toggle */}
+              <div className="flex items-start justify-between gap-2 mb-5">
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
+                  {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
+                        filter === f
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {f} ({counts[f]})
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                  title={sortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                  className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                >
+                  {sortOrder === 'desc' ? (
+                    <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                  ) : (
+                    <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                  )}
+                  {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                </button>
               </div>
 
               {isLoading ? (
@@ -674,7 +846,9 @@ export function OrgEventRegistrants() {
                       </div>
                       <p className="text-md3-body-lg font-bold text-slate-700">No registrants found</p>
                       <p className="text-md3-body-md text-slate-400 mt-1">
-                        {filter === 'all' ? 'No one has registered yet.' : `No ${filter} registrations.`}
+                        {query
+                          ? `No results for "${search.trim()}".`
+                          : filter === 'all' ? 'No one has registered yet.' : `No ${filter} registrations.`}
                       </p>
                     </motion.div>
                   ) : (
@@ -707,6 +881,22 @@ export function OrgEventRegistrants() {
               animate="visible"
               exit="exit"
             >
+              {volunteers.length > 0 && (
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => setVolunteerSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                    title={volunteerSortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                    className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                  >
+                    {volunteerSortOrder === 'desc' ? (
+                      <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                    ) : (
+                      <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                    )}
+                    {volunteerSortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                  </button>
+                </div>
+              )}
               {volunteersLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
@@ -741,7 +931,7 @@ export function OrgEventRegistrants() {
                   initial="hidden"
                   animate="visible"
                 >
-                  {volunteers.map((app) => (
+                  {sortedVolunteers.map((app) => (
                     <motion.div
                       key={app.id}
                       variants={cardItem}
@@ -798,6 +988,15 @@ export function OrgEventRegistrants() {
         />
       )}
 
+      {event?.requires_approval && (
+        <SendSlotEmailsSheet
+          eventId={event.id}
+          eventTitle={event.title}
+          isOpen={showNotify}
+          onClose={() => setShowNotify(false)}
+        />
+      )}
+
       <AnimatePresence>
         {selectedRegistrant && (
           <RegistrantDetailView
@@ -805,11 +1004,13 @@ export function OrgEventRegistrants() {
             registration={selectedRegistrant}
             formSchema={formSchema}
             eventTitle={event?.title ?? ''}
+            requiresApproval={event?.requires_approval ?? false}
             onClose={() => setSelectedRegistrant(null)}
             onApprove={handleApprove}
             onReject={handleReject}
             onRevert={handleRevert}
             onCheckIn={handleCheckIn}
+            onSendEmail={handleSendEmail}
           />
         )}
       </AnimatePresence>
