@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
 <meta name="color-scheme" content="light">
-<title>DEVCON+ is getting an upgrade</title>
+<title>DEVCON+ is getting an upgrade. We will be back soon!</title>
 <style>
   :root {
     color-scheme: light;
@@ -21,8 +21,40 @@
     height: 100%;
   }
 
+  @font-face {
+    font-family: 'Proxima Nova';
+    src: url('/fonts/ProximaNova-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Proxima Nova';
+    src: url('/fonts/ProximaNova-Semibold.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Proxima Nova';
+    src: url('/fonts/ProximaNova-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: 'Proxima Nova';
+    src: url('/fonts/ProximaNova-Black.woff2') format('woff2');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+  }
+
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Proxima Nova', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     min-height: 100%;
     display: flex;
     align-items: center;
@@ -31,9 +63,13 @@
     color: #0F172A;
     background-color: #1152D4;
     background-image:
+      url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='60'%20height='60'%3E%3Ccircle%20cx='0'%20cy='0'%20r='30'%20stroke='white'%20stroke-width='0.8'%20stroke-opacity='0.10'%20fill='none'/%3E%3Ccircle%20cx='60'%20cy='0'%20r='30'%20stroke='white'%20stroke-width='0.8'%20stroke-opacity='0.10'%20fill='none'/%3E%3Ccircle%20cx='0'%20cy='60'%20r='30'%20stroke='white'%20stroke-width='0.8'%20stroke-opacity='0.10'%20fill='none'/%3E%3Ccircle%20cx='60'%20cy='60'%20r='30'%20stroke='white'%20stroke-width='0.8'%20stroke-opacity='0.10'%20fill='none'/%3E%3Ccircle%20cx='30'%20cy='30'%20r='30'%20stroke='white'%20stroke-width='0.8'%20stroke-opacity='0.10'%20fill='none'/%3E%3C/svg%3E"),
       radial-gradient(120% 90% at 15% -10%, #6099F4 0%, rgba(96, 153, 244, 0) 55%),
       linear-gradient(160deg, #1152D4 0%, #0D42AA 55%, #1E2A56 100%);
-    background-attachment: fixed;
+    background-size: 60px 60px, auto, auto;
+    background-position: top center, 0 0, 0 0;
+    background-repeat: repeat, no-repeat, no-repeat;
+    background-attachment: fixed, fixed, fixed;
   }
 
   .wrap {
@@ -60,44 +96,10 @@
     text-align: center;
   }
 
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(248, 198, 48, 0.16);
-    color: #92650A;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    padding: 6px 14px;
-    border-radius: 999px;
-    margin-bottom: 18px;
-  }
-
-  .badge-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #F8C630;
-    flex: none;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .badge-dot {
-      animation: pulse 1.8s ease-in-out infinite;
-    }
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%      { opacity: 0.45; transform: scale(0.8); }
-  }
-
   h1 {
     font-size: 22px;
     line-height: 1.3;
-    font-weight: 800;
+    font-weight: 900;
     color: #0F172A;
     margin: 0 0 12px;
   }
@@ -116,7 +118,7 @@
     gap: 10px;
     background: #F8FAFC;
     border: 1px solid #E2E8F0;
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 14px 16px;
     margin-bottom: 24px;
   }
@@ -234,12 +236,10 @@
     </div>
 
     <main class="card">
-      <span class="badge"><span class="badge-dot"></span>Upgrading</span>
-
       <h1>DEVCON+ is getting an upgrade</h1>
       <p>
         We're making things faster and better for the community — chapter events,
-        Points+, and rewards will be back online shortly.
+        Points+, and rewards will be back online soon.
       </p>
 
       <div class="eta">
@@ -249,7 +249,7 @@
         </svg>
         <span class="eta-text">
           <span class="eta-label">Back by</span>
-          <span class="eta-value">[Mon DD, h:mm AM PHT] — placeholder, team to update</span>
+          <span class="eta-value">Monday, August 3, 2026</span>
         </span>
       </div>
 
