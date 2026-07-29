@@ -364,8 +364,16 @@ export default function EventDetail() {
               View My Ticket
             </button>
           ) : (
-            <div className="w-full bg-red/10 text-red font-semibold py-4 rounded-2xl text-center">
-              Registration Rejected
+            <div className="space-y-2">
+              <div className="w-full bg-slate-100 border border-slate-200 text-slate-500 font-semibold py-4 rounded-2xl text-center text-md3-body-md">
+                Event is Full — see you at the next one!
+              </div>
+              <button
+                onClick={() => navigate('/events')}
+                className="w-full bg-primary text-white font-bold py-3 rounded-full shadow-sm"
+              >
+                Browse Events
+              </button>
             </div>
           )}
 

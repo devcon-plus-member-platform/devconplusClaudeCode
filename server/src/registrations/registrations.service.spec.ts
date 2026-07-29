@@ -1,6 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
-import type { EmailService } from '../email/email.service';
 import type { Profile, Registration } from '../supabase/types';
 import { RegistrationsRepository } from './registrations.repository';
 import { RegistrationsService } from './registrations.service';
@@ -24,7 +23,7 @@ const admin    = makeUser('hq_admin',        CH_1, 'admin-1');
 const mockReg: Registration = {
   id: REG_ID, event_id: EVENT_ID, user_id: 'member-1',
   status: 'pending', qr_code_token: null, checked_in: false,
-  registered_at: null, approved_at: null, notified_at: null,
+  registered_at: null, approved_at: null,
 };
 
 // ── Mock factory ──────────────────────────────────────────────────────────────
@@ -47,24 +46,15 @@ function makeRepo(eventChapterId: string | null = CH_1) {
   } as unknown as jest.Mocked<RegistrationsRepository>;
 }
 
-function makeEmail() {
-  return {
-    sendSlotConfirmedEmail: jest.fn().mockResolvedValue(undefined),
-    sendSlotsFullEmail:     jest.fn().mockResolvedValue(undefined),
-  } as unknown as jest.Mocked<EmailService>;
-}
-
 // ── Suite ──────────────────────────────────────────────────────────────────────
 
 describe('RegistrationsService', () => {
   let service: RegistrationsService;
   let repo: jest.Mocked<RegistrationsRepository>;
-  let email: jest.Mocked<EmailService>;
 
   beforeEach(() => {
     repo = makeRepo();
-    email = makeEmail();
-    service = new RegistrationsService(repo, email);
+    service = new RegistrationsService(repo);
   });
 
   // ── Member ────────────────────────────────────────────────────────────────
@@ -158,14 +148,14 @@ describe('RegistrationsService', () => {
 
     it('throws ForbiddenException for officer in different chapter', async () => {
       repo = makeRepo(CH_1); // event is CH_1
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await expect(service.approveRegistration(officer2, REG_ID)).rejects.toBeInstanceOf(ForbiddenException);
       expect(repo.approveRegistration).not.toHaveBeenCalled();
     });
 
     it('hq_admin bypasses chapter scope', async () => {
       repo = makeRepo(CH_2); // event is CH_2, admin is CH_1
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await service.approveRegistration(admin, REG_ID);
       expect(repo.approveRegistration).toHaveBeenCalled();
     });
@@ -187,14 +177,14 @@ describe('RegistrationsService', () => {
   describe('getEventRegistrants', () => {
     it('chapter scope prevents officer from reading another chapter event', async () => {
       repo = makeRepo(CH_1);
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await expect(service.getEventRegistrants(officer2, EVENT_ID)).rejects.toBeInstanceOf(ForbiddenException);
       expect(repo.findByEvent).not.toHaveBeenCalled();
     });
 
     it('hq_admin can read any chapter event', async () => {
       repo = makeRepo(CH_2);
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await service.getEventRegistrants(admin, EVENT_ID);
       expect(repo.findByEvent).toHaveBeenCalledWith(EVENT_ID);
     });
@@ -202,7 +192,7 @@ describe('RegistrationsService', () => {
     it('throws NotFoundException when the event does not exist', async () => {
       repo = makeRepo();
       repo.findEventChapterScope.mockResolvedValue(null);
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await expect(service.getEventRegistrants(officer1, EVENT_ID)).rejects.toBeInstanceOf(NotFoundException);
       expect(repo.findByEvent).not.toHaveBeenCalled();
     });
@@ -210,14 +200,14 @@ describe('RegistrationsService', () => {
     // HQ / program event (chapter_id === null) — restricted to HQ admins.
     it('forbids a chapter officer from reading registrants of an HQ (null-chapter) event', async () => {
       repo = makeRepo(null);
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await expect(service.getEventRegistrants(officer1, EVENT_ID)).rejects.toBeInstanceOf(ForbiddenException);
       expect(repo.findByEvent).not.toHaveBeenCalled();
     });
 
     it('lets an hq_admin read registrants of an HQ (null-chapter) event', async () => {
       repo = makeRepo(null);
-      service = new RegistrationsService(repo, email);
+      service = new RegistrationsService(repo);
       await service.getEventRegistrants(admin, EVENT_ID);
       expect(repo.findByEvent).toHaveBeenCalledWith(EVENT_ID);
     });
