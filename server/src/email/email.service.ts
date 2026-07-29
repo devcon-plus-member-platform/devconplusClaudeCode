@@ -294,4 +294,187 @@ ${body}
       body,
     });
   }
+
+  // ── Slot notification emails (organizer-triggered — manual single send or
+  //    BCC batch send for requires_approval events) ─────────────────────────
+
+  private notifyDetailRow(label: string, value: string): string {
+    return `<tr>
+                    <td style="font-size:12px;color:#94A3B8;padding:8px 0;vertical-align:top;width:88px;">${label}</td>
+                    <td style="font-size:13px;color:#0F172A;font-weight:600;padding:8px 0;">${value}</td>
+                  </tr>`;
+  }
+
+  private notifyDetailCard(event: EventNotifyInfo): string {
+    const rows = [
+      this.notifyDetailRow('Event', this.escapeHtml(event.title)),
+      this.notifyDetailRow(
+        'Date',
+        `${this.escapeHtml(event.dayLabel)}, ${this.escapeHtml(event.dateLabel)}`,
+      ),
+      this.notifyDetailRow('Time', this.escapeHtml(event.timeLabel)),
+      ...(event.location
+        ? [this.notifyDetailRow('Location', this.escapeHtml(event.location))]
+        : []),
+      this.notifyDetailRow('Organizer', this.escapeHtml(event.organizerName)),
+    ].join('\n');
+    return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;margin:0 0 28px 0;">
+                <tr>
+                  <td style="padding:8px 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+${rows}
+                    </table>
+                  </td>
+                </tr>
+              </table>`;
+  }
+
+  private notifyAboutSection(description: string | null): string {
+    if (!description) return '';
+    return `              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#0F172A;">About the Event</p>
+              <p style="margin:0 0 28px 0;font-size:14px;line-height:1.8;color:#475569;">${this.escapeHtml(description)}</p>`;
+  }
+
+  /**
+   * Shared send path for both the per-registrant button (`to`) and the
+   * batch/BCC button (`bcc`) — one template, two delivery shapes. For a BCC
+   * send, `to` is set to our own from-address (nodemailer requires a non-empty
+   * `to`) so every real recipient sits only in `bcc`, invisible to each other.
+   */
+  private async sendNotifyMail(
+    recipients: NotifyRecipients,
+    subject: string,
+    text: string,
+    html: string,
+  ): Promise<void> {
+    if (recipients.bcc && recipients.bcc.length === 0) return;
+    if (!this.enabled) {
+      this.logger.warn(`Email service disabled — cannot send "${subject}"`);
+      throw new ServiceUnavailableException(
+        'Email service is not configured. Please contact support.',
+      );
+    }
+    const target = recipients.bcc
+      ? { to: this.fromAddress, bcc: recipients.bcc }
+      : { to: recipients.to };
+    await this.transporter.sendMail({ from: this.fromAddress, ...target, subject, text, html });
+    this.logger.log(
+      `"${subject}" sent to ${recipients.bcc ? `${recipients.bcc.length} recipient(s) (BCC)` : recipients.to}`,
+    );
+  }
+
+  async sendSlotConfirmedEmail(
+    recipients: NotifyRecipients,
+    event: EventNotifyInfo,
+  ): Promise<void> {
+    const title = this.escapeHtml(event.title);
+    const org = this.escapeHtml(event.organizerName);
+    const subject = `Slot Confirmed: ${event.title} – ${event.dayLabel}, ${event.dateLabel}`;
+
+    const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hello,</p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">Your spot is confirmed for <strong style="color:#0F172A;">${title}</strong>.</p>
+              ${this.notifyDetailCard(event)}
+              ${this.notifyAboutSection(event.description)}
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;margin:0 0 28px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0;font-size:13px;line-height:1.7;color:#9A3412;"><strong>Important Attendance Policy:</strong> Space is strictly limited. If you can no longer attend, please let us know within 2–3 days before the event so we can release your slot to another registrant. Please note that multiple no-shows will result in being added to our event blocklist for future activities.</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">We look forward to seeing you there.</p>
+              <p style="margin:0;font-size:14px;line-height:1.8;color:#334155;">Best regards,<br/>${org} Team</p>`;
+
+    const html = this.emailShell({
+      title: 'Slot Confirmed',
+      subtitle: `Your spot is confirmed for ${title}.`,
+      preheader: `Your spot for ${title} is confirmed.`,
+      body,
+    });
+
+    const text = [
+      `Slot Confirmed: ${event.title} – ${event.dayLabel}, ${event.dateLabel}`,
+      '',
+      `Your spot is confirmed for ${event.title}.`,
+      '',
+      'Event Details:',
+      `Event: ${event.title}`,
+      `Date: ${event.dayLabel}, ${event.dateLabel}`,
+      `Time: ${event.timeLabel}`,
+      ...(event.location ? [`Location: ${event.location}`] : []),
+      `Organizer: ${event.organizerName}`,
+      ...(event.description ? ['', 'About the Event:', event.description] : []),
+      '',
+      'Important Attendance Policy: Space is strictly limited. If you can no longer attend, please let us know within 2–3 days before the event so we can release your slot to another registrant. Please note that multiple no-shows will result in being added to our event blocklist for future activities.',
+      '',
+      'We look forward to seeing you there.',
+      '',
+      `Best regards,`,
+      `${event.organizerName} Team`,
+    ].join('\n');
+
+    await this.sendNotifyMail(recipients, subject, text, html);
+  }
+
+  async sendSlotsFullEmail(
+    recipients: NotifyRecipients,
+    event: EventNotifyInfo,
+  ): Promise<void> {
+    const title = this.escapeHtml(event.title);
+    const day = this.escapeHtml(event.dayLabel);
+    const date = this.escapeHtml(event.dateLabel);
+    const org = this.escapeHtml(event.organizerName);
+    const subject = `Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel} — See you at our next events!`;
+
+    const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hello,</p>
+              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#475569;">Thank you for your interest in <strong style="color:#0F172A;">${title}</strong> scheduled for ${day}, ${date}.</p>
+              <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;">Due to high demand, all available slots for this event have been filled. Unfortunately, we are unable to confirm a spot for you this time.</p>
+              ${this.notifyAboutSection(event.description)}
+              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#475569;">Although we cannot accommodate you for ${day}, ${date}, we regularly host community gatherings, showcases, and meetups.</p>
+              <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;">Please follow our chapter Facebook page and check <a href="https://devcon.plus/events" style="color:#2563EB;text-decoration:none;">devcon.plus/events</a> for the latest event schedules and volunteer opportunities.</p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">Thank you again for your interest, and we hope to see you at our future events!</p>
+              <p style="margin:0;font-size:14px;line-height:1.8;color:#334155;">Best regards,<br/>${org} Team</p>`;
+
+    const html = this.emailShell({
+      title: 'Slots Are Full',
+      subtitle: `All slots for ${title} have been filled — thank you for your interest.`,
+      preheader: `Slots full for ${title} on ${event.dayLabel}, ${event.dateLabel}.`,
+      body,
+    });
+
+    const text = [
+      `Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel} — See you at our next events!`,
+      '',
+      `Thank you for your interest in ${event.title} scheduled for ${event.dayLabel}, ${event.dateLabel}.`,
+      '',
+      'Due to high demand, all available slots for this event have been filled. Unfortunately, we are unable to confirm a spot for you this time.',
+      ...(event.description ? ['', 'About the Event:', event.description] : []),
+      '',
+      `Although we cannot accommodate you for ${event.dayLabel}, ${event.dateLabel}, we regularly host community gatherings, showcases, and meetups.`,
+      '',
+      'Please follow our chapter Facebook page and check devcon.plus/events for the latest event schedules and volunteer opportunities.',
+      '',
+      'Thank you again for your interest, and we hope to see you at our future events!',
+      '',
+      `Best regards,`,
+      `${event.organizerName} Team`,
+    ].join('\n');
+
+    await this.sendNotifyMail(recipients, subject, text, html);
+  }
+}
+
+export interface EventNotifyInfo {
+  title: string;
+  description: string | null;
+  location: string | null;
+  dayLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  organizerName: string;
+}
+
+export interface NotifyRecipients {
+  to?: string;
+  bcc?: string[];
 }
