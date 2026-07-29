@@ -1203,6 +1203,21 @@ export default function AdminEvents() {
     }
   }, [location.state, location.pathname, navigate])
 
+  // Auto-open the edit slide-over for a specific event when arriving from the
+  // "Manage Event" button on the (shared organizer/admin) Registrants page —
+  // navigate('/admin/events', { state: { openEditEventId } }). Waits for the
+  // events list to finish loading so the target event object is available;
+  // clears the router state afterwards so a refresh/back doesn't reopen it.
+  useEffect(() => {
+    const openEditEventId = (location.state as { openEditEventId?: string } | null)?.openEditEventId
+    if (!openEditEventId || events.length === 0) return
+    const target = events.find((e) => e.id === openEditEventId)
+    if (target) {
+      setSlideOver({ mode: 'edit', event: target })
+      navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location.state, location.pathname, navigate, events])
+
   // Table tab (DEVCON vs external), search + sort (separate from the export
   // dialog's `eventSearch`).
   const [eventTab, setEventTab] = useState<'devcon' | 'external'>('devcon')

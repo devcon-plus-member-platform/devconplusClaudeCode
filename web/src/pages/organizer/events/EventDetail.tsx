@@ -220,6 +220,17 @@ export function OrgEventDetail() {
 
         <motion.button
           variants={fadeUp}
+          onClick={() => navigate(`/organizer/events/${event.id}/edit`)}
+          className="w-full py-3 mb-3 border border-blue/30 text-blue text-md3-body-md font-bold rounded-xl
+                     hover:bg-blue/5 transition-colors flex items-center justify-center gap-2"
+          whileTap={{ scale: 0.98 }}
+        >
+          <PenOutline className="w-4 h-4" />
+          Manage Event
+        </motion.button>
+
+        <motion.button
+          variants={fadeUp}
           onClick={() => setShowAnnounce(true)}
           className="w-full py-3 mb-3 border border-blue/30 text-blue text-md3-body-md font-bold rounded-xl
                      hover:bg-blue/5 transition-colors flex items-center justify-center gap-2"
