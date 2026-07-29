@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import { Controller, type Control, type UseFormRegister, type FieldErrors } from 'react-hook-form'
+import {
+  Controller,
+  type Control,
+  type UseFormRegister,
+  type FieldErrors,
+  type UseFormWatch,
+  type UseFormSetValue,
+} from 'react-hook-form'
 import { AddCircleOutline, TrashBinTrashOutline, CloseCircleLineDuotone } from 'solar-icon-set'
 import { z } from 'zod'
 import type { DevconCategory } from '@devcon-plus/supabase'
@@ -222,6 +229,80 @@ export function TicketPriceField({
           {errors.ticket_price_php && (
             <p className="text-md3-label-md text-red mt-1">{errors.ticket_price_php.message}</p>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── NoShowBufferField ─────────────────────────────────────────────────────────
+// Toggle + number input. Off = no_show_buffer stored as 0 (buffer disabled — see
+// EventRegistrants.tsx, which already hides all buffer UI when no_show_buffer is 0).
+// On = restores the last-entered amount (default 10) into the visible number field.
+
+export function NoShowBufferField({
+  register,
+  errors,
+  watch,
+  setValue,
+}: {
+  register: UseFormRegister<FormData>
+  errors: FieldErrors<FormData>
+  watch: UseFormWatch<FormData>
+  setValue: UseFormSetValue<FormData>
+}) {
+  const bufferValue = watch('no_show_buffer')
+  const enabled = !!bufferValue && bufferValue > 0
+  const [lastValue, setLastValue] = useState(enabled ? bufferValue! : 10)
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 p-4">
+        <input
+          type="checkbox"
+          id="no_show_buffer_enabled"
+          checked={enabled}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setValue('no_show_buffer', lastValue || 10, { shouldValidate: true, shouldDirty: true })
+            } else {
+              if (bufferValue) setLastValue(bufferValue)
+              setValue('no_show_buffer', 0, { shouldValidate: true, shouldDirty: true })
+            }
+          }}
+          className="w-4 h-4 accent-blue rounded"
+        />
+        <div>
+          <label
+            htmlFor="no_show_buffer_enabled"
+            className="text-md3-body-md font-semibold text-slate-900 cursor-pointer"
+          >
+            Enable No-Show Buffer
+          </label>
+          <p className="text-md3-label-md text-slate-400 mt-0.5">
+            Let officers keep approving a few registrations past Capacity, to cover expected no-shows.
+          </p>
+        </div>
+      </div>
+
+      {enabled && (
+        <div className="mt-3">
+          <label className={labelClass}>No-Show Buffer</label>
+          <input
+            {...register('no_show_buffer')}
+            type="number"
+            min={1}
+            step={1}
+            className={inputClass}
+            placeholder="10"
+          />
+          {errors.no_show_buffer && (
+            <p className="text-md3-label-md text-red mt-1">{errors.no_show_buffer.message}</p>
+          )}
+          <p className="text-md3-label-md text-slate-400 mt-1">
+            Officers can still approve this many registrations past Capacity. Approvals stop once
+            Capacity + Buffer is reached.
+          </p>
         </div>
       )}
     </div>

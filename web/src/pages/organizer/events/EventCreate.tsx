@@ -30,6 +30,7 @@ import {
   SectionHeader,
   CustomFieldsBuilder,
   TicketPriceField,
+  NoShowBufferField,
 } from './eventFormConstants'
 import type { Json } from '@devcon-plus/supabase'
 import { MarkdownEditor } from '../../../components/MarkdownEditor'
@@ -809,24 +810,7 @@ export function OrgEventCreate() {
 
             {/* No-Show Buffer — how far past Capacity an officer may still approve */}
             {!isExternal && (
-              <div>
-                <label className={labelClass}>No-Show Buffer</label>
-                <input
-                  {...register('no_show_buffer')}
-                  type="number"
-                  min={0}
-                  step={1}
-                  className={inputClass}
-                  placeholder="10"
-                />
-                {errors.no_show_buffer && (
-                  <p className="text-md3-label-md text-red mt-1">{errors.no_show_buffer.message}</p>
-                )}
-                <p className="text-md3-label-md text-slate-400 mt-1">
-                  Officers can still approve this many registrations past Capacity, to cover expected
-                  no-shows. Approvals stop once Capacity + Buffer is reached.
-                </p>
-              </div>
+              <NoShowBufferField register={register} errors={errors} watch={watch} setValue={setValue} />
             )}
 
             {/* Close Registration toggle — manual hard stop, independent of capacity */}
