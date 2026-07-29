@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, LetterOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -7,6 +7,7 @@ import { supabase, getBridgeToken } from '../../../lib/supabase'
 import { apiFetch } from '../../../lib/api'
 import { buildRegistrationApprovedEmail } from '../../../lib/emailTemplates'
 import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
+import { formatDate } from '../../../lib/dates'
 
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
@@ -298,20 +299,30 @@ function RegistrantDetailView({
           </div>
         )}
         {requiresApproval && (
-          <motion.button
-            onClick={handleSendEmailClick}
-            disabled={isSendingEmail}
-            className="w-full mt-2 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          >
-            <LetterOutline color="currentColor" size={14} />
-            {isSendingEmail
-              ? 'Sending…'
-              : localReg.status === 'approved'
-                ? 'Send Slot Confirmed Email'
-                : 'Send Slots Are Full Email'}
-          </motion.button>
+          <>
+            {localReg.notified_at && (
+              <p className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-2 mb-1">
+                <CheckCircleOutline color="#94A3B8" size={12} />
+                Emailed {formatDate.compact(localReg.notified_at)}
+              </p>
+            )}
+            <motion.button
+              onClick={handleSendEmailClick}
+              disabled={isSendingEmail}
+              className="w-full mt-1 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            >
+              <LetterOutline color="currentColor" size={14} />
+              {isSendingEmail
+                ? 'Sending…'
+                : localReg.notified_at
+                  ? 'Resend Email'
+                  : localReg.status === 'approved'
+                    ? 'Send Slot Confirmed Email'
+                    : 'Send Slots Are Full Email'}
+            </motion.button>
+          </>
         )}
       </div>
     </motion.div>
@@ -374,7 +385,7 @@ export function OrgEventRegistrants() {
   }, [event, id, fetchEvents])
 
   // Fetch registrations with joined member profile data + form_responses
-  useEffect(() => {
+  const loadRegistrants = useCallback(() => {
     if (!id) return
     setIsLoading(true)
     setLoadError(null)
@@ -390,6 +401,10 @@ export function OrgEventRegistrants() {
       })
       .finally(() => setIsLoading(false))
   }, [id, event?.title])
+
+  useEffect(() => {
+    loadRegistrants()
+  }, [loadRegistrants])
 
   const refreshCapacity = async () => {
     if (!id) return
@@ -487,6 +502,7 @@ export function OrgEventRegistrants() {
     try {
       await apiFetch(`/api/registrations/${regId}/notify`, { method: 'POST' })
       toast.success('Email sent')
+      loadRegistrants()
       return true
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send email.')
@@ -568,6 +584,11 @@ export function OrgEventRegistrants() {
     approved: registrants.filter((r) => r.status === 'approved').length,
     rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
+
+  // registrants already excludes 'cancelled' (see the /event/:id fetch), so every
+  // row here is notify-eligible — approved gets Slot Confirmed, the rest get Slots Full.
+  const totalNotifiable = registrants.length
+  const alreadyNotifiedCount = registrants.filter((r) => !!r.notified_at).length
 
   const sortedVolunteers = [...volunteers].sort((a, b) => {
     const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -994,6 +1015,9 @@ export function OrgEventRegistrants() {
           eventTitle={event.title}
           isOpen={showNotify}
           onClose={() => setShowNotify(false)}
+          onSent={loadRegistrants}
+          totalNotifiable={totalNotifiable}
+          alreadyNotified={alreadyNotifiedCount}
         />
       )}
 

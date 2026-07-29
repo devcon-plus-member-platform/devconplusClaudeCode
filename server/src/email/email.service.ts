@@ -298,25 +298,26 @@ ${body}
   // ── Slot notification emails (organizer-triggered — manual single send or
   //    BCC batch send for requires_approval events) ─────────────────────────
 
-  private notifyDetailRow(label: string, value: string): string {
+  private notifyDetailRow(icon: string, label: string, value: string): string {
     return `<tr>
-                    <td style="font-size:12px;color:#94A3B8;padding:8px 0;vertical-align:top;width:88px;">${label}</td>
+                    <td style="font-size:12px;color:#94A3B8;padding:8px 0;vertical-align:top;width:104px;white-space:nowrap;">${icon} ${label}</td>
                     <td style="font-size:13px;color:#0F172A;font-weight:600;padding:8px 0;">${value}</td>
                   </tr>`;
   }
 
   private notifyDetailCard(event: EventNotifyInfo): string {
     const rows = [
-      this.notifyDetailRow('Event', this.escapeHtml(event.title)),
+      this.notifyDetailRow('🎫', 'Event', this.escapeHtml(event.title)),
       this.notifyDetailRow(
+        '📅',
         'Date',
         `${this.escapeHtml(event.dayLabel)}, ${this.escapeHtml(event.dateLabel)}`,
       ),
-      this.notifyDetailRow('Time', this.escapeHtml(event.timeLabel)),
+      this.notifyDetailRow('🕒', 'Time', this.escapeHtml(event.timeLabel)),
       ...(event.location
-        ? [this.notifyDetailRow('Location', this.escapeHtml(event.location))]
+        ? [this.notifyDetailRow('📍', 'Location', this.escapeHtml(event.location))]
         : []),
-      this.notifyDetailRow('Organizer', this.escapeHtml(event.organizerName)),
+      this.notifyDetailRow('👤', 'Organizer', this.escapeHtml(event.organizerName)),
     ].join('\n');
     return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;margin:0 0 28px 0;">
                 <tr>
@@ -331,8 +332,56 @@ ${rows}
 
   private notifyAboutSection(description: string | null): string {
     if (!description) return '';
-    return `              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#0F172A;">About the Event</p>
+    return `              <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#0F172A;">📝 About the Event</p>
               <p style="margin:0 0 28px 0;font-size:14px;line-height:1.8;color:#475569;">${this.escapeHtml(description)}</p>`;
+  }
+
+  /**
+   * Pill banner making the outcome unmistakable at a glance — green "You're In"
+   * for a confirmed slot, red "Not This Time" for a full event. Sits directly
+   * under the greeting, above the (identical) event-detail card either way.
+   */
+  private notifyStatusBanner(opts: {
+    icon: string;
+    label: string;
+    bg: string;
+    border: string;
+    color: string;
+  }): string {
+    const { icon, label, bg, border, color } = opts;
+    return `<table cellpadding="0" cellspacing="0" align="center" role="presentation" style="margin:0 0 28px 0;">
+                <tr>
+                  <td align="center" bgcolor="${bg}" style="border:1px solid ${border};border-radius:999px;padding:10px 22px;">
+                    <p style="margin:0;font-size:14px;font-weight:700;color:${color};white-space:nowrap;">${icon} ${label}</p>
+                  </td>
+                </tr>
+              </table>`;
+  }
+
+  /** A short, scannable callout card — icon + heading + a few one-line bullets, never one long paragraph. */
+  private notifyCalloutCard(opts: {
+    icon: string;
+    heading: string;
+    lines: string[];
+    bg: string;
+    border: string;
+    color: string;
+  }): string {
+    const { icon, heading, lines, bg, border, color } = opts;
+    const body = lines
+      .map(
+        (line, i) =>
+          `<p style="margin:0${i === lines.length - 1 ? '' : ' 0 6px 0'};font-size:13px;line-height:1.6;color:${color};">• ${line}</p>`,
+      )
+      .join('\n');
+    return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:${bg};border:1px solid ${border};border-radius:12px;margin:0 0 28px 0;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 10px 0;font-size:13px;font-weight:700;color:${color};">${icon} ${heading}</p>
+${body}
+                  </td>
+                </tr>
+              </table>`;
   }
 
   /**
@@ -372,28 +421,33 @@ ${rows}
     const subject = `Slot Confirmed: ${event.title} – ${event.dayLabel}, ${event.dateLabel}`;
 
     const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hello,</p>
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">Your spot is confirmed for <strong style="color:#0F172A;">${title}</strong>.</p>
+              ${this.notifyStatusBanner({ icon: '✅', label: "You're In — Slot Confirmed", bg: '#DCFCE7', border: '#86EFAC', color: '#15803D' })}
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;text-align:center;">Your spot is confirmed for <strong style="color:#0F172A;">${title}</strong>.</p>
               ${this.notifyDetailCard(event)}
               ${this.notifyAboutSection(event.description)}
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;margin:0 0 28px 0;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="margin:0;font-size:13px;line-height:1.7;color:#9A3412;"><strong>Important Attendance Policy:</strong> Space is strictly limited. If you can no longer attend, please let us know within 2–3 days before the event so we can release your slot to another registrant. Please note that multiple no-shows will result in being added to our event blocklist for future activities.</p>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">We look forward to seeing you there.</p>
+              ${this.notifyCalloutCard({
+                icon: '⚠️',
+                heading: 'Attendance Policy',
+                bg: '#FFF7ED',
+                border: '#FED7AA',
+                color: '#9A3412',
+                lines: [
+                  "Space is strictly limited — can't make it? Let us know 2–3 days ahead so we can release your slot.",
+                  'Repeated no-shows may result in being blocked from future events.',
+                ],
+              })}
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">We look forward to seeing you there. 🎉</p>
               <p style="margin:0;font-size:14px;line-height:1.8;color:#334155;">Best regards,<br/>${org} Team</p>`;
 
     const html = this.emailShell({
       title: 'Slot Confirmed',
       subtitle: `Your spot is confirmed for ${title}.`,
-      preheader: `Your spot for ${title} is confirmed.`,
+      preheader: `You're in! Your spot for ${title} is confirmed.`,
       body,
     });
 
     const text = [
-      `Slot Confirmed: ${event.title} – ${event.dayLabel}, ${event.dateLabel}`,
+      `YOU'RE IN — Slot Confirmed: ${event.title} – ${event.dayLabel}, ${event.dateLabel}`,
       '',
       `Your spot is confirmed for ${event.title}.`,
       '',
@@ -405,7 +459,9 @@ ${rows}
       `Organizer: ${event.organizerName}`,
       ...(event.description ? ['', 'About the Event:', event.description] : []),
       '',
-      'Important Attendance Policy: Space is strictly limited. If you can no longer attend, please let us know within 2–3 days before the event so we can release your slot to another registrant. Please note that multiple no-shows will result in being added to our event blocklist for future activities.',
+      'Attendance Policy:',
+      "- Space is strictly limited — can't make it? Let us know 2-3 days ahead so we can release your slot.",
+      '- Repeated no-shows may result in being blocked from future events.',
       '',
       'We look forward to seeing you there.',
       '',
@@ -427,12 +483,22 @@ ${rows}
     const subject = `Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel} — See you at our next events!`;
 
     const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hello,</p>
-              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#475569;">Thank you for your interest in <strong style="color:#0F172A;">${title}</strong> scheduled for ${day}, ${date}.</p>
-              <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;">Due to high demand, all available slots for this event have been filled. Unfortunately, we are unable to confirm a spot for you this time.</p>
+              ${this.notifyStatusBanner({ icon: '🚫', label: 'Not This Time — Slots Full', bg: '#FEE2E2', border: '#FCA5A5', color: '#B91C1C' })}
+              <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;text-align:center;">All slots for <strong style="color:#0F172A;">${title}</strong> (${day}, ${date}) have been filled — we're unable to confirm a spot for you this time.</p>
               ${this.notifyAboutSection(event.description)}
-              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#475569;">Although we cannot accommodate you for ${day}, ${date}, we regularly host community gatherings, showcases, and meetups.</p>
-              <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;">Please follow our chapter Facebook page and check <a href="https://devcon.plus/events" style="color:#2563EB;text-decoration:none;">devcon.plus/events</a> for the latest event schedules and volunteer opportunities.</p>
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;">Thank you again for your interest, and we hope to see you at our future events!</p>
+              ${this.notifyCalloutCard({
+                icon: '🔔',
+                heading: "What's Next",
+                bg: '#EFF6FF',
+                border: '#BFDBFE',
+                color: '#1D4ED8',
+                lines: [
+                  'We host community gatherings, showcases, and meetups all year round.',
+                  'Follow your chapter\'s Facebook page for the latest schedules and volunteer openings.',
+                ],
+              })}
+              ${this.emailButton('https://devcon.plus/events', 'Browse Upcoming Events')}
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;text-align:center;">Thank you again for your interest — we hope to see you soon!</p>
               <p style="margin:0;font-size:14px;line-height:1.8;color:#334155;">Best regards,<br/>${org} Team</p>`;
 
     const html = this.emailShell({
@@ -443,16 +509,15 @@ ${rows}
     });
 
     const text = [
-      `Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel} — See you at our next events!`,
+      `NOT THIS TIME — Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel}`,
       '',
-      `Thank you for your interest in ${event.title} scheduled for ${event.dayLabel}, ${event.dateLabel}.`,
-      '',
-      'Due to high demand, all available slots for this event have been filled. Unfortunately, we are unable to confirm a spot for you this time.',
+      `All slots for ${event.title} (${event.dayLabel}, ${event.dateLabel}) have been filled. We're unable to confirm a spot for you this time.`,
       ...(event.description ? ['', 'About the Event:', event.description] : []),
       '',
-      `Although we cannot accommodate you for ${event.dayLabel}, ${event.dateLabel}, we regularly host community gatherings, showcases, and meetups.`,
-      '',
-      'Please follow our chapter Facebook page and check devcon.plus/events for the latest event schedules and volunteer opportunities.',
+      "What's Next:",
+      '- We host community gatherings, showcases, and meetups all year round.',
+      "- Follow your chapter's Facebook page for the latest schedules and volunteer openings.",
+      '- Browse upcoming events: https://devcon.plus/events',
       '',
       'Thank you again for your interest, and we hope to see you at our future events!',
       '',
