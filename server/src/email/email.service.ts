@@ -337,22 +337,33 @@ ${rows}
   }
 
   /**
-   * Pill banner making the outcome unmistakable at a glance — green "You're In"
-   * for a confirmed slot, red "Not This Time" for a full event. Sits directly
-   * under the greeting, above the (identical) event-detail card either way.
+   * Centered "hero" status block making the outcome unmistakable at a glance —
+   * a large icon, a big bold headline (e.g. "You're In!"), and a short
+   * supporting line. Sits directly under the greeting. Wrapped in an outer
+   * width:100% table (not just `align="center"` on the inner one) so it
+   * centers reliably across webmail clients, not just desktop Outlook/Gmail.
    */
-  private notifyStatusBanner(opts: {
+  private notifyStatusHero(opts: {
     icon: string;
-    label: string;
+    headline: string;
+    subtext: string;
     bg: string;
     border: string;
     color: string;
   }): string {
-    const { icon, label, bg, border, color } = opts;
-    return `<table cellpadding="0" cellspacing="0" align="center" role="presentation" style="margin:0 0 28px 0;">
+    const { icon, headline, subtext, bg, border, color } = opts;
+    return `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 28px 0;">
                 <tr>
-                  <td align="center" bgcolor="${bg}" style="border:1px solid ${border};border-radius:999px;padding:10px 22px;">
-                    <p style="margin:0;font-size:14px;font-weight:700;color:${color};white-space:nowrap;">${icon} ${label}</p>
+                  <td align="center" style="text-align:center;">
+                    <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto;">
+                      <tr>
+                        <td align="center" bgcolor="${bg}" style="border:1px solid ${border};border-radius:16px;padding:28px 32px;">
+                          <p style="margin:0 0 8px 0;font-size:40px;line-height:1;">${icon}</p>
+                          <p style="margin:0;font-size:26px;font-weight:800;color:${color};letter-spacing:-0.3px;">${headline}</p>
+                          <p style="margin:8px 0 0 0;font-size:14px;font-weight:500;line-height:1.6;color:${color};max-width:340px;">${subtext}</p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>`;
@@ -421,8 +432,14 @@ ${body}
     const subject = `Slot Confirmed: ${event.title} – ${event.dayLabel}, ${event.dateLabel}`;
 
     const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hello,</p>
-              ${this.notifyStatusBanner({ icon: '✅', label: "You're In — Slot Confirmed", bg: '#DCFCE7', border: '#86EFAC', color: '#15803D' })}
-              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.8;color:#475569;text-align:center;">Your spot is confirmed for <strong style="color:#0F172A;">${title}</strong>.</p>
+              ${this.notifyStatusHero({
+                icon: '✅',
+                headline: "You're In!",
+                subtext: `Your spot for ${title} is confirmed.`,
+                bg: '#DCFCE7',
+                border: '#86EFAC',
+                color: '#15803D',
+              })}
               ${this.notifyDetailCard(event)}
               ${this.notifyAboutSection(event.description)}
               ${this.notifyCalloutCard({
@@ -483,9 +500,14 @@ ${body}
     const subject = `Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel} — See you at our next events!`;
 
     const body = `              <p style="margin:0 0 20px 0;font-size:15px;line-height:1.8;color:#334155;">Hello,</p>
-              ${this.notifyStatusBanner({ icon: '🚫', label: 'Not This Time — Slots Full', bg: '#FEE2E2', border: '#FCA5A5', color: '#B91C1C' })}
-              <p style="margin:0 0 28px 0;font-size:15px;line-height:1.8;color:#475569;text-align:center;">All slots for <strong style="color:#0F172A;">${title}</strong> (${day}, ${date}) have been filled — we're unable to confirm a spot for you this time.</p>
-              ${this.notifyAboutSection(event.description)}
+              ${this.notifyStatusHero({
+                icon: '🎟️',
+                headline: 'Slots Are Full',
+                subtext: `All spots for ${title} (${day}, ${date}) have been filled — thank you for your interest.`,
+                bg: '#F1F5F9',
+                border: '#CBD5E1',
+                color: '#334155',
+              })}
               ${this.notifyCalloutCard({
                 icon: '🔔',
                 heading: "What's Next",
@@ -509,10 +531,9 @@ ${body}
     });
 
     const text = [
-      `NOT THIS TIME — Slots full for ${event.title} on ${event.dayLabel}, ${event.dateLabel}`,
+      `SLOTS ARE FULL — ${event.title} on ${event.dayLabel}, ${event.dateLabel}`,
       '',
-      `All slots for ${event.title} (${event.dayLabel}, ${event.dateLabel}) have been filled. We're unable to confirm a spot for you this time.`,
-      ...(event.description ? ['', 'About the Event:', event.description] : []),
+      `All spots for ${event.title} (${event.dayLabel}, ${event.dateLabel}) have been filled. Thank you for your interest.`,
       '',
       "What's Next:",
       '- We host community gatherings, showcases, and meetups all year round.',
