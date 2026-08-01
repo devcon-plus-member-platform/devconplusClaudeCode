@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, LetterOutline } from 'solar-icon-set'
+import { useState, useEffect } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, PenOutline, LetterOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
 import { apiFetch } from '../../../lib/api'
 import { buildRegistrationApprovedEmail } from '../../../lib/emailTemplates'
+import { buildRegistrantMailtoUrl } from '../../../lib/registrantMailto'
 import { buildCsv, downloadCsv, slugify, getPhilippineDateStamp } from '../../../lib/csv'
-import { formatDate } from '../../../lib/dates'
 
 import { useEventsStore } from '../../../stores/useEventsStore'
 import { useOrganizerUser } from '../../../stores/useOrgAuthStore'
+import { useChaptersStore } from '../../../stores/useChaptersStore'
 import { ApprovalCard, type Registration } from '../../../components/ApprovalCard'
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
-import SendSlotEmailsSheet from '../../../components/SendSlotEmailsSheet'
 import type { EventCapacitySummary } from '@devcon-plus/supabase'
 
 // ── Custom form field types ───────────────────────────────────────────────────
@@ -60,29 +60,26 @@ interface RegistrantDetailViewProps {
   registration: RegistrantWithResponses
   formSchema: CustomFormField[]
   eventTitle: string
-  requiresApproval: boolean
   onClose: () => void
   onApprove: (id: string) => Promise<boolean>
   onReject: (id: string) => Promise<boolean>
   onRevert: (id: string) => Promise<boolean>
   onCheckIn: (id: string) => Promise<boolean>
-  onSendEmail: (id: string) => Promise<boolean>
+  buildMailto: (reg: RegistrantWithResponses) => string | null
 }
 
 function RegistrantDetailView({
   registration,
   formSchema,
   eventTitle,
-  requiresApproval,
   onClose,
   onApprove,
   onReject,
   onRevert,
   onCheckIn,
-  onSendEmail,
+  buildMailto,
 }: RegistrantDetailViewProps) {
   const [localReg, setLocalReg] = useState(registration)
-  const [isSendingEmail, setIsSendingEmail] = useState(false)
 
   const initials = localReg.member_name
     .split(' ')
@@ -129,11 +126,6 @@ function RegistrantDetailView({
   const handleCheckInClick = async () => {
     const ok = await onCheckIn(localReg.id)
     if (ok) setLocalReg(prev => ({ ...prev, checked_in: true }))
-  }
-  const handleSendEmailClick = async () => {
-    setIsSendingEmail(true)
-    await onSendEmail(localReg.id)
-    setIsSendingEmail(false)
   }
 
   return (
@@ -298,31 +290,14 @@ function RegistrantDetailView({
             </motion.button>
           </div>
         )}
-        {requiresApproval && (
-          <>
-            {localReg.notified_at && (
-              <p className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-2 mb-1">
-                <CheckCircleOutline color="#94A3B8" size={12} />
-                Emailed {formatDate.compact(localReg.notified_at)}
-              </p>
-            )}
-            <motion.button
-              onClick={handleSendEmailClick}
-              disabled={isSendingEmail}
-              className="w-full mt-1 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-              whileTap={{ scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            >
-              <LetterOutline color="currentColor" size={14} />
-              {isSendingEmail
-                ? 'Sending…'
-                : localReg.notified_at
-                  ? 'Resend Email'
-                  : localReg.status === 'approved'
-                    ? 'Send Slot Confirmed Email'
-                    : 'Send Slots Are Full Email'}
-            </motion.button>
-          </>
+        {(localReg.status === 'approved' || localReg.status === 'rejected') && buildMailto(localReg) && (
+          <a
+            href={buildMailto(localReg)!}
+            className="w-full mt-2 py-2.5 text-[13px] font-semibold rounded-xl border border-slate-200 text-slate-500 hover:border-blue hover:text-blue transition-colors flex items-center justify-center gap-1.5"
+          >
+            <LetterOutline color="currentColor" size={14} />
+            Email Registrant
+          </a>
         )}
       </div>
     </motion.div>
@@ -349,10 +324,18 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventRegistrants() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  // This screen is shared verbatim between /organizer/events/:id/registrants
+  // and /admin/events/:id/registrants (see AdminEventRegistrants.tsx) — route
+  // "Manage Event" to whichever edit surface matches the current session.
+  // Organizer edit is its own route; admin edit is a slide-over on the events
+  // list, so we hand it the target id via router state instead.
+  const isAdminContext = location.pathname.startsWith('/admin')
   const { events, fetchEvents, fetchEventCapacity } = useEventsStore()
 
   const event = events.find((e) => e.id === id)
   const organizerUser = useOrganizerUser()
+  const { getChapterById, fetchChapters } = useChaptersStore()
   const [registrants, setRegistrants] = useState<RegistrantWithResponses[]>([])
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
@@ -361,7 +344,6 @@ export function OrgEventRegistrants() {
   const [sortOrder, setSortOrder]     = useState<'asc' | 'desc'>('desc')
   const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
   const [showAnnounce, setShowAnnounce] = useState(false)
-  const [showNotify, setShowNotify] = useState(false)
   const [mainTab, setMainTab]           = useState<MainTab>('registrants')
   const [volunteers, setVolunteers]     = useState<VolunteerApplication[]>([])
   const [volunteersLoading, setVolunteersLoading] = useState(false)
@@ -384,8 +366,10 @@ export function OrgEventRegistrants() {
     if (!event && id) void fetchEvents()
   }, [event, id, fetchEvents])
 
+  useEffect(() => { void fetchChapters() }, [fetchChapters])
+
   // Fetch registrations with joined member profile data + form_responses
-  const loadRegistrants = useCallback(() => {
+  useEffect(() => {
     if (!id) return
     setIsLoading(true)
     setLoadError(null)
@@ -401,10 +385,6 @@ export function OrgEventRegistrants() {
       })
       .finally(() => setIsLoading(false))
   }, [id, event?.title])
-
-  useEffect(() => {
-    loadRegistrants()
-  }, [loadRegistrants])
 
   const refreshCapacity = async () => {
     if (!id) return
@@ -498,18 +478,6 @@ export function OrgEventRegistrants() {
     return true
   }
 
-  const handleSendEmail = async (regId: string): Promise<boolean> => {
-    try {
-      await apiFetch(`/api/registrations/${regId}/notify`, { method: 'POST' })
-      toast.success('Email sent')
-      loadRegistrants()
-      return true
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send email.')
-      return false
-    }
-  }
-
   const handleCheckIn = async (regId: string): Promise<boolean> => {
     if (!organizerUser?.id) return false
     try {
@@ -521,6 +489,34 @@ export function OrgEventRegistrants() {
       toast.success(`${result.member_name} checked in — +${result.points_awarded} pts`)
       return true
     } catch { return false }
+  }
+
+  const chapterLabel = event?.chapter_id
+    ? `${(getChapterById(event.chapter_id)?.name ?? '').trim()} Chapter`
+    : 'HQ'
+
+  const getMailtoUrl = (reg: RegistrantWithResponses): string | null => {
+    if (!event) return null
+    return buildRegistrantMailtoUrl(
+      reg,
+      {
+        title: event.title,
+        event_date: event.event_date,
+        location: event.location,
+        points_value: event.points_value,
+        chapterLabel,
+      },
+      organizerUser?.email,
+    )
+  }
+
+  const handleManageEvent = () => {
+    if (!id) return
+    if (isAdminContext) {
+      navigate('/admin/events', { state: { openEditEventId: id } })
+    } else {
+      navigate(`/organizer/events/${id}/edit`)
+    }
   }
 
   const handleExportCsv = () => {
@@ -585,11 +581,6 @@ export function OrgEventRegistrants() {
     rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
 
-  // registrants already excludes 'cancelled' (see the /event/:id fetch), so every
-  // row here is notify-eligible — approved gets Slot Confirmed, the rest get Slots Full.
-  const totalNotifiable = registrants.length
-  const alreadyNotifiedCount = registrants.filter((r) => !!r.notified_at).length
-
   const sortedVolunteers = [...volunteers].sort((a, b) => {
     const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     return volunteerSortOrder === 'asc' ? diff : -diff
@@ -643,16 +634,6 @@ export function OrgEventRegistrants() {
                   Announce
                 </button>
               )}
-              {event?.requires_approval && (
-                <button
-                  onClick={() => setShowNotify(true)}
-                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
-                             text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
-                >
-                  <LetterOutline className="w-3.5 h-3.5" color="white" />
-                  Notify
-                </button>
-              )}
             </div>
           </div>
           <div className="px-[76px] pb-4">
@@ -669,23 +650,34 @@ export function OrgEventRegistrants() {
         initial="hidden"
         animate="visible"
       >
-        {/* Main tab switcher: Registrants | Volunteers */}
-        <motion.div variants={fadeUp} className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit mb-5">
-          {(['registrants', 'volunteers'] as MainTab[]).map((tab) => (
+        {/* Main tab switcher: Registrants | Volunteers, + Manage Event shortcut */}
+        <motion.div variants={fadeUp} className="flex items-center justify-between gap-2 mb-5">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+            {(['registrants', 'volunteers'] as MainTab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMainTab(tab)}
+                className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize flex items-center gap-1.5 ${
+                  mainTab === tab
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab === 'volunteers' && <UsersGroupRoundedOutline className="w-3.5 h-3.5" />}
+                {tab === 'registrants' && <ClipboardListOutline className="w-3.5 h-3.5" />}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+          {event && (
             <button
-              key={tab}
-              onClick={() => setMainTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize flex items-center gap-1.5 ${
-                mainTab === tab
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
+              onClick={handleManageEvent}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue/30 text-blue text-md3-body-md font-bold hover:bg-blue/5 transition-colors shrink-0"
             >
-              {tab === 'volunteers' && <UsersGroupRoundedOutline className="w-3.5 h-3.5" />}
-              {tab === 'registrants' && <ClipboardListOutline className="w-3.5 h-3.5" />}
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              <PenOutline className="w-3.5 h-3.5" />
+              Manage Event
             </button>
-          ))}
+          )}
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -886,6 +878,7 @@ export function OrgEventRegistrants() {
                           <ApprovalCard
                             registration={reg}
                             onClick={() => setSelectedRegistrant(reg)}
+                            mailtoHref={getMailtoUrl(reg)}
                           />
                         </motion.div>
                       ))}
@@ -1009,18 +1002,6 @@ export function OrgEventRegistrants() {
         />
       )}
 
-      {event?.requires_approval && (
-        <SendSlotEmailsSheet
-          eventId={event.id}
-          eventTitle={event.title}
-          isOpen={showNotify}
-          onClose={() => setShowNotify(false)}
-          onSent={loadRegistrants}
-          totalNotifiable={totalNotifiable}
-          alreadyNotified={alreadyNotifiedCount}
-        />
-      )}
-
       <AnimatePresence>
         {selectedRegistrant && (
           <RegistrantDetailView
@@ -1028,13 +1009,12 @@ export function OrgEventRegistrants() {
             registration={selectedRegistrant}
             formSchema={formSchema}
             eventTitle={event?.title ?? ''}
-            requiresApproval={event?.requires_approval ?? false}
             onClose={() => setSelectedRegistrant(null)}
             onApprove={handleApprove}
             onReject={handleReject}
             onRevert={handleRevert}
             onCheckIn={handleCheckIn}
-            onSendEmail={handleSendEmail}
+            buildMailto={getMailtoUrl}
           />
         )}
       </AnimatePresence>
