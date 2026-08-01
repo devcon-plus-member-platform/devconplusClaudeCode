@@ -1,14 +1,15 @@
 # DEVCON+ Maintenance Site
 
 A standalone, independently-deployable Vercel project that serves the DEVCON+
-"we're upgrading" page (`maintenance.html`, copied verbatim from
-[`web/public/maintenance.html`](../../web/public/maintenance.html)) on **every path**,
-with an `HTTP 503` status so search crawlers treat the downtime as temporary instead
-of indexing a broken/empty site.
+"we're upgrading" page (`maintenance.html`) on **every path**, with an `HTTP 503`
+status so search crawlers treat the downtime as temporary instead of indexing a
+broken/empty site.
 
-This project is separate from `web/` on purpose: it has no build step, no framework,
-and no dependency on the main app's env vars or Supabase/Firebase config, so it can be
-deployed even when the main app or its backing services are down.
+This project is separate from `web/` on purpose: **the deployed artifact** has no
+build step, no framework, and no dependency on the main app's env vars or
+Supabase/Firebase config, so it can be deployed even when the main app or its backing
+services are down. That constraint applies to what gets served at runtime — it does
+not mean the HTML has to be hand-edited. See "Editing the page copy" below.
 
 ## How it works
 
@@ -20,9 +21,40 @@ deployed even when the main app or its backing services are down.
   - `Content-Type: text/html; charset=utf-8`
 - [`vercel.json`](./vercel.json) — rewrites `/` and `/:path*` (every path) to
   `/api/maintenance`, so there is no route that falls through to a static 200 response.
-- [`maintenance.html`](./maintenance.html) — the single source of the HTML markup for
-  this project. If the page copy changes, update `web/public/maintenance.html` first,
-  then copy it here again (do not let the two diverge).
+  `/favicon.ico` has its own rule (`source`/`destination` both `/favicon.ico`) placed
+  *before* the catch-all, so the browser's automatic favicon request resolves to the
+  real static file below instead of getting swallowed by the 503 rewrite — Vercel
+  rewrites match in array order, first match wins.
+- [`favicon.ico`](./favicon.ico) — copied from [`web/public/favicon.ico`](../../web/public/favicon.ico)
+  (same brand mark as the main app). If the brand favicon changes, re-copy it here too.
+- [`maintenance.html`](./maintenance.html) — a **generated, checked-in** file, kept in
+  sync byte-for-byte with [`web/public/maintenance.html`](../../web/public/maintenance.html).
+  Do not hand-edit either copy — see below.
+
+## Editing the page copy
+
+The page markup lives in one place, [`shell/MaintenanceShell.tsx`](./shell/MaintenanceShell.tsx),
+a React component that takes a single `backBy` prop (e.g. `"Monday, August 3, 2026"`).
+It is **never imported into `web/src`** and never rendered at runtime — it exists only
+to be rendered to static HTML at build time, so the deployed `api/maintenance.ts` path
+above stays framework-free.
+
+To update the return date (or any other copy):
+
+1. Edit `BACK_BY` in [`scripts/generate.tsx`](./scripts/generate.tsx) (or the JSX in
+   `MaintenanceShell.tsx` for anything beyond the date).
+2. Run:
+   ```bash
+   cd ops/maintenance-site
+   npm install   # first time only
+   npm run generate
+   ```
+   This regenerates **both** `ops/maintenance-site/maintenance.html` and
+   `web/public/maintenance.html` from the same component, so they can't drift apart.
+3. Review the diff, commit both regenerated `.html` files together with the
+   `MaintenanceShell.tsx`/`generate.tsx` change, then deploy as below.
+
+`npm run typecheck` also type-checks `shell/` and `scripts/` now (not just `api/`).
 
 ## Deploying
 
@@ -79,4 +111,11 @@ is working):
 
 ```bash
 curl -sI https://<this-deployment>.vercel.app/anything
+```
+
+Also confirm the favicon exception rule works (should be a real `200` + `image/...`
+content type, NOT the 503 HTML page):
+
+```bash
+curl -sI https://<this-deployment>.vercel.app/favicon.ico
 ```
