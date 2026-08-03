@@ -4,6 +4,22 @@ variable "aws_region" {
   default     = "ap-southeast-1"
 }
 
+# Pinned so an apply can never silently target whichever account the shared
+# `default` CLI profile happens to point at. Source account (admin-david,
+# 484907520476) is `devcon-current`; migration destination (admin-devcon,
+# 216833405172) is `devcon-target`.
+variable "aws_profile" {
+  description = "Named AWS CLI profile used for this stack. Must be set explicitly per target account."
+  type        = string
+  default     = "devcon-current"
+}
+
+variable "owner_tag" {
+  description = "Value for the Owner tag. Defaults to the source-account owner so the existing stack sees no diff."
+  type        = string
+  default     = "admin-david"
+}
+
 variable "instance_name" {
   description = "Name tag for the backend EC2 instance."
   type        = string
