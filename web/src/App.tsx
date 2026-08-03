@@ -11,8 +11,8 @@ import { useNewsStore } from './stores/useNewsStore'
 import AppLoader from './components/AppLoader'
 // 🚧 MAINTENANCE MODE — these two pair with the gate inside App() below.
 // Currently ACTIVE. To bring the app back online, comment out all three.
-import MaintenanceShell from './components/MaintenanceShell'
-import { MAINTENANCE_CONFIG, SHOW_MAINTENANCE } from './lib/maintenance'
+// import MaintenanceShell from './components/MaintenanceShell'
+// import { MAINTENANCE_CONFIG, SHOW_MAINTENANCE } from './lib/maintenance'
 
 export default function App() {
   // ─── 🚧 MAINTENANCE MODE ──────────────────────────────────────────────────
@@ -26,7 +26,7 @@ export default function App() {
   // Edit the copy / ETA in web/src/lib/maintenance.ts — not here.
   // Full procedure: docs/runbooks/maintenance-mode.md
   //
-  if (SHOW_MAINTENANCE) return <MaintenanceShell {...MAINTENANCE_CONFIG} />
+  // if (SHOW_MAINTENANCE) return <MaintenanceShell {...MAINTENANCE_CONFIG} />
   // ──────────────────────────────────────────────────────────────────────────
 
   const { themeId } = useThemeStore()
