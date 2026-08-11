@@ -162,7 +162,18 @@ describe('AuthController', () => {
   describe('resendVerification', () => {
     it('delegates email to auth.resendVerification', async () => {
       await controller.resendVerification({ email: 'user@devcon.ph' });
-      expect(authService.resendVerification).toHaveBeenCalledWith('user@devcon.ph');
+      expect(authService.resendVerification).toHaveBeenCalledWith('user@devcon.ph', undefined);
+    });
+
+    it('forwards returnTo to auth.resendVerification', async () => {
+      await controller.resendVerification({
+        email: 'user@devcon.ph',
+        returnTo: '/events/some-event/register',
+      });
+      expect(authService.resendVerification).toHaveBeenCalledWith(
+        'user@devcon.ph',
+        '/events/some-event/register',
+      );
     });
   });
 
