@@ -13,6 +13,10 @@ interface LocationState {
 
 const RESEND_COOLDOWN = 60
 
+function isSafeReturnTo(url: string | null): url is string {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
+}
+
 export default function EmailSent() {
   const location = useLocation()
   const state = location.state as LocationState | null
@@ -43,9 +47,13 @@ export default function EmailSent() {
     setResendSuccess(false)
     try {
       if (type === 'signup') {
+        const savedReturnTo = localStorage.getItem('devcon_returnTo')
         await apiFetch('/auth/email/resend-verification', {
           method: 'POST',
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({
+            email,
+            returnTo: isSafeReturnTo(savedReturnTo) ? savedReturnTo : undefined,
+          }),
         })
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {

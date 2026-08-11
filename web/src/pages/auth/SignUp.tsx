@@ -134,7 +134,10 @@ export default function SignUp() {
     // New Google user (no username yet) → finish on the dedicated /complete-profile
     // page. The layout guard enforces the same thing for every other entry point.
     if (!user.username || !user.chapter_id) {
-      navigate('/complete-profile', { replace: true })
+      navigate(
+        isSafeReturnTo(returnTo) ? `/complete-profile?returnTo=${encodeURIComponent(returnTo)}` : '/complete-profile',
+        { replace: true },
+      )
       return
     }
 
@@ -184,6 +187,7 @@ export default function SignUp() {
       const { emailConfirmationPending } = await signUp(
         data.email, data.password, data.full_name, data.username, data.chapter_id,
         /* data.school_or_company */ undefined, turnstileToken ?? undefined, sanitizedRef,
+        undefined, isSafeReturnTo(returnTo) ? returnTo : undefined,
       )
 
       if (emailConfirmationPending) {

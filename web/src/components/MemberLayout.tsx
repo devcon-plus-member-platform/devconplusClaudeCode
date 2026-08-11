@@ -50,12 +50,16 @@ export default function MemberLayout() {
 
   useEffect(() => {
     if (!user && !isGuestPath(location.pathname)) {
-      navigate('/sign-in', { replace: true })
+      const returnTo = encodeURIComponent(location.pathname + location.search)
+      navigate(`/sign-in?returnTo=${returnTo}`, { replace: true })
       return
     }
     // DB gate: profiles.is_email_verified is the source of truth.
     // Catches edge cases where a session exists but email was never verified.
     if (user && !user.is_email_verified) {
+      // Mirror SignUp.tsx's own stash so EmailConfirm can still recover the
+      // destination if the user lands here directly instead of via SignUp's submit path.
+      localStorage.setItem('devcon_returnTo', location.pathname + location.search)
       navigate('/email-sent', { replace: true, state: { email: user.email, type: 'signup' } })
       return
     }
@@ -64,9 +68,10 @@ export default function MemberLayout() {
     // for OAuth completion — it catches sign-in, sign-up, OAuth callback, refresh,
     // and direct-URL entry alike.
     if (user && (!user.username || !user.chapter_id)) {
-      navigate('/complete-profile', { replace: true })
+      const returnTo = encodeURIComponent(location.pathname + location.search)
+      navigate(`/complete-profile?returnTo=${returnTo}`, { replace: true })
     }
-  }, [user, navigate, location.pathname])
+  }, [user, navigate, location.pathname, location.search])
 
   // Interest quiz redirect disabled — users can set interests from Profile instead.
   // useEffect(() => {
