@@ -20,6 +20,14 @@ interface VerificationPayload {
   sub: string;   // Firebase UID
   email: string;
   purpose: string;
+  returnTo?: string;
+}
+
+// Same shape check duplicated across the frontend (SignIn/SignUp/CompleteProfile/
+// MemberLayout): a same-origin relative path only — blocks protocol-relative
+// ("//evil.com") and absolute URLs before the value ever reaches a redirect header.
+function isSafeReturnTo(url: string | undefined): url is string {
+  return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//');
 }
 
 @Injectable()
@@ -169,6 +177,7 @@ export class AuthService {
     school_or_company?: string;
     captchaToken?: string;
     referral_code?: string;
+    returnTo?: string;
   }): Promise<{ message: string }> {
     // Bot gate first — reject before any Firebase/DB work.
     await this.verifyTurnstile(input.captchaToken);
@@ -235,7 +244,7 @@ export class AuthService {
     }
 
     // Generate a stateless verification JWT and send via Gmail SMTP.
-    const verificationToken = this.signVerificationToken(createdUid, email);
+    const verificationToken = this.signVerificationToken(createdUid, email, input.returnTo);
     try {
       await this.email.sendVerificationEmail(email, verificationToken);
     } catch (err) {
@@ -298,7 +307,12 @@ export class AuthService {
     }
 
     this.logger.log(`Email verified for ${payload.email} (uid=${payload.sub})`);
-    return `${appUrl}/email-confirm?status=success`;
+    // Re-validate before it lands in a redirect Location header — the JWT is
+    // HMAC-signed so tampering isn't feasible, but shape-check regardless.
+    const returnToParam = isSafeReturnTo(payload.returnTo)
+      ? `&returnTo=${encodeURIComponent(payload.returnTo)}`
+      : '';
+    return `${appUrl}/email-confirm?status=success${returnToParam}`;
   }
 
   // ── /auth/email/resend-verification ─────────────────────────────────────
@@ -307,7 +321,7 @@ export class AuthService {
    * Resends a verification email. Always returns 200 regardless of whether
    * the email exists or is already verified (prevents account enumeration).
    */
-  async resendVerification(email: string): Promise<{ message: string }> {
+  async resendVerification(email: string, returnTo?: string): Promise<{ message: string }> {
     const normalised = email.toLowerCase();
     const silentOk = {
       message:
@@ -325,7 +339,7 @@ export class AuthService {
       return silentOk; // already verified — don't reveal this
     }
 
-    const token = this.signVerificationToken(firebaseUser.uid, normalised);
+    const token = this.signVerificationToken(firebaseUser.uid, normalised, returnTo);
     try {
       await this.email.sendVerificationEmail(normalised, token);
     } catch (err) {
@@ -657,9 +671,11 @@ export class AuthService {
     }
   }
 
-  private signVerificationToken(firebaseUid: string, email: string): string {
+  private signVerificationToken(firebaseUid: string, email: string, returnTo?: string): string {
+    const payload: VerificationPayload = { sub: firebaseUid, email, purpose: 'email_verify' };
+    if (isSafeReturnTo(returnTo)) payload.returnTo = returnTo;
     return jwt.sign(
-      { sub: firebaseUid, email, purpose: 'email_verify' },
+      payload,
       this.config.getOrThrow<string>('EMAIL_VERIFICATION_SECRET'),
       { expiresIn: '24h' },
     );
