@@ -5,6 +5,7 @@ import {
   IsString,
   IsUUID,
   Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
@@ -44,4 +45,12 @@ export class EmailSignupDto {
   @IsString()
   @Matches(/^[A-Z0-9]{6,12}$/i, { message: 'Invalid referral code' })
   referral_code?: string;
+
+  // Where to send the user after they click the emailed verification link
+  // (e.g. back to the event registration page they signed up from). Embedded
+  // in the verification JWT so it survives being opened on a different device.
+  @IsOptional()
+  @MaxLength(500)
+  @Matches(/^\/(?!\/)\S*$/, { message: 'Invalid return path' })
+  returnTo?: string;
 }

@@ -17,13 +17,23 @@ export default function EmailConfirm() {
     const reasonParam = searchParams.get('reason')   // 'expired' | 'invalid' | undefined
     const rawToken    = searchParams.get('token')    // NestJS bridge JWT (fallback: old email links)
 
+    function isSafeReturnTo(url: string | null): url is string {
+      return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
+    }
+
     function onConfirmed() {
       setStatus('confirmed')
+      // Prefer the returnTo the backend echoed back on the redirect (it was embedded
+      // in the verification token, so it survives being opened on a different
+      // browser/device than the one that signed up) over localStorage.
+      const queryReturnTo = searchParams.get('returnTo')
       const savedReturnTo = localStorage.getItem('devcon_returnTo')
       if (savedReturnTo) localStorage.removeItem('devcon_returnTo')
-      const destination = (typeof savedReturnTo === 'string' && savedReturnTo.startsWith('/') && !savedReturnTo.startsWith('//'))
-        ? savedReturnTo
-        : '/home'
+      const destination = isSafeReturnTo(queryReturnTo)
+        ? queryReturnTo
+        : isSafeReturnTo(savedReturnTo)
+          ? savedReturnTo
+          : '/home'
       setTimeout(() => navigate(destination), 2000)
     }
 

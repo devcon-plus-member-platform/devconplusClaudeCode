@@ -85,6 +85,7 @@ export class AuthController {
       school_or_company: body.school_or_company,
       captchaToken: body.captchaToken,
       referral_code: body.referral_code,
+      returnTo: body.returnTo,
     });
   }
 
@@ -159,7 +160,7 @@ export class AuthController {
   resendVerification(
     @Body() body: ResendVerificationDto,
   ): Promise<{ message: string }> {
-    return this.auth.resendVerification(body.email);
+    return this.auth.resendVerification(body.email, body.returnTo);
   }
 
   /**

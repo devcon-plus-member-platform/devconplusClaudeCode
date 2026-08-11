@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { AltArrowRightOutline, CheckCircleOutline } from 'solar-icon-set'
+import { AltArrowRightOutline, CheckCircleOutline, LetterOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { StatusBadge } from './StatusBadge'
 
@@ -17,9 +17,10 @@ export interface Registration {
 interface ApprovalCardProps {
   registration: Registration
   onClick?: () => void
+  mailtoHref?: string | null
 }
 
-function ApprovalCardComponent({ registration, onClick }: ApprovalCardProps) {
+function ApprovalCardComponent({ registration, onClick, mailtoHref }: ApprovalCardProps) {
   const initials = registration.member_name
     .split(' ')
     .map((n) => n[0])
@@ -52,6 +53,16 @@ function ApprovalCardComponent({ registration, onClick }: ApprovalCardProps) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <StatusBadge status={registration.status} />
+          {mailtoHref && (
+            <a
+              href={mailtoHref}
+              onClick={(e) => e.stopPropagation()}
+              title="Email registrant"
+              className="w-7 h-7 rounded-full bg-slate-100 hover:bg-blue/10 flex items-center justify-center transition-colors shrink-0"
+            >
+              <LetterOutline color="#64748B" size={14} />
+            </a>
+          )}
           <AltArrowRightOutline color="#CBD5E1" size={16} />
         </div>
       </div>

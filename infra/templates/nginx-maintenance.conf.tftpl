@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────
+# API maintenance curtain — devcon.plus backend gateway (server/, EC2 nginx)
+#
+# Purpose: stop already-open browser tabs / stray clients from continuing
+# to hit the NestJS gateway mid-migration. Returns `503` + a small JSON
+# body for every /api/* and /auth/* request, EXCEPT the allowlisted admin
+# IP below, which still proxies through to the gateway on 127.0.0.1:8000
+# so the team can run and verify the migration while everyone else is
+# locked out.
+#
+# ⚠️ NOT a standalone maintenance mode. This curtain only blocks the API.
+# The SPA at devcon.plus will still load and its client-side JS will just
+# see failed API calls (blank states / error toasts) — that looks like a
+# broken app, not planned maintenance. ALWAYS pair this with the frontend
+# alias swap (docs/runbooks/maintenance-window.md §2.1–2.3) FIRST, then
+# apply this curtain. Never enable this on its own.
+#
+# Not applied via `terraform apply`. The backend `aws_instance` has
+# `lifecycle { ignore_changes = [ami, user_data] }` (infra/main.tf), so
+# Terraform will never push a re-rendered user_data to the already-running
+# host — this is a template for a hand-applied, temporary edit, versioned
+# here so the exact snippet is reviewable and doesn't have to be typed out
+# live during an incident (see the fragile inline `sed` this replaces in
+# docs/runbooks/maintenance-window.md §5's original 2.4 block).
+#
+# Variables (fill in when rendering — see "Enable" below):
+#   admin_ip             CIDR allowed to bypass the curtain, e.g. "1.2.3.4/32"
+#   retry_after_seconds  value for the Retry-After header, in seconds
+#                        (172800 = 2 days, matching ops/maintenance-site's
+#                        frontend maintenance page — keep both in sync)
+# ─────────────────────────────────────────────────────────────────────────
+
+location ^~ /api/ {
+  allow ${admin_ip};
+  deny all;
+  error_page 403 = @maintenance_503;
+
+  proxy_pass http://127.0.0.1:8000;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_connect_timeout 10s;
+  proxy_send_timeout 60s;
+  proxy_read_timeout 60s;
+}
+
+location ^~ /auth/ {
+  allow ${admin_ip};
+  deny all;
+  error_page 403 = @maintenance_503;
+
+  proxy_pass http://127.0.0.1:8000;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_connect_timeout 10s;
+  proxy_send_timeout 60s;
+  proxy_read_timeout 60s;
+}
+
+location @maintenance_503 {
+  default_type application/json;
+  add_header Retry-After ${retry_after_seconds} always;
+  return 503 '{"status":"maintenance"}';
+}
+
+# ── Enable ──────────────────────────────────────────────────────────────
+# 1. Confirm the frontend alias swap (maintenance-window.md §2.1-2.3) is
+#    already live and verified — devcon.plus must be serving the 503
+#    maintenance page BEFORE you touch the API.
+# 2. Render this file with real values (from your workstation, no apply
+#    needed):
+#      terraform -chdir=infra console <<< \
+#        'templatefile("templates/nginx-maintenance.conf.tftpl", { admin_ip = "1.2.3.4/32", retry_after_seconds = 172800 })'
+#    Copy the rendered output (it prints with literal "\n" — reformat, or
+#    pipe through `sed 's/\\n/\n/g'` for a readable copy-paste version).
+# 3. On the backend host (SSM Session Manager or SSH):
+#      sudo cp /etc/nginx/conf.d/00-devcon-plus.conf /etc/nginx/conf.d/00-devcon-plus.conf.bak
+#    Open /etc/nginx/conf.d/00-devcon-plus.conf and paste the rendered
+#    snippet INSIDE the existing `server { ... }` block, above the
+#    existing `location / { ... }` block (nginx picks the longest
+#    `^~` prefix match first, so these two locations take priority over
+#    the generic proxy for exactly /api/* and /auth/*; everything else on
+#    this host is unaffected).
+# 4. Validate and reload (reload, not restart — zero-downtime for
+#    in-flight connections outside the blocked paths):
+#      sudo nginx -t && sudo nginx -s reload
+# 5. Verify from an unlisted network: `curl -sI https://api.devcon.plus/api/health`
+#    → expect `503` with a `Retry-After` header and a
+#    `{"status":"maintenance"}` body. From the allowlisted admin IP: same
+#    command → expect `200`.
+#
+# ── Disable ─────────────────────────────────────────────────────────────
+# 1. Restore the pre-edit config:
+#      sudo cp /etc/nginx/conf.d/00-devcon-plus.conf.bak /etc/nginx/conf.d/00-devcon-plus.conf
+# 2. Validate and reload:
+#      sudo nginx -t && sudo nginx -s reload
+# 3. Verify: `curl -sI https://api.devcon.plus/api/health` returns `200`
+#    from a network that was previously blocked.
+# 4. Only THEN re-alias the frontend back to production
+#    (maintenance-window.md §3.3) — API bring-up must be verified healthy
+#    before the SPA is allowed to start calling it again.
