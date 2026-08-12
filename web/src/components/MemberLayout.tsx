@@ -23,10 +23,16 @@ let hasShownDesktopToast = false
 
 // Routes inside MemberLayout that guests (unauthenticated users) may view.
 // Keep this list minimal — only routes whose components handle !user gracefully.
+// '/events' is exact-only: its sub-routes (/events/:slug/register, /pending,
+// /ticket, /volunteer) all require an authenticated user and must NOT be
+// treated as guest-accessible, or they render blank instead of redirecting
+// to sign-in (they assume `user` is non-null and bail out with `return null`).
+const GUEST_EXACT_PATHS = ['/events']
 // Matched as an exact path or a prefix (so '/jobs' also covers '/jobs/:id').
-const GUEST_PATHS = ['/events', '/jobs', '/rewards']
+const GUEST_PREFIX_PATHS = ['/jobs', '/rewards']
 const isGuestPath = (pathname: string) =>
-  GUEST_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  GUEST_EXACT_PATHS.includes(pathname) ||
+  GUEST_PREFIX_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 
 export default function MemberLayout() {
   const { user } = useAuthStore()
