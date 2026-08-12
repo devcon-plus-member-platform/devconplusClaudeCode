@@ -2,6 +2,7 @@
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { CheckCircleOutline, CloseCircleOutline } from 'solar-icon-set'
 import { supabase } from '../../lib/supabase'
+import { useAuthStore } from '../../stores/useAuthStore'
 import logoHorizontal from '../../assets/logos/logo-horizontal.svg'
 
 type Status = 'verifying' | 'confirmed' | 'error'
@@ -34,7 +35,17 @@ export default function EmailConfirm() {
         : isSafeReturnTo(savedReturnTo)
           ? savedReturnTo
           : '/home'
-      setTimeout(() => navigate(destination), 2000)
+      // Verifying the email server-side doesn't mean THIS browser has a live
+      // session — mail apps commonly open the link in a different browser than
+      // the one used to sign up. App.tsx blocks the router behind auth
+      // initialize(), so by the time this runs the store's `user` reliably
+      // reflects whether this browser is authenticated. If not, continue to
+      // sign-in first and let it forward to `destination` after login.
+      const hasSession = !!useAuthStore.getState().user
+      const target = hasSession
+        ? destination
+        : `/sign-in?returnTo=${encodeURIComponent(destination)}`
+      setTimeout(() => navigate(target), 2000)
     }
 
     function onFailed(msg?: string) {
