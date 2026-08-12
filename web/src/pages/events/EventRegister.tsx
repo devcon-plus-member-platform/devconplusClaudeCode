@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeftOutline } from 'solar-icon-set'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
@@ -211,6 +211,7 @@ export default function EventRegister() {
     schoolValue: string
   }>(`event-register:${slug ?? ''}`, 'local')
   const navigate = useNavigate()
+  const location = useLocation()
   const { events, registrations, register } = useEventsStore()
   const { user } = useAuthStore()
   const [agreed, setAgreed] = useState<boolean>((draft.agreed as boolean) ?? false)
@@ -260,6 +261,17 @@ export default function EventRegister() {
   // existing registrants fall through to their ticket/pending redirect below.
   const isClosed = event?.registration_closed === true && !existingReg
   const hasSchoolOnProfile = !!user?.school_or_company?.trim()
+
+  // Defense-in-depth: this route requires an authenticated user. It's normally
+  // unreachable while signed out (MemberLayout's own guard redirects first),
+  // but if that guard ever changes, don't fall through to a blank `return null`
+  // below — send the visitor to sign in and continue here afterward.
+  useEffect(() => {
+    if (!user) {
+      const returnTo = encodeURIComponent(location.pathname + location.search)
+      navigate(`/sign-in?returnTo=${returnTo}`, { replace: true })
+    }
+  }, [user, navigate, location.pathname, location.search])
 
   useEffect(() => {
     if (!event || !user) return
