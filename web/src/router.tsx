@@ -72,6 +72,8 @@ export const router = createBrowserRouter([
   { path: '/wheel/:eventId',       lazy: () => import('./pages/wheel/WheelPage').then((m) => ({ Component: m.default })) },
   // Public responsive QR poster for an event's raffle wheel (shareable link)
   { path: '/wheel/:eventId/poster', lazy: () => import('./pages/wheel/WheelPosterPage').then((m) => ({ Component: m.default })) },
+  // Preview the maintenance screen without taking the app offline — see docs/runbooks/maintenance-mode.md
+  { path: '/maintenance-preview',  lazy: () => import('./pages/MaintenancePreview').then((m) => ({ Component: m.default })) },
 
   // Auth routes — no layout
   { path: '/onboarding',           element: <Onboarding /> },

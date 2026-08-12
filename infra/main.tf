@@ -50,7 +50,7 @@ locals {
   common_tags = {
     Project     = "devcon-plus"
     Environment = "production"
-    Owner       = "admin-david"
+    Owner       = var.owner_tag
     ManagedBy   = "terraform"
   }
 

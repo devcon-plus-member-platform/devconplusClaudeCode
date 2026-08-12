@@ -9,8 +9,26 @@ import { useEventsStore } from './stores/useEventsStore'
 import { useJobsStore } from './stores/useJobsStore'
 import { useNewsStore } from './stores/useNewsStore'
 import AppLoader from './components/AppLoader'
+// 🚧 MAINTENANCE MODE — these two pair with the gate inside App() below.
+// Currently ACTIVE. To bring the app back online, comment out all three.
+// import MaintenanceShell from './components/MaintenanceShell'
+// import { MAINTENANCE_CONFIG, SHOW_MAINTENANCE } from './lib/maintenance'
 
 export default function App() {
+  // ─── 🚧 MAINTENANCE MODE ──────────────────────────────────────────────────
+  // Takes the ENTIRE app offline: every route (member, organizer, admin, public,
+  // 404) and short-circuits before auth init and the dashboard prefetches below,
+  // so open tabs stop hitting the API during the window.
+  //
+  //   ON  → uncomment the two imports above AND the line below
+  //   OFF → comment all three back out
+  //
+  // Edit the copy / ETA in web/src/lib/maintenance.ts — not here.
+  // Full procedure: docs/runbooks/maintenance-mode.md
+  //
+  // if (SHOW_MAINTENANCE) return <MaintenanceShell {...MAINTENANCE_CONFIG} />
+  // ──────────────────────────────────────────────────────────────────────────
+
   const { themeId } = useThemeStore()
   const { initialize, isInitialized } = useAuthStore()
 

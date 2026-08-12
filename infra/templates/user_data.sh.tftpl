@@ -69,10 +69,23 @@ CWAGENT
   -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
   -s
 
+# Pick up unit files shipped by the certbot package installed earlier in this script.
+# Without this reload the lookup below can miss them, which silently leaves renewal
+# unscheduled -- the cert then expires ~90 days later and takes the API down.
+systemctl daemon-reload
+
 if systemctl list-unit-files | grep -q '^certbot-renew.timer'; then
   systemctl enable --now certbot-renew.timer
 elif systemctl list-unit-files | grep -q '^certbot.timer'; then
   systemctl enable --now certbot.timer
+else
+  echo "WARNING: no certbot renewal timer unit found - renewal is NOT scheduled" >&2
+fi
+
+# Fail loudly at bootstrap rather than at expiry if nothing ended up enabled.
+if ! systemctl is-enabled certbot-renew.timer >/dev/null 2>&1 \
+  && ! systemctl is-enabled certbot.timer >/dev/null 2>&1; then
+  echo "WARNING: certbot renewal timer is not enabled - run 'systemctl enable --now certbot-renew.timer'" >&2
 fi
 
 cat >/etc/motd <<EOF

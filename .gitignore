@@ -37,6 +37,9 @@ SECURITY_AUDIT_*.md
 # Terraform local state
 infra/.terraform/
 infra/terraform.tfvars
+infra/*.tfvars
 infra/*.tfplan
 infra/terraform.tfstate
 infra/terraform.tfstate.*
+infra/terraform.tfstate.d/
+!infra/terraform.tfvars.example
