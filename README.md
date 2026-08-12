@@ -369,15 +369,19 @@ Env vars are set in Vercel project Settings → Environment Variables. Productio
 
 | Credential | Where used | Who to ask |
 |-----------|-----------|------------|
-| Supabase URL + anon key | `.env.local` | Kenshin (outgoing lead) |
-| Supabase service role key | `supabase/.env` | Kenshin |
-| Google OAuth client ID | `.env.local` | Kenshin |
+| Supabase URL + anon key | `web/.env.local` | Kenshin (outgoing lead) |
+| Supabase service role key + JWT secret | `server/.env` (EC2 host — not `supabase/.env`) | Kenshin |
+| Firebase web config + service account | `web/.env.local` (public config) / `server/.env` (Admin SDK) | Kenshin |
+| Google OAuth client ID | `web/.env.local` | Kenshin |
 | Vercel project access | Deployment, env vars | Kenshin |
 | GCP Console access | OAuth redirect URI config | Kenshin |
+| EC2 SSH / AWS console access | Backend host, deploy troubleshooting | Kenshin |
+| GHCR (`ghcr.io/devcon-plus-member-platform`) | Backend Docker image registry | Kenshin |
 | Resend account | Email domain verification | DEVCON HQ IT officer |
 | Cloudflare DNS panel (`devcon.ph`) | Custom domain + email DNS | DEVCON HQ IT officer |
 
-> Never commit secrets. `.env.local` and `supabase/.env` are gitignored.
+> Never commit secrets. `web/.env.local` and `server/.env` are gitignored. See
+> [`.claude/docs/SECURITY.md`](.claude/docs/SECURITY.md) for the full secret-by-secret contract.
 
 ---
 
@@ -386,6 +390,8 @@ Env vars are set in Vercel project Settings → Environment Variables. Productio
 | Document | Location | Focus |
 |----------|----------|-------|
 | Master architecture + DB schema | [`.claude/CLAUDE.md`](.claude/CLAUDE.md) | The authoritative technical reference |
+| Contributing guide | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Branching, commit style, pre-PR checks, PR flow |
+| Security & secrets contract | [`.claude/docs/SECURITY.md`](.claude/docs/SECURITY.md) | Where every secret/env var lives, rotation procedure |
 | Developer handover + status | [`.claude/context/HANDOVER.md`](.claude/context/HANDOVER.md) | L1/L2 items, credentials, knowledge transfer |
 | PRD + product context | [`PRD.md`](PRD.md) | User stories, KPIs, milestones |
 | Domain + email setup | [`.claude/docs/DOMAIN_AND_EMAIL_SETUP.md`](.claude/docs/DOMAIN_AND_EMAIL_SETUP.md) | Step-by-step DNS, Supabase, GCP config |
@@ -413,32 +419,47 @@ MCPs (Model Context Protocol servers) automate common workflows by giving the AI
 
 | MCP | Status | Cost | What it enables |
 |-----|--------|------|-----------------|
-| **Supabase MCP** | Configured in `.mcp.json` | Free | Schema inspection, query execution, migration assistance directly from the AI session |
+| **Supabase MCP** | Not checked into the repo — add locally (see below) | Free | Schema inspection, query execution, migration assistance directly from the AI session |
 | **Figma MCP** (claude.ai native) | Built into claude.ai/code sessions | Free (Dev Mode needs paid Figma plan) | Available without any setup — `get_design_context`, `get_screenshot`, `get_metadata`, etc. Per developer observation: element capture accuracy is limited. |
-| **Figma MCP** (local server) | Not configured in `.mcp.json` | Free (Dev Mode needs paid Figma plan) | Local Figma MCP server — alternative to the native integration. Requires a Figma PAT. |
-| **Vercel MCP** | Not configured in `.mcp.json` | Free | Trigger deploys, check build logs, inspect env vars, manage project settings from the AI session |
+| **Figma MCP** (local server) | Not checked into the repo — add locally (see below) | Free (Dev Mode needs paid Figma plan) | Local Figma MCP server — alternative to the native integration. Requires a Figma PAT. |
+| **Vercel MCP** | Not checked into the repo — add locally (see below) | Free | Trigger deploys, check build logs, inspect env vars, manage project settings from the AI session |
 
-To add the local Figma MCP server or Vercel MCP, append to [`.mcp.json`](.mcp.json):
+> **There is no `.mcp.json` checked into this repo** (project-level MCP config is intentionally not
+> committed, since entries below carry personal tokens). To use any of these MCPs, create a
+> `.mcp.json` at the repo root — it's gitignored — with the servers you need:
 
 ```json
-"figma": {
-  "type": "stdio",
-  "command": "npx",
-  "args": ["-y", "figma-mcp"],
-  "env": { "FIGMA_API_KEY": "<your-figma-personal-access-token>" }
-},
-"vercel": {
-  "type": "stdio",
-  "command": "npx",
-  "args": ["-y", "@vercel/mcp-adapter"],
-  "env": { "VERCEL_TOKEN": "<your-vercel-token>" }
+{
+  "mcpServers": {
+    "supabase": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server-supabase", "--project-ref=<your-project-ref>"],
+      "env": { "SUPABASE_ACCESS_TOKEN": "<your-supabase-personal-access-token>" }
+    },
+    "figma": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "figma-mcp"],
+      "env": { "FIGMA_API_KEY": "<your-figma-personal-access-token>" }
+    },
+    "vercel": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@vercel/mcp-adapter"],
+      "env": { "VERCEL_TOKEN": "<your-vercel-token>" }
+    }
+  }
 }
 ```
 
 > Figma personal access tokens: Figma → Account Settings → Personal Access Tokens.
 > Dev Mode requires the file owner to have a paid Figma plan (Professional or Organization).
+> Supabase personal access tokens: Supabase Dashboard → Account → Access Tokens.
 
-> **Note (April 21, 2026):** Claude Code (claude.ai/code) already has Figma MCP built in — no token or `.mcp.json` entry is needed. The local Figma MCP server in `.mcp.json` is only needed for non-claude.ai environments or automated pipelines.
+> **Note:** Claude Code (claude.ai/code) already has Figma MCP built in — no token or `.mcp.json` entry
+> is needed for that one. The local Figma MCP server above is only needed for non-claude.ai environments
+> or automated pipelines.
 
 ### AI Tool Decision Table
 
