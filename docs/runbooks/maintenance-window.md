@@ -5,7 +5,7 @@ Operator checklist for taking DEVCON+ dark for a planned window and bringing it 
 **Stack:**
 - Frontend: Vercel SPA, production domain `devcon.plus` (project linked locally in `web/` — not in git, see `web/.gitignore`)
 - Maintenance page: standalone Vercel project `ops/maintenance-site/` — serves real `HTTP 503` + `Retry-After` on every path (primary go-dark mechanism; see `ops/maintenance-site/README.md`)
-- Backend: NestJS gateway on EC2 (`i-02e08aceb6d701d77`, `ap-southeast-1`) behind host nginx, `https://api.devcon.plus`
+- Backend: NestJS gateway on EC2 (`i-06518a219cae8a703`, `ap-southeast-1`) behind host nginx, `https://api.devcon.plus`
 - DB: Supabase Postgres
 
 **⚠️ Read before starting — two things that aren't obvious from the code:**
@@ -158,7 +158,7 @@ Operator checklist for taking DEVCON+ dark for a planned window and bringing it 
 ```bash
 # ── vars — fill these in before running anything ──────────────────────────
 AWS_REGION=ap-southeast-1
-INSTANCE_ID=i-02e08aceb6d701d77
+INSTANCE_ID=i-06518a219cae8a703
 ADMIN_IP=$(curl -s https://ifconfig.me)/32
 PROD_DEPLOYMENT_URL=      # from step 1.3 — the CURRENT devcon.plus deployment, for rollback
 MAINT_DEPLOYMENT_URL=     # from step 1.8/2.1 — the ops/maintenance-site deployment
