@@ -17,11 +17,26 @@
  * draft event falls back to the unmodified shell (default DEVCON+ metadata).
  * A share preview is never worth breaking the page for.
  *
- * Env vars (server-only — set in Vercel project settings, NOT in .env.local;
- * these are the same two `api/keep-alive.ts` already uses):
+ * Env vars (set in Vercel project settings):
  *   SUPABASE_URL       — Supabase REST base URL
  *   SUPABASE_ANON_KEY  — Supabase public anon key (events has a public
  *                        SELECT RLS policy: "Events are public")
+ *
+ * Falls back to VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, which are already
+ * configured for the frontend build. The plain names are the convention for
+ * server-side code, but as of 2026-08-13 they are NOT set on the project — the
+ * fallback is what makes this work without a dashboard change. No secret is
+ * exposed: the anon key is public-by-design and already ships in the client
+ * bundle. (`api/keep-alive.ts` has the same env expectation and has been
+ * failing 500 for the same reason — fix that by setting the plain names.)
+ *
+ * Debugging: every response carries an `x-og-event` header —
+ *   hit    → event found, metadata injected
+ *   miss   → no such slug, or a draft event → default card (expected)
+ *   no-env → Supabase env vars missing → default card (misconfiguration)
+ *   error  → lookup threw → default card
+ * Check it with: curl -sI https://devcon.plus/events/<slug> | grep og-event
+ * If the header is absent entirely, the vercel.json rewrite is not matching.
  */
 export const config = { runtime: 'edge' }
 
@@ -82,10 +97,10 @@ function setContent(html: string, selector: string, value: string): string {
   return html.replace(pattern, () => `<meta ${selector} content="${esc(value)}"`)
 }
 
-async function fetchEvent(slug: string): Promise<EventMeta | null> {
-  const url = process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_ANON_KEY
-  if (!url || !key) return null
+async function fetchEvent(slug: string): Promise<EventMeta | null | 'no-env'> {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const key = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !key) return 'no-env'
 
   const query =
     `${url}/rest/v1/events` +
@@ -114,11 +129,15 @@ export default async function handler(request: Request): Promise<Response> {
   if (!shell.ok) return shell
 
   let html = await shell.text()
+  let status: 'hit' | 'miss' | 'no-env' | 'error' = 'miss'
 
   try {
     const event = slug ? await fetchEvent(slug) : null
 
-    if (event?.title) {
+    if (event === 'no-env') {
+      status = 'no-env'
+    } else if (event?.title) {
+      status = 'hit'
       const title = summarize(event.title)
       const when = formatEventDate(event.event_date)
       const description = event.description?.trim()
@@ -163,6 +182,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
   } catch (error) {
     // Fall through with the unmodified shell — the page must still render.
+    status = 'error'
     console.warn('[og-event] metadata injection skipped:', error)
   }
 
@@ -170,6 +190,7 @@ export default async function handler(request: Request): Promise<Response> {
     status: 200,
     headers: {
       'content-type': 'text/html; charset=utf-8',
+      'x-og-event': status,
       // Browsers revalidate (asset hashes change per deploy); the CDN holds it
       // briefly so crawler storms and repeat shares don't hit Supabase.
       'cache-control': 'public, max-age=0, must-revalidate, s-maxage=300, stale-while-revalidate=86400',
