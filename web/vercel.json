@@ -8,6 +8,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/events/:slug", "destination": "/api/og-event?slug=:slug" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
