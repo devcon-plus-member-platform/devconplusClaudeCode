@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeftOutline, MapPointOutline, RefreshOutline, CheckCircleOutline, BoltOutline, DangerTriangleOutline, CalendarMarkOutline, CalendarAddOutline, StarOutline, AltArrowRightOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, MapPointOutline, RefreshOutline, CheckCircleOutline, BoltOutline, DangerTriangleOutline, CalendarMarkOutline, CalendarAddOutline, StarOutline, AltArrowRightOutline, HomeOutline, GiftOutline, CalendarOutline } from 'solar-icon-set'
 import { QRCodeSVG } from 'qrcode.react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import AddToCalendarSheet from '../../components/AddToCalendarSheet'
+import type { SolarIcon } from '../../lib/icons'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useThemeStore } from '../../stores/useThemeStore'
@@ -48,6 +49,13 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 const NOTCH_MASK =
   'radial-gradient(circle 14px at 0 14px, transparent 13px, #000 14px), ' +
   'radial-gradient(circle 14px at 100% 14px, transparent 13px, #000 14px)'
+
+// Post-registration next steps — keeps the ticket from being a dead end
+const NEXT_STEPS: { label: string; description: string; to: string; Icon: SolarIcon }[] = [
+  { label: 'Explore DEVCON+',     description: "See your points and what's new", to: '/home',    Icon: HomeOutline },
+  { label: 'Redeem Rewards',      description: 'Turn your points into perks',        to: '/rewards', Icon: GiftOutline },
+  { label: 'Discover Tech Events', description: 'Find more events near you',         to: '/events',  Icon: CalendarOutline },
+]
 
 // Inline horizontal logo — white text paths + multicolor ICON
 function LogoHorizontalWhite({ width = 132 }: { width?: number }) {
@@ -228,9 +236,13 @@ export default function EventTicket() {
   }
 
   return (
+    // pb-24 / -mb-24: MemberLayout's scroll container adds pb-24 to clear the
+    // floating nav — padding this page can't paint into. The extra bottom
+    // padding extends the gradient across that band; the matching negative
+    // margin cancels its height so the scroll extent is unchanged.
     <div
-      className="min-h-screen flex flex-col"
-      style={{ 
+      className="min-h-screen flex flex-col pb-24 -mb-24"
+      style={{
         background: `${PATTERN_BG}, linear-gradient(160deg, ${effectiveTheme.darkHex} 0%, ${effectiveTheme.hex} 100%)`,
         backgroundSize: '60px 60px, auto',
         backgroundRepeat: 'repeat, no-repeat'
@@ -579,6 +591,42 @@ export default function EventTicket() {
               ? 'This event has already ended.'
               : 'Show this QR code at the venue entrance.\nKeep this screen open — QR refreshes automatically.'}
         </motion.p>
+
+        {/* ── Next steps — never leave the ticket as a dead end ── */}
+        <div className="w-full max-w-sm mt-7">
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7, duration: 0.3 }}
+            className="text-white/45 text-[10px] font-semibold uppercase tracking-widest text-center mb-3"
+          >
+            What's next
+          </motion.p>
+
+          <div className="space-y-2">
+            {NEXT_STEPS.map(({ label, description, to, Icon }, i) => (
+              <motion.button
+                key={to}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.74 + i * 0.06, duration: 0.26, ease: 'easeOut' }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate(to)}
+                className="w-full flex items-center gap-3 bg-white/[0.14] border border-white/25
+                           rounded-2xl px-3.5 py-3 text-left backdrop-blur-sm"
+              >
+                <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                  <Icon color="#FFFFFF" size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-md3-body-md font-semibold leading-tight">{label}</p>
+                  <p className="text-white/50 text-md3-label-md leading-tight mt-0.5">{description}</p>
+                </div>
+                <AltArrowRightOutline className="w-4 h-4 shrink-0" color="rgba(255,255,255,0.55)" />
+              </motion.button>
+            ))}
+          </div>
+        </div>
 
       </div>
 
