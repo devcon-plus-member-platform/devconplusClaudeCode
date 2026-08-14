@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Navigate } from 'react-router-dom'
 import { isValidUUID } from '../../../lib/validation'
-import { ArrowLeftOutline, DangerTriangleOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, TrashBinTrashOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -106,9 +106,17 @@ export function OrgEventEdit() {
   )
 
   // ── Delete flow ──────────────────────────────────────────────────────────
-  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return
+    setShowDeleteModal(false)
+    setDeleteConfirmInput('')
+    setDeleteError(null)
+  }
 
   // ── Submit state ─────────────────────────────────────────────────────────
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -870,7 +878,7 @@ export function OrgEventEdit() {
           </p>
           <motion.button
             type="button"
-            onClick={() => setDeleteStep(1)}
+            onClick={() => setShowDeleteModal(true)}
             whileTap={{ scale: 0.95 }}
             className="w-full py-3 rounded-xl border border-red/30 text-red text-md3-body-md font-bold hover:bg-red/5 transition-colors"
           >
@@ -879,73 +887,77 @@ export function OrgEventEdit() {
         </motion.div>
       </motion.form>
 
-      {/* ── Delete confirmation bottom sheets (2-step) ── */}
+      {/* ── Delete confirmation modal (type-to-confirm) ── */}
       <AnimatePresence>
-        {deleteStep > 0 && (
+        {showDeleteModal && (
           <>
             <motion.div
               className="fixed inset-0 bg-black/40 z-[60]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => !isDeleting && setDeleteStep(0)}
+              onClick={closeDeleteModal}
             />
-
-            {deleteStep === 1 && (
-              <motion.div
-                key={1}
-                className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl px-4 pt-4 pb-10"
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 360 }}
+              className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+                className="w-[90vw] max-w-sm bg-white rounded-3xl shadow-2xl p-6"
               >
-                <div className="flex flex-col items-center text-center mb-6">
-                  <div className="w-14 h-14 rounded-full bg-red/10 flex items-center justify-center mb-4">
-                    <DangerTriangleOutline className="w-7 h-7" color="#EF4444" />
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 rounded-full bg-red/10 flex items-center justify-center mb-3">
+                    <TrashBinTrashOutline color="#EF4444" width={28} height={28} />
                   </div>
-                  <h2 className="text-md3-body-lg font-bold text-slate-900 mb-1">Delete Event?</h2>
-                  <p className="text-md3-body-md text-slate-500">
-                    You are about to delete{' '}
-                    <span className="font-semibold text-slate-700">"{event.title}"</span>.
-                    This will also permanently remove all registrations for this event.
+                  <h2 className="text-md3-headline-sm font-bold text-slate-900">Delete this event?</h2>
+                  <p className="text-md3-body-md text-slate-500 mt-1">
+                    You will permanently lose <span className="font-semibold text-slate-700">{event.title}</span>{' '}
+                    and all of its registrations, QR tickets, volunteer applications, and announcements. This cannot be undone.
                   </p>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setDeleteStep(0)} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-md3-body-md font-bold">Cancel</button>
-                  <button onClick={() => setDeleteStep(2)} className="flex-1 py-3 rounded-xl bg-red/10 text-red text-md3-body-md font-bold">Continue</button>
-                </div>
-              </motion.div>
-            )}
 
-            {deleteStep === 2 && (
-              <motion.div
-                key={2}
-                className="fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl px-4 pt-4 pb-10"
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              >
-                <div className="flex flex-col items-center text-center mb-6">
-                  <div className="w-14 h-14 rounded-full bg-red/10 flex items-center justify-center mb-4">
-                    <DangerTriangleOutline className="w-7 h-7" color="#EF4444" />
-                  </div>
-                  <h2 className="text-md3-body-lg font-bold text-slate-900 mb-1">Are you sure?</h2>
-                  <p className="text-md3-body-md text-slate-500">
-                    All registrations for this event will be permanently deleted along with the event itself.{' '}
-                    <span className="font-semibold text-red">This cannot be undone.</span>
-                  </p>
-                  {deleteError && <p className="mt-3 text-md3-body-md text-red font-semibold">{deleteError}</p>}
+                <div className="mt-5">
+                  <label className="block text-md3-label-md font-semibold text-slate-500 mb-1.5">
+                    Type <span className="font-bold text-slate-700">{event.title}</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmInput}
+                    onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                    placeholder={event.title}
+                    autoFocus
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-red/30"
+                  />
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setDeleteStep(0)} disabled={isDeleting} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 text-md3-body-md font-bold disabled:opacity-50">Cancel</button>
-                  <button onClick={handleDelete} disabled={isDeleting} className="flex-1 py-3 rounded-xl bg-red text-white text-md3-body-md font-bold disabled:opacity-60">
-                    {isDeleting ? 'Deleting…' : 'Delete Everything'}
+
+                {deleteError && <p className="mt-3 text-md3-body-md text-red font-semibold text-center">{deleteError}</p>}
+
+                <div className="mt-5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeDeleteModal}
+                    disabled={isDeleting}
+                    className="flex-1 py-3 text-md3-label-lg font-bold text-slate-700 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleteConfirmInput !== event.title || isDeleting}
+                    className="flex-1 py-3 text-md3-label-lg font-bold text-white rounded-xl bg-red hover:bg-red/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isDeleting ? 'Deleting…' : 'Delete event'}
                   </button>
                 </div>
-              </motion.div>
-            )}
+              </div>
+            </motion.div>
           </>
         )}
       </AnimatePresence>

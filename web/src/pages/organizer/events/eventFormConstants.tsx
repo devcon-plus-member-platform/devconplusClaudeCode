@@ -7,7 +7,13 @@ import {
   type UseFormWatch,
   type UseFormSetValue,
 } from 'react-hook-form'
-import { AddCircleOutline, TrashBinTrashOutline, CloseCircleLineDuotone } from 'solar-icon-set'
+import { Reorder, useDragControls } from 'framer-motion'
+import {
+  AddCircleOutline,
+  TrashBinTrashOutline,
+  CloseCircleLineDuotone,
+  HamburgerMenuOutline,
+} from 'solar-icon-set'
 import { z } from 'zod'
 import type { DevconCategory } from '@devcon-plus/supabase'
 
@@ -331,6 +337,162 @@ const FIELD_TYPE_OPTIONS: { value: CustomFieldType; label: string }[] = [
   { value: 'checkbox', label: 'Checkboxes'   },
 ]
 
+const hasOptions = (type: CustomFieldType) =>
+  type === 'select' || type === 'radio' || type === 'checkbox'
+
+// One reorderable question card. Extracted so each card can own its own
+// `useDragControls()` — drag is started ONLY from the handle (`dragListener={false}`),
+// so the label input / select / option chips stay normally interactive.
+function QuestionCard({
+  field,
+  index,
+  optionDraft,
+  onOptionDraftChange,
+  onUpdate,
+  onRemove,
+  onAddOption,
+  onRemoveOption,
+  onMove,
+}: {
+  field: CustomFormField
+  index: number
+  optionDraft: string
+  onOptionDraftChange: (value: string) => void
+  onUpdate: (patch: Partial<CustomFormField>) => void
+  onRemove: () => void
+  onAddOption: () => void
+  onRemoveOption: (opt: string) => void
+  onMove: (from: number, to: number) => void
+}) {
+  const dragControls = useDragControls()
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={field.id}
+      dragListener={false}
+      dragControls={dragControls}
+      whileDrag={{ scale: 1.02, boxShadow: '0 8px 24px rgba(15,23,42,0.14)', zIndex: 20 }}
+      className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
+          {/* Drag handle — pointer drag + arrow-key reorder for keyboard users */}
+          <button
+            type="button"
+            title="Drag to reorder (or focus and use ↑ / ↓)"
+            aria-label={`Reorder question ${index + 1}. Press arrow up or arrow down to move it.`}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              dragControls.start(e)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                onMove(index, index - 1)
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                onMove(index, index + 1)
+              }
+            }}
+            className="w-6 h-6 -ml-1 rounded-md flex items-center justify-center touch-none cursor-grab active:cursor-grabbing hover:bg-blue/10 focus:outline-none focus:ring-1 focus:ring-blue/40 transition-colors"
+          >
+            <HamburgerMenuOutline className="w-3.5 h-3.5" color="#94A3B8" />
+          </button>
+          <span className="text-md3-label-md font-bold text-slate-400 uppercase tracking-wide">
+            Question {index + 1}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red hover:bg-red/10 transition-colors"
+        >
+          <TrashBinTrashOutline className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Label */}
+      <input
+        value={field.label}
+        onChange={e => onUpdate({ label: e.target.value })}
+        placeholder="Question label"
+        className={inputClass}
+      />
+
+      {/* Type + Required row */}
+      <div className="flex gap-2">
+        <select
+          value={field.type}
+          onChange={e => onUpdate({ type: e.target.value as CustomFieldType, options: [], allowOther: false })}
+          className={`${inputClass} flex-1`}
+        >
+          {FIELD_TYPE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+
+        <label className="flex items-center gap-1.5 text-md3-label-md text-slate-600 font-medium shrink-0 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={field.required}
+            onChange={e => onUpdate({ required: e.target.checked })}
+            className="w-3.5 h-3.5 accent-blue"
+          />
+          Required
+        </label>
+      </div>
+
+      {/* Options (select / radio / checkbox only) */}
+      {hasOptions(field.type) && (
+        <div className="space-y-2">
+          {field.options.map(opt => (
+            <div key={opt} className="flex items-center gap-2">
+              <span className="flex-1 text-md3-body-md text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
+                {opt}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemoveOption(opt)}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red hover:bg-red/10 transition-colors"
+              >
+                <CloseCircleLineDuotone className="w-3.5 h-3.5" color="#EF4444" />
+              </button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input
+              value={optionDraft}
+              onChange={e => onOptionDraftChange(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onAddOption() } }}
+              placeholder="Add option, press Enter"
+              className={`${inputClass} flex-1`}
+            />
+            <button
+              type="button"
+              onClick={onAddOption}
+              className="w-9 h-9 rounded-xl bg-blue text-white flex items-center justify-center shrink-0"
+            >
+              <AddCircleOutline className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Allow "Other" free-text choice */}
+          <label className="flex items-center gap-1.5 text-md3-label-md text-slate-600 font-medium cursor-pointer pt-0.5">
+            <input
+              type="checkbox"
+              checked={field.allowOther ?? false}
+              onChange={e => onUpdate({ allowOther: e.target.checked })}
+              className="w-3.5 h-3.5 accent-blue"
+            />
+            Add an “Other…” option (lets people type their own answer)
+          </label>
+        </div>
+      )}
+    </Reorder.Item>
+  )
+}
+
 export function CustomFieldsBuilder({
   customFields,
   setCustomFields,
@@ -372,105 +534,58 @@ export function CustomFieldsBuilder({
     })
   }
 
-  const hasOptions = (type: CustomFieldType) =>
-    type === 'select' || type === 'radio' || type === 'checkbox'
+  // Drag-and-drop reorder. Reorder.Group tracks ids (not the field objects) so
+  // editing a field mid-list never breaks the identity framer-motion reorders by.
+  const reorderFields = (ids: string[]) => {
+    setCustomFields(prev => {
+      const byId = new Map(prev.map(f => [f.id, f]))
+      return ids
+        .map(id => byId.get(id))
+        .filter((f): f is CustomFormField => f !== undefined)
+    })
+  }
+
+  // Keyboard reorder (↑ / ↓ on the focused drag handle)
+  const moveField = (from: number, to: number) => {
+    setCustomFields(prev => {
+      if (from === to || to < 0 || to >= prev.length) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
 
   return (
     <div className="space-y-3">
-      {customFields.map((field, idx) => (
-        <div key={field.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-md3-label-md font-bold text-slate-400 uppercase tracking-wide">
-              Question {idx + 1}
-            </span>
-            <button
-              type="button"
-              onClick={() => removeField(field.id)}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red hover:bg-red/10 transition-colors"
-            >
-              <TrashBinTrashOutline className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      {customFields.length > 1 && (
+        <p className="text-md3-label-md text-slate-400">
+          Drag the handle to reorder questions — members see them in this order.
+        </p>
+      )}
 
-          {/* Label */}
-          <input
-            value={field.label}
-            onChange={e => updateField(field.id, { label: e.target.value })}
-            placeholder="Question label"
-            className={inputClass}
+      <Reorder.Group
+        as="div"
+        axis="y"
+        values={customFields.map(f => f.id)}
+        onReorder={reorderFields}
+        className="space-y-3"
+      >
+        {customFields.map((field, idx) => (
+          <QuestionCard
+            key={field.id}
+            field={field}
+            index={idx}
+            optionDraft={optionDrafts[field.id] ?? ''}
+            onOptionDraftChange={value => setOptionDrafts(prev => ({ ...prev, [field.id]: value }))}
+            onUpdate={patch => updateField(field.id, patch)}
+            onRemove={() => removeField(field.id)}
+            onAddOption={() => addOption(field.id)}
+            onRemoveOption={opt => removeOption(field.id, opt)}
+            onMove={moveField}
           />
-
-          {/* Type + Required row */}
-          <div className="flex gap-2">
-            <select
-              value={field.type}
-              onChange={e => updateField(field.id, { type: e.target.value as CustomFieldType, options: [], allowOther: false })}
-              className={`${inputClass} flex-1`}
-            >
-              {FIELD_TYPE_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-
-            <label className="flex items-center gap-1.5 text-md3-label-md text-slate-600 font-medium shrink-0 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={field.required}
-                onChange={e => updateField(field.id, { required: e.target.checked })}
-                className="w-3.5 h-3.5 accent-blue"
-              />
-              Required
-            </label>
-          </div>
-
-          {/* Options (select / radio / checkbox only) */}
-          {hasOptions(field.type) && (
-            <div className="space-y-2">
-              {field.options.map(opt => (
-                <div key={opt} className="flex items-center gap-2">
-                  <span className="flex-1 text-md3-body-md text-slate-700 bg-white border border-slate-200 rounded-lg px-3 py-1.5">
-                    {opt}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeOption(field.id, opt)}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-red hover:bg-red/10 transition-colors"
-                  >
-                    <CloseCircleLineDuotone className="w-3.5 h-3.5" color="#EF4444" />
-                  </button>
-                </div>
-              ))}
-              <div className="flex gap-2">
-                <input
-                  value={optionDrafts[field.id] ?? ''}
-                  onChange={e => setOptionDrafts(prev => ({ ...prev, [field.id]: e.target.value }))}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addOption(field.id) } }}
-                  placeholder="Add option, press Enter"
-                  className={`${inputClass} flex-1`}
-                />
-                <button
-                  type="button"
-                  onClick={() => addOption(field.id)}
-                  className="w-9 h-9 rounded-xl bg-blue text-white flex items-center justify-center shrink-0"
-                >
-                  <AddCircleOutline className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Allow "Other" free-text choice */}
-              <label className="flex items-center gap-1.5 text-md3-label-md text-slate-600 font-medium cursor-pointer pt-0.5">
-                <input
-                  type="checkbox"
-                  checked={field.allowOther ?? false}
-                  onChange={e => updateField(field.id, { allowOther: e.target.checked })}
-                  className="w-3.5 h-3.5 accent-blue"
-                />
-                Add an “Other…” option (lets people type their own answer)
-              </label>
-            </div>
-          )}
-        </div>
-      ))}
+        ))}
+      </Reorder.Group>
 
       <button
         type="button"
