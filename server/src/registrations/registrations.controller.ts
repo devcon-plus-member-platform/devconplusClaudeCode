@@ -15,6 +15,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
+import { BulkRegistrationIdsDto } from './dto/bulk-registration-ids.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegistrationsService } from './registrations.service';
 
@@ -56,6 +57,38 @@ export class RegistrationsController {
     @Param() { id }: IdParamDto,
   ) {
     return this.service.getEventRegistrants(user, id);
+  }
+
+  /**
+   * POST /api/registrations/event/:id/bulk-approve — approve many at once.
+   *
+   * The event id lives in the path so chapter scope is checked ONCE for the whole
+   * batch. No route collision with `:id/approve` — that pattern is two segments,
+   * this one is three.
+   */
+  @Post('event/:id/bulk-approve')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles('chapter_officer')
+  bulkApprove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param() { id }: IdParamDto,
+    @Body() dto: BulkRegistrationIdsDto,
+  ) {
+    return this.service.bulkApprove(user, id, dto.registrationIds);
+  }
+
+  /** POST /api/registrations/event/:id/bulk-reject — reject many at once */
+  @Post('event/:id/bulk-reject')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles('chapter_officer')
+  bulkReject(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param() { id }: IdParamDto,
+    @Body() dto: BulkRegistrationIdsDto,
+  ) {
+    return this.service.bulkReject(user, id, dto.registrationIds);
   }
 
   /** POST /api/registrations/:id/approve — approve registration */

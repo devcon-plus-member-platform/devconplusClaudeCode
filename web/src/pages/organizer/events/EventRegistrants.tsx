@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, PenOutline, LetterOutline } from 'solar-icon-set'
+import { ArrowLeftOutline, CheckCircleOutline, CloseCircleLineDuotone, CloseCircleOutline, RestartOutline, UserCheckOutline, ClipboardListOutline, UserSpeakOutline, UsersGroupRoundedOutline, DownloadOutline, MagniferOutline, SortFromTopToBottomOutline, SortFromBottomToTopOutline, PenOutline, LetterOutline, FilterOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { supabase, getBridgeToken } from '../../../lib/supabase'
@@ -16,7 +16,8 @@ import { ApprovalCard, type Registration } from '../../../components/ApprovalCar
 import { StatusBadge } from '../../../components/StatusBadge'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import SendAnnouncementSheet from '../../../components/SendAnnouncementSheet'
-import type { EventCapacitySummary } from '@devcon-plus/supabase'
+import ConfirmDialog from '../../../components/ConfirmDialog'
+import type { EventCapacitySummary, BulkRegistrationResult } from '@devcon-plus/supabase'
 
 // ── Custom form field types ───────────────────────────────────────────────────
 
@@ -309,6 +310,13 @@ function RegistrantDetailView({
 type FilterStatus = 'all' | 'pending' | 'approved' | 'rejected'
 type MainTab = 'registrants' | 'volunteers'
 
+const FILTER_OPTIONS: { id: FilterStatus; label: string }[] = [
+  { id: 'all',      label: 'All' },
+  { id: 'pending',  label: 'Pending' },
+  { id: 'approved', label: 'Approved' },
+  { id: 'rejected', label: 'Rejected' },
+]
+
 interface VolunteerApplication {
   id: string
   reason: string | null
@@ -340,6 +348,8 @@ export function OrgEventRegistrants() {
   const [isLoading, setIsLoading]     = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [filter, setFilter]           = useState<FilterStatus>('all')
+  /** Mobile only — the status filter collapses into a single pill + menu. */
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const [search, setSearch]           = useState('')
   const [sortOrder, setSortOrder]     = useState<'asc' | 'desc'>('desc')
   const [capacitySummary, setCapacitySummary] = useState<EventCapacitySummary | null>(null)
@@ -349,6 +359,17 @@ export function OrgEventRegistrants() {
   const [volunteersLoading, setVolunteersLoading] = useState(false)
   const [volunteerSortOrder, setVolunteerSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedRegistrant, setSelectedRegistrant] = useState<RegistrantWithResponses | null>(null)
+
+  // ── Bulk approve / reject ───────────────────────────────────────────────────
+  // Select mode is strictly opt-in: until the organizer taps "Select" the list
+  // behaves exactly as before, and the action buttons never write — they only
+  // open the confirmation dialog.
+  const [selectMode, setSelectMode]   = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction]   = useState<'approve' | 'reject' | null>(null)
+  const [bulkRunning, setBulkRunning] = useState(false)
+  /** > 0 → show the "approved without emails, announce instead?" nudge. */
+  const [lastBulkApproved, setLastBulkApproved] = useState(0)
 
   // Custom form schema comes from the event's custom_form_schema (JSONB array),
   // sourced from the gateway-backed events store — NOT a direct Supabase read.
@@ -581,6 +602,167 @@ export function OrgEventRegistrants() {
     rejected: registrants.filter((r) => r.status === 'rejected').length,
   }
 
+  // ── Bulk selection ──────────────────────────────────────────────────────────
+
+  // Only 'pending' rows are actionable: approve_registration_with_capacity returns
+  // invalid_status for anything else, and bulk reject filters on pending server-side.
+  const pendingInView      = filtered.filter((r) => r.status === 'pending')
+  const selectedCount      = selectedIds.size
+  const allInViewSelected  = pendingInView.length > 0 && pendingInView.every((r) => selectedIds.has(r.id))
+  const someInViewSelected = pendingInView.some((r) => selectedIds.has(r.id)) && !allInViewSelected
+
+  const handleToggleSelect = useCallback((regId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(regId)) next.delete(regId)
+      else next.add(regId)
+      return next
+    })
+  }, [])
+
+  const toggleSelectAllInView = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      for (const r of pendingInView) {
+        if (allInViewSelected) next.delete(r.id)
+        else next.add(r.id)
+      }
+      return next
+    })
+  }
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }, [])
+
+  // The selection may only ever hold ids that still exist AND are still pending.
+  // Covers approving one registrant from the detail view while it is selected, a
+  // background refetch, and another officer's action landing on the next load.
+  useEffect(() => {
+    if (selectedIds.size === 0) return
+    const pendingIds = new Set(
+      registrants.filter((r) => r.status === 'pending').map((r) => r.id)
+    )
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((rid) => pendingIds.has(rid)))
+      return next.size === prev.size ? prev : next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registrants])
+
+  // Select mode is registrant-only — Volunteers has its own approve flow.
+  useEffect(() => {
+    if (mainTab !== 'registrants' && selectMode) exitSelectMode()
+  }, [mainTab, selectMode, exitSelectMode])
+
+  // Escape leaves select mode (desktop). Never while a batch is in flight, and
+  // never while the filter menu is open — that Escape belongs to the menu.
+  useEffect(() => {
+    if (!selectMode) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !bulkRunning && !filterMenuOpen) exitSelectMode()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectMode, bulkRunning, filterMenuOpen, exitSelectMode])
+
+  // Escape closes the filter menu; it also closes when the panel is left.
+  useEffect(() => {
+    if (!filterMenuOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFilterMenuOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [filterMenuOpen])
+
+  useEffect(() => {
+    if (mainTab !== 'registrants') setFilterMenuOpen(false)
+  }, [mainTab])
+
+  /** First few selected names, for the confirmation dialog. */
+  const selectedNames = registrants
+    .filter((r) => selectedIds.has(r.id))
+    .map((r) => r.member_name)
+  const namePreview =
+    selectedNames.length <= 3
+      ? selectedNames.join(', ')
+      : `${selectedNames.slice(0, 3).join(', ')} and ${selectedNames.length - 3} more`
+
+  const runBulk = async (action: 'approve' | 'reject') => {
+    if (!id || selectedIds.size === 0) return
+    setBulkRunning(true)
+
+    // ALWAYS oldest-first, regardless of how the list is sorted on screen.
+    // The server approves in the order it receives and stops when the event hits
+    // capacity + no_show_buffer, so this order decides who gets the last seats —
+    // that has to be first-come-first-served, not "whoever the current sort
+    // toggle happens to float to the top". Rejects have no ceiling, so the order
+    // is immaterial there; keeping one path avoids the two drifting apart.
+    // Selections hidden by the current filter/search are still included — they
+    // are still in `registrants`.
+    const registrationIds = [...registrants]
+      .filter((r) => selectedIds.has(r.id) && r.status === 'pending')
+      .sort((a, b) =>
+        new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
+      )
+      .map((r) => r.id)
+
+    try {
+      const res = await apiFetch<BulkRegistrationResult>(
+        `/api/registrations/event/${id}/bulk-${action}`,
+        { method: 'POST', body: JSON.stringify({ registrationIds }) },
+      )
+
+      // Patch from the authoritative `succeeded` list — never assume the whole
+      // selection landed (capacity stop, or a concurrent write beat us to a row).
+      const done = new Set(res.succeeded)
+      const nextStatus = action === 'approve' ? ('approved' as const) : ('rejected' as const)
+      setRegistrants((prev) =>
+        prev.map((r) => (done.has(r.id) ? { ...r, status: nextStatus } : r))
+      )
+      setSelectedIds((prev) => new Set([...prev].filter((rid) => !done.has(rid))))
+
+      const n = res.succeeded.length
+      const noun = `registrant${n === 1 ? '' : 's'}`
+
+      if (action === 'approve') {
+        if (res.stoppedReason === 'capacity_full') {
+          toast.warning(
+            `Approved ${n} of ${res.requested} — event is full. ${res.skipped.length} left pending.`,
+            { description: 'No approval emails were sent.' },
+          )
+        } else if (n > 0) {
+          toast.success(`${n} ${noun} approved`, {
+            description: 'No approval emails were sent — use Announce to notify them.',
+            action: { label: 'Announce', onClick: () => setShowAnnounce(true) },
+          })
+        } else {
+          toast.error('Nothing was approved.')
+        }
+        if (n > 0) setLastBulkApproved(n)
+      } else if (n > 0) {
+        toast.success(`${n} ${noun} rejected`)
+      } else {
+        toast.error('Nothing was rejected.')
+      }
+
+      if (res.failed.length > 0) {
+        toast.error(`${res.failed.length} could not be updated — they may have changed status.`)
+      }
+      // Clean batch → drop out of select mode. Partial → stay, so the organizer
+      // can see what was left behind and retry.
+      if (res.failed.length === 0 && res.skipped.length === 0) exitSelectMode()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Bulk action failed.')
+    } finally {
+      setBulkRunning(false)
+      setBulkAction(null)
+      void refreshCapacity() // ONCE for the whole batch — not per row
+    }
+  }
+
   const sortedVolunteers = [...volunteers].sort((a, b) => {
     const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     return volunteerSortOrder === 'asc' ? diff : -diff
@@ -600,24 +782,31 @@ export function OrgEventRegistrants() {
             backgroundRepeat: 'repeat'
           }}
         >
-          {/* Header Row: Title + Icons */}
-          <div className="relative z-10 px-4 pb-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          {/* Header Row: Title + Icons. The event title sits inside the title
+              block (not on its own indented row) so it stays aligned with
+              "Attendees" and truncates instead of pushing the header taller. */}
+          <div className="relative z-10 px-4 pb-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
               <button
                 onClick={() => navigate(-1)}
                 className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center active:bg-white/40 transition-colors shadow-sm shrink-0"
               >
                 <ArrowLeftOutline className="w-5 h-5" color="white" />
               </button>
-              <h1 className="text-white text-[24px] font-semibold font-proxima leading-none tracking-tight">
-                Attendees
-              </h1>
+              <div className="min-w-0">
+                <h1 className="text-white text-[24px] font-semibold font-proxima leading-none tracking-tight truncate">
+                  Attendees
+                </h1>
+                <p className="text-white/70 text-[13px] font-proxima truncate leading-none mt-1">
+                  {event?.title ?? 'Event'}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               {mainTab === 'registrants' && filtered.length > 0 && (
                 <button
                   onClick={handleExportCsv}
-                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                  className="bg-white/20 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5
                              text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
                 >
                   <DownloadOutline className="w-3.5 h-3.5" color="white" />
@@ -627,7 +816,7 @@ export function OrgEventRegistrants() {
               {event && (
                 <button
                   onClick={() => setShowAnnounce(true)}
-                  className="bg-white/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5
+                  className="bg-white/20 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5
                              text-white text-md3-label-md font-bold active:bg-white/30 transition-colors shrink-0"
                 >
                   <UserSpeakOutline className="w-3.5 h-3.5" color="white" />
@@ -635,11 +824,6 @@ export function OrgEventRegistrants() {
                 </button>
               )}
             </div>
-          </div>
-          <div className="px-[76px] pb-4">
-            <p className="text-white/70 text-[13px] font-proxima truncate leading-none">
-              {event?.title ?? 'Event'}
-            </p>
           </div>
         </div>
       </header>
@@ -651,13 +835,13 @@ export function OrgEventRegistrants() {
         animate="visible"
       >
         {/* Main tab switcher: Registrants | Volunteers, + Manage Event shortcut */}
-        <motion.div variants={fadeUp} className="flex items-center justify-between gap-2 mb-5">
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+        <motion.div variants={fadeUp} className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl min-w-0">
             {(['registrants', 'volunteers'] as MainTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setMainTab(tab)}
-                className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize flex items-center gap-1.5 whitespace-nowrap ${
                   mainTab === tab
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'
@@ -672,10 +856,10 @@ export function OrgEventRegistrants() {
           {event && (
             <button
               onClick={handleManageEvent}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue/30 text-blue text-md3-body-md font-bold hover:bg-blue/5 transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-blue/30 text-blue text-md3-body-md font-bold hover:bg-blue/5 transition-colors shrink-0 whitespace-nowrap"
             >
               <PenOutline className="w-3.5 h-3.5" />
-              Manage Event
+              Manage<span className="hidden sm:inline"> Event</span>
             </button>
           )}
         </motion.div>
@@ -773,6 +957,36 @@ export function OrgEventRegistrants() {
                 </motion.div>
               )}
 
+              {/*
+                Durable counterpart to the post-bulk toast. Bulk approvals send no
+                email (the send-email edge function caps at 30/user/min and drops
+                the rest silently), so nudge the organizer toward one announcement.
+              */}
+              {lastBulkApproved > 0 && (
+                <motion.div
+                  variants={fadeUp}
+                  className="mb-4 rounded-xl border border-blue/30 bg-blue/5 p-3 flex items-center gap-3"
+                >
+                  <UserSpeakOutline size={16} color="#1152D4" />
+                  <p className="flex-1 text-md3-label-md text-slate-700">
+                    {lastBulkApproved} approved without emails. Send one announcement so they all know.
+                  </p>
+                  <button
+                    onClick={() => { setShowAnnounce(true); setLastBulkApproved(0) }}
+                    className="text-md3-label-md font-bold text-blue shrink-0"
+                  >
+                    Announce
+                  </button>
+                  <button
+                    onClick={() => setLastBulkApproved(0)}
+                    aria-label="Dismiss the announcement reminder"
+                    className="shrink-0"
+                  >
+                    <CloseCircleOutline size={16} color="#94A3B8" />
+                  </button>
+                </motion.div>
+              )}
+
               {/* Search by name, email, or school/company */}
               <div className="relative mb-4">
                 <MagniferOutline color="#94A3B8" width={16} height={16} className="absolute left-3 top-1/2 -translate-y-1/2" />
@@ -785,36 +999,177 @@ export function OrgEventRegistrants() {
                 />
               </div>
 
-              {/* Status filter sub-tabs + sort order toggle */}
-              <div className="flex items-start justify-between gap-2 mb-5">
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
-                  {(['all', 'pending', 'approved', 'rejected'] as FilterStatus[]).map((f) => (
+              {/*
+                Status filters + sort/select controls, one fixed-height row.
+                On mobile the four statuses collapse into a single pill + menu —
+                four chips alongside Sort and Select overflowed at 390px and read
+                as a wall of pills. From md up there is room, so the chips show
+                inline. White-outlined chip variant per the design system —
+                `blue` on the organizer surface, not `primary`.
+              */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex-1 min-w-0 flex items-center">
+                  {/* Mobile: collapsed status filter */}
+                  <div className="relative md:hidden">
                     <button
-                      key={f}
-                      onClick={() => setFilter(f)}
-                      className={`px-4 py-1.5 rounded-lg text-md3-body-md font-semibold transition-colors capitalize ${
-                        filter === f
-                          ? 'bg-white text-slate-900 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                      onClick={() => setFilterMenuOpen((open) => !open)}
+                      aria-haspopup="listbox"
+                      aria-expanded={filterMenuOpen}
+                      aria-label={`Filter by status — ${FILTER_OPTIONS.find((o) => o.id === filter)?.label}`}
+                      className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 pl-3 pr-2.5 h-[30px] rounded-full border text-[12px] font-proxima transition-colors ${
+                        filter === 'all'
+                          ? 'bg-white text-slate-500 font-medium border-slate-200'
+                          : 'bg-white text-blue font-semibold border-blue'
                       }`}
                     >
-                      {f} ({counts[f]})
+                      <FilterOutline size={14} color={filter === 'all' ? '#64748B' : '#1152D4'} />
+                      {FILTER_OPTIONS.find((o) => o.id === filter)?.label} ({counts[filter]})
+                      <AltArrowDownOutline
+                        size={12}
+                        color={filter === 'all' ? '#94A3B8' : '#1152D4'}
+                        className={`transition-transform ${filterMenuOpen ? 'rotate-180' : ''}`}
+                      />
                     </button>
-                  ))}
+
+                    <AnimatePresence>
+                      {filterMenuOpen && (
+                        <>
+                          {/* Click-away catcher — sits under the menu, over the page */}
+                          <div
+                            aria-hidden="true"
+                            className="fixed inset-0 z-40"
+                            onClick={() => setFilterMenuOpen(false)}
+                          />
+                          <motion.div
+                            role="listbox"
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute left-0 top-full mt-2 z-50 w-48 bg-white rounded-2xl border border-slate-200 shadow-card p-1"
+                          >
+                            {FILTER_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.id}
+                                role="option"
+                                aria-selected={filter === opt.id}
+                                onClick={() => { setFilter(opt.id); setFilterMenuOpen(false) }}
+                                className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-[13px] font-proxima transition-colors ${
+                                  filter === opt.id
+                                    ? 'bg-blue/5 text-blue font-semibold'
+                                    : 'text-slate-700 font-medium hover:bg-slate-50'
+                                }`}
+                              >
+                                {opt.label}
+                                <span className="flex items-center gap-2 shrink-0">
+                                  <span className={`text-[11px] font-bold ${filter === opt.id ? 'text-blue' : 'text-slate-400'}`}>
+                                    {counts[opt.id]}
+                                  </span>
+                                  {filter === opt.id && <CheckCircleOutline size={14} color="#1152D4" />}
+                                </span>
+                              </button>
+                            ))}
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* md+: the same statuses inline */}
+                  <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar w-full">
+                    {FILTER_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setFilter(opt.id)}
+                        className={`shrink-0 whitespace-nowrap px-3.5 h-[30px] flex items-center rounded-full border text-[12px] font-proxima transition-colors ${
+                          filter === opt.id
+                            ? 'bg-white text-blue font-semibold border-blue'
+                            : 'bg-white text-slate-500 font-medium border-slate-200'
+                        }`}
+                      >
+                        {opt.label} ({counts[opt.id]})
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <button
-                  onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
-                  title={sortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
-                  className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
-                >
-                  {sortOrder === 'desc' ? (
-                    <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
-                  ) : (
-                    <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+                    title={sortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
+                    className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-[30px] rounded-full border border-slate-200 bg-white text-[12px] font-proxima font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    {sortOrder === 'desc' ? (
+                      <SortFromTopToBottomOutline className="w-3.5 h-3.5" color="#64748B" />
+                    ) : (
+                      <SortFromBottomToTopOutline className="w-3.5 h-3.5" color="#64748B" />
+                    )}
+                    {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
+                  </button>
+                  {/* `|| selectMode` keeps Cancel reachable if the last pending
+                      row is approved (here or by another officer) mid-selection. */}
+                  {(counts.pending > 0 || selectMode) && (
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                      onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                      aria-pressed={selectMode}
+                      className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-[30px] rounded-full border text-[12px] font-proxima font-semibold transition-colors ${
+                        selectMode
+                          ? 'bg-blue text-white border-blue shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {selectMode ? (
+                        <CloseCircleOutline size={14} color="#FFFFFF" />
+                      ) : (
+                        <CheckCircleOutline size={14} color="#64748B" />
+                      )}
+                      {selectMode ? 'Cancel' : 'Select'}
+                    </motion.button>
                   )}
-                  {sortOrder === 'desc' ? 'Newest' : 'Oldest'}
-                </button>
+                </div>
               </div>
+
+              {/* Bulk select-all bar — only in select mode */}
+              <AnimatePresence initial={false}>
+                {selectMode && (
+                  <motion.div
+                    variants={fadeUp}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="flex items-center justify-between gap-3 mb-4 px-3 py-2.5 bg-white rounded-xl border border-blue/30"
+                  >
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none min-w-0">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 shrink-0 accent-[#1152D4] cursor-pointer"
+                        checked={allInViewSelected}
+                        disabled={pendingInView.length === 0}
+                        // Block body required — an implicit return is typed as a
+                        // cleanup function under React 19 and fails `tsc -b`.
+                        ref={(el) => {
+                          if (el) el.indeterminate = someInViewSelected
+                        }}
+                        onChange={toggleSelectAllInView}
+                      />
+                      <span className="text-md3-body-md font-semibold text-slate-700 truncate">
+                        {pendingInView.length === 0
+                          ? 'No pending registrants in this view'
+                          : `Select all pending in view (${pendingInView.length})`}
+                      </span>
+                    </label>
+                    {selectedCount > 0 && (
+                      <button
+                        onClick={() => setSelectedIds(new Set())}
+                        className="text-md3-label-md font-bold text-blue shrink-0"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {isLoading ? (
                 <div className="space-y-3">
@@ -879,12 +1234,54 @@ export function OrgEventRegistrants() {
                             registration={reg}
                             onClick={() => setSelectedRegistrant(reg)}
                             mailtoHref={getMailtoUrl(reg)}
+                            selectable={selectMode && reg.status === 'pending'}
+                            selected={selectedIds.has(reg.id)}
+                            onToggleSelect={handleToggleSelect}
                           />
                         </motion.div>
                       ))}
                     </motion.div>
                   )}
                 </AnimatePresence>
+              )}
+
+              {/*
+                Bulk action bar. `sticky`, not `fixed`: this panel is a motion.div
+                running `fadeUp`, and a transformed ancestor re-parents fixed
+                positioning. Sticky also scopes itself to whichever scroll
+                container is active (organizer mobile / desktop card / admin main)
+                with no per-layout offset math. bottom-24 clears the mobile
+                floating pill nav; there is no nav on md+.
+              */}
+              {selectMode && (
+                <div className="sticky bottom-24 md:bottom-4 z-40 mt-4">
+                  <div className="bg-white/95 backdrop-blur border border-slate-200 shadow-card rounded-2xl p-3 flex items-center gap-2">
+                    <p className="text-md3-label-md font-bold text-slate-700 pl-1 shrink-0" aria-live="polite">
+                      {selectedCount} selected
+                    </p>
+                    <div className="flex-1" />
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                      disabled={selectedCount === 0 || bulkRunning}
+                      onClick={() => setBulkAction('reject')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red/30 text-red text-md3-label-lg font-bold disabled:opacity-40"
+                    >
+                      <CloseCircleOutline size={14} color="#EF4444" />
+                      Reject
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                      disabled={selectedCount === 0 || bulkRunning}
+                      onClick={() => setBulkAction('approve')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue text-white text-md3-label-lg font-bold disabled:opacity-40"
+                    >
+                      <CheckCircleOutline size={14} color="#FFFFFF" />
+                      Approve
+                    </motion.button>
+                  </div>
+                </div>
               )}
             </motion.div>
           ) : (
@@ -900,12 +1297,12 @@ export function OrgEventRegistrants() {
                   <button
                     onClick={() => setVolunteerSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
                     title={volunteerSortOrder === 'desc' ? 'Newest first — click for oldest first' : 'Oldest first — click for newest first'}
-                    className="flex items-center gap-1.5 bg-slate-100 p-1 pl-2.5 pr-3 rounded-xl text-md3-body-md font-semibold text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                    className="shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-[30px] rounded-full border border-slate-200 bg-white text-[12px] font-proxima font-medium text-slate-500 hover:text-slate-700 transition-colors"
                   >
                     {volunteerSortOrder === 'desc' ? (
-                      <SortFromTopToBottomOutline className="w-4 h-4" color="#64748B" />
+                      <SortFromTopToBottomOutline className="w-3.5 h-3.5" color="#64748B" />
                     ) : (
-                      <SortFromBottomToTopOutline className="w-4 h-4" color="#64748B" />
+                      <SortFromBottomToTopOutline className="w-3.5 h-3.5" color="#64748B" />
                     )}
                     {volunteerSortOrder === 'desc' ? 'Newest' : 'Oldest'}
                   </button>
@@ -999,6 +1396,32 @@ export function OrgEventRegistrants() {
           eventTitle={event.title}
           isOpen={showAnnounce}
           onClose={() => setShowAnnounce(false)}
+        />
+      )}
+
+      {/*
+        Mandatory confirmation before any bulk write. The action-bar buttons only
+        set `bulkAction` — there is no path from a single tap to an approval. Past
+        25 people the dialog also demands an explicit acknowledgement tick.
+      */}
+      {bulkAction && (
+        <ConfirmDialog
+          title={`${bulkAction === 'approve' ? 'Approve' : 'Reject'} ${selectedCount} registrant${selectedCount === 1 ? '' : 's'}?`}
+          message={
+            bulkAction === 'approve'
+              ? `${namePreview} will be approved and get their QR ticket.`
+              : `${namePreview} will be marked rejected. You can revert later.`
+          }
+          acknowledgement={
+            selectedCount >= 25
+              ? `I understand this ${bulkAction === 'approve' ? 'approves' : 'rejects'} ${selectedCount} people`
+              : undefined
+          }
+          confirmLabel={`${bulkAction === 'approve' ? 'Approve' : 'Reject'} ${selectedCount}`}
+          tone={bulkAction === 'approve' ? 'primary' : 'danger'}
+          loading={bulkRunning}
+          onConfirm={() => void runBulk(bulkAction)}
+          onCancel={() => { if (!bulkRunning) setBulkAction(null) }}
         />
       )}
 
