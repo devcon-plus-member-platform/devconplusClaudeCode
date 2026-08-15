@@ -41,6 +41,10 @@ function makeRepo(eventChapterId: string | null = CH_1) {
     findRegistrationEventId:   jest.fn().mockResolvedValue(EVENT_ID),
     approveRegistration:       jest.fn().mockResolvedValue({ success: true }),
     rejectRegistration:        jest.fn().mockResolvedValue(undefined),
+    // Bulk helpers. Default: every id asked about is a pending row of this event,
+    // and every reject lands — individual tests override to model the edge cases.
+    findEventRegistrationStatuses: jest.fn().mockResolvedValue([{ id: REG_ID, status: 'pending' }]),
+    rejectRegistrationsInEvent:    jest.fn().mockImplementation((_e: string, ids: string[]) => Promise.resolve([...ids])),
     revertRegistration:        jest.fn().mockResolvedValue(undefined),
     manualCheckin:             jest.fn().mockResolvedValue({ success: true, member_name: 'Juan', points_awarded: 200 }),
   } as unknown as jest.Mocked<RegistrationsRepository>;
@@ -158,6 +162,146 @@ describe('RegistrationsService', () => {
       service = new RegistrationsService(repo);
       await service.approveRegistration(admin, REG_ID);
       expect(repo.approveRegistration).toHaveBeenCalled();
+    });
+  });
+
+  // ── Organizer: bulk actions ───────────────────────────────────────────────
+
+  describe('bulkApprove', () => {
+    const IDS = ['r1', 'r2', 'r3'];
+    const allPending = IDS.map((id) => ({ id, status: 'pending' }));
+
+    beforeEach(() => {
+      repo.findEventRegistrationStatuses.mockResolvedValue(allPending);
+    });
+
+    it('runs ONE chapter-scope check for the whole batch', async () => {
+      await service.bulkApprove(officer1, EVENT_ID, IDS);
+      expect(repo.findEventChapterScope).toHaveBeenCalledTimes(1);
+      expect(repo.findRegistrationEventId).not.toHaveBeenCalled();
+    });
+
+    it('SECURITY: drops ids that do not belong to the scoped event', async () => {
+      repo.findEventRegistrationStatuses.mockResolvedValue([{ id: 'r1', status: 'pending' }]);
+      const result = await service.bulkApprove(officer1, EVENT_ID, ['r1', 'foreign-reg']);
+
+      expect(repo.approveRegistration).toHaveBeenCalledTimes(1);
+      expect(repo.approveRegistration).toHaveBeenCalledWith('r1', 'officer-1');
+      expect(result.failed).toContainEqual({ id: 'foreign-reg', reason: 'not_in_event' });
+    });
+
+    it('throws ForbiddenException for an officer in another chapter, before any write', async () => {
+      repo = makeRepo(CH_1);
+      service = new RegistrationsService(repo);
+      await expect(service.bulkApprove(officer2, EVENT_ID, IDS)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repo.approveRegistration).not.toHaveBeenCalled();
+    });
+
+    it('approves in the order given', async () => {
+      await service.bulkApprove(officer1, EVENT_ID, ['r3', 'r1', 'r2']);
+      expect(repo.approveRegistration.mock.calls.map((c) => c[0])).toEqual(['r3', 'r1', 'r2']);
+    });
+
+    it('stops at capacity_full and reports the remainder as skipped', async () => {
+      repo.approveRegistration
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({ success: false, error: 'capacity_full' });
+
+      const result = await service.bulkApprove(officer1, EVENT_ID, IDS);
+
+      expect(result.succeeded).toEqual(['r1']);
+      expect(result.stoppedReason).toBe('capacity_full');
+      expect(result.skipped).toEqual(['r2', 'r3']);
+      // r3 is never attempted — no point burning a round trip on a full event.
+      expect(repo.approveRegistration).toHaveBeenCalledTimes(2);
+    });
+
+    it('does NOT roll back rows already approved when capacity fills', async () => {
+      repo.approveRegistration
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({ success: false, error: 'capacity_full' });
+
+      await service.bulkApprove(officer1, EVENT_ID, IDS);
+
+      expect(repo.revertRegistration).not.toHaveBeenCalled();
+      expect(repo.rejectRegistration).not.toHaveBeenCalled();
+      expect(repo.rejectRegistrationsInEvent).not.toHaveBeenCalled();
+    });
+
+    it('keeps going when a single row returns invalid_status', async () => {
+      repo.approveRegistration
+        .mockResolvedValueOnce({ success: false, error: 'invalid_status' })
+        .mockResolvedValue({ success: true });
+
+      const result = await service.bulkApprove(officer1, EVENT_ID, IDS);
+
+      expect(result.succeeded).toEqual(['r2', 'r3']);
+      expect(result.failed).toEqual([{ id: 'r1', reason: 'invalid_status' }]);
+      expect(result.stoppedReason).toBeNull();
+    });
+
+    it('never calls the RPC for a non-pending row', async () => {
+      repo.findEventRegistrationStatuses.mockResolvedValue([{ id: 'r1', status: 'approved' }]);
+      const result = await service.bulkApprove(officer1, EVENT_ID, ['r1']);
+
+      expect(repo.approveRegistration).not.toHaveBeenCalled();
+      expect(result.failed).toEqual([{ id: 'r1', reason: 'invalid_status' }]);
+    });
+
+    it('de-dupes repeated ids', async () => {
+      await service.bulkApprove(officer1, EVENT_ID, ['r1', 'r1', 'r2']);
+      expect(repo.approveRegistration).toHaveBeenCalledTimes(2);
+    });
+
+    it('passes the organizer id from the token, never from the caller payload', async () => {
+      await service.bulkApprove(officer1, EVENT_ID, ['r1']);
+      expect(repo.approveRegistration).toHaveBeenCalledWith('r1', 'officer-1');
+    });
+
+    it('hq_admin bypasses chapter scope', async () => {
+      repo = makeRepo(CH_2);
+      repo.findEventRegistrationStatuses.mockResolvedValue(allPending);
+      service = new RegistrationsService(repo);
+      await service.bulkApprove(admin, EVENT_ID, IDS);
+      expect(repo.approveRegistration).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('bulkReject', () => {
+    const IDS = ['r1', 'r2'];
+
+    beforeEach(() => {
+      repo.findEventRegistrationStatuses.mockResolvedValue(
+        IDS.map((id) => ({ id, status: 'pending' })),
+      );
+    });
+
+    it('issues a single scoped UPDATE for the whole batch', async () => {
+      const result = await service.bulkReject(officer1, EVENT_ID, IDS);
+      expect(repo.rejectRegistrationsInEvent).toHaveBeenCalledTimes(1);
+      expect(repo.rejectRegistrationsInEvent).toHaveBeenCalledWith(EVENT_ID, IDS);
+      expect(result.succeeded).toEqual(IDS);
+    });
+
+    it('reports ids the UPDATE did not touch as invalid_status', async () => {
+      repo.rejectRegistrationsInEvent.mockResolvedValue(['r1']);
+      const result = await service.bulkReject(officer1, EVENT_ID, IDS);
+      expect(result.succeeded).toEqual(['r1']);
+      expect(result.failed).toEqual([{ id: 'r2', reason: 'invalid_status' }]);
+    });
+
+    it('SECURITY: foreign ids never reach the repo', async () => {
+      repo.findEventRegistrationStatuses.mockResolvedValue([{ id: 'r1', status: 'pending' }]);
+      const result = await service.bulkReject(officer1, EVENT_ID, ['r1', 'foreign-reg']);
+      expect(repo.rejectRegistrationsInEvent).toHaveBeenCalledWith(EVENT_ID, ['r1']);
+      expect(result.failed).toContainEqual({ id: 'foreign-reg', reason: 'not_in_event' });
+    });
+
+    it('throws ForbiddenException for an officer in another chapter, before any write', async () => {
+      repo = makeRepo(CH_1);
+      service = new RegistrationsService(repo);
+      await expect(service.bulkReject(officer2, EVENT_ID, IDS)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repo.rejectRegistrationsInEvent).not.toHaveBeenCalled();
     });
   });
 

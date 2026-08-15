@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 
 interface Props {
@@ -10,6 +11,12 @@ interface Props {
   tone?: 'danger' | 'primary'
   /** Disables both buttons and shows a working label while an async action runs. */
   loading?: boolean
+  /**
+   * When set, renders a required checkbox with this label and keeps the confirm
+   * button disabled until it is ticked. For actions whose blast radius warrants
+   * a deliberate second beat — e.g. approving 40+ registrants in one tap.
+   */
+  acknowledgement?: string
   onConfirm: () => void
   onCancel: () => void
 }
@@ -27,9 +34,13 @@ export default function ConfirmDialog({
   cancelLabel = 'Cancel',
   tone = 'danger',
   loading = false,
+  acknowledgement,
   onConfirm,
   onCancel,
 }: Props) {
+  const [acknowledged, setAcknowledged] = useState(false)
+  const confirmBlocked = loading || (Boolean(acknowledgement) && !acknowledged)
+
   return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4"
@@ -41,6 +52,18 @@ export default function ConfirmDialog({
       >
         <p className="text-md3-body-md text-slate-700 mb-1 font-semibold">{title}</p>
         {message && <p className="text-md3-label-md text-slate-400 mb-5">{message}</p>}
+        {acknowledgement && (
+          <label className="flex items-start gap-2.5 mb-5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              disabled={loading}
+              className="w-4 h-4 mt-0.5 shrink-0 accent-[#1152D4] cursor-pointer"
+            />
+            <span className="text-md3-label-md text-slate-700 font-semibold">{acknowledgement}</span>
+          </label>
+        )}
         <div className="flex gap-2">
           <button
             onClick={onCancel}
@@ -51,7 +74,7 @@ export default function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading}
+            disabled={confirmBlocked}
             className={`flex-1 py-2 text-white rounded-xl text-md3-body-md font-bold transition-opacity disabled:opacity-60 ${
               tone === 'danger' ? 'bg-red hover:opacity-90' : 'bg-blue hover:bg-blue-dark'
             }`}

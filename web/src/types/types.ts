@@ -152,6 +152,27 @@ export interface EventCapacitySummary {
   is_full: boolean
 }
 
+/**
+ * Outcome of a bulk approve/reject on the organizer registrants screen.
+ *
+ * Hand-mirrored from `BulkRegistrationResult` in
+ * `server/src/registrations/registrations.service.ts` — `@devcon-plus/supabase`
+ * is a path alias to this folder, not a package shared with the server, so the
+ * two must be kept in sync manually.
+ */
+export interface BulkRegistrationResult {
+  /** How many ids the client sent, before de-duping. */
+  requested: number
+  /** Ids whose status actually changed. */
+  succeeded: string[]
+  /** Ids refused before or at the write: `not_in_event` | `invalid_status` | an RPC error. */
+  failed: { id: string; reason: string }[]
+  /** Ids never attempted because the batch stopped early. */
+  skipped: string[]
+  /** Why the batch stopped early, if it did. */
+  stoppedReason: 'capacity_full' | null
+}
+
 export interface EventRegistration {
   id: string
   event_id: string

@@ -16,6 +16,14 @@ const mockOfficer: AuthenticatedUser = { firebaseUid: 'fb-o', profileId: 'office
 
 const mockReg: Partial<Registration> = { id: REG_ID, event_id: EVENT_ID, status: 'pending' };
 
+const bulkResult = {
+  requested: 2,
+  succeeded: ['r1', 'r2'],
+  failed: [],
+  skipped: [],
+  stoppedReason: null,
+};
+
 function makeService() {
   return {
     getMyRegistrations: jest.fn().mockResolvedValue([mockReg]),
@@ -26,6 +34,8 @@ function makeService() {
     rejectRegistration: jest.fn().mockResolvedValue(undefined),
     revertRegistration: jest.fn().mockResolvedValue(undefined),
     manualCheckin:      jest.fn().mockResolvedValue({ success: true, member_name: 'Juan', points_awarded: 200 }),
+    bulkApprove:        jest.fn().mockResolvedValue(bulkResult),
+    bulkReject:         jest.fn().mockResolvedValue(bulkResult),
   };
 }
 
@@ -83,6 +93,19 @@ describe('RegistrationsController', () => {
   it('revertRegistration — organizerId from token', async () => {
     await controller.revertRegistration(mockOfficer, { id: REG_ID });
     expect(service.revertRegistration).toHaveBeenCalledWith(mockOfficer, REG_ID);
+  });
+
+  it('bulkApprove — eventId from param, ids from body, organizer from token', async () => {
+    const result = await controller.bulkApprove(mockOfficer, { id: EVENT_ID }, {
+      registrationIds: ['r1', 'r2'],
+    });
+    expect(service.bulkApprove).toHaveBeenCalledWith(mockOfficer, EVENT_ID, ['r1', 'r2']);
+    expect(result).toEqual(bulkResult);
+  });
+
+  it('bulkReject — eventId from param, ids from body, organizer from token', async () => {
+    await controller.bulkReject(mockOfficer, { id: EVENT_ID }, { registrationIds: ['r1', 'r2'] });
+    expect(service.bulkReject).toHaveBeenCalledWith(mockOfficer, EVENT_ID, ['r1', 'r2']);
   });
 
   it('manualCheckin — organizerId from token (never from body)', async () => {
