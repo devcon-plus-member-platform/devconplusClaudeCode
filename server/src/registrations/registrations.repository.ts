@@ -185,6 +185,51 @@ export class RegistrationsRepository extends BaseRepository {
     return (data?.event_id ?? null) as string | null;
   }
 
+  /**
+   * Every registration id + status for an event.
+   *
+   * Deliberately NOT filtered with `.in('id', ids)` — 200 UUIDs inline is ~7.4 KB
+   * of query string and risks PostgREST/nginx header limits. An event tops out at
+   * a few hundred rows, so one unfiltered read is both cheaper and safer.
+   */
+  async findEventRegistrationStatuses(
+    eventId: string,
+  ): Promise<{ id: string; status: string }[]> {
+    const { data, error } = await this.db
+      .from('event_registrations')
+      .select('id, status')
+      .eq('event_id', eventId);
+    if (error) throw new BadRequestException(error.message);
+    return (data ?? []) as { id: string; status: string }[];
+  }
+
+  /**
+   * Rejects only PENDING rows belonging to `eventId`.
+   *
+   * The `event_id` filter is defence-in-depth behind the service-level scope check
+   * — never drop it. The `status = 'pending'` filter is what makes it impossible
+   * for a mistaken bulk action to un-approve confirmed attendees.
+   *
+   * `.select('id')` returns the ids actually updated (PostgREST returns no rows
+   * without it) so the caller can report partial success. Chunked at 50 to keep
+   * the `in.(...)` query string small.
+   */
+  async rejectRegistrationsInEvent(eventId: string, regIds: string[]): Promise<string[]> {
+    const updated: string[] = [];
+    for (let i = 0; i < regIds.length; i += 50) {
+      const { data, error } = await this.db
+        .from('event_registrations')
+        .update({ status: 'rejected' })
+        .eq('event_id', eventId)
+        .eq('status', 'pending')
+        .in('id', regIds.slice(i, i + 50))
+        .select('id');
+      if (error) throw new BadRequestException(error.message);
+      updated.push(...(data ?? []).map((r) => (r as { id: string }).id));
+    }
+    return updated;
+  }
+
   async approveRegistration(
     regId: string,
     organizerId: string,
