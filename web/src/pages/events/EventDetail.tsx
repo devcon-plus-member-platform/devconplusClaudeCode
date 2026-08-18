@@ -99,6 +99,22 @@ export default function EventDetail() {
 
   if (!event) return null
 
+  // Back navigation. When the page was opened in a new tab (admin "view live event
+  // page", a shared link, a direct URL) there is no in-app history entry to pop —
+  // React Router's history index is still 0 — so navigate(-1) silently does nothing.
+  // Fall back to the list the visitor most likely came from, based on their role.
+  const handleBack = () => {
+    const historyIdx = (window.history.state as { idx?: number } | null)?.idx
+    if (typeof historyIdx === 'number' && historyIdx > 0) {
+      navigate(-1)
+      return
+    }
+    const role = user?.role
+    if (role === 'hq_admin' || role === 'super_admin') navigate('/admin/events', { replace: true })
+    else if (role === 'chapter_officer') navigate('/organizer/events', { replace: true })
+    else navigate('/events', { replace: true })
+  }
+
   const handleShare = async () => {
     const url = window.location.href
     if ('share' in navigator) {
@@ -154,7 +170,7 @@ export default function EventDetail() {
       {/* Floating back + share buttons */}
       <div className="fixed md:absolute top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 pt-12 pointer-events-none">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center active:bg-white/40 transition-colors shadow-lg pointer-events-auto"
         >
           <ArrowLeftOutline className="w-5 h-5" color="white" />

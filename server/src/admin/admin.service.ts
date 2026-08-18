@@ -4,8 +4,9 @@ import { AppCacheService } from '../cache/app-cache.service';
 import { CacheKeys } from '../cache/cache-keys';
 import { EmailService } from '../email/email.service';
 import type { AdminAnalytics, PointTransaction, Profile, ProfileRole } from '../supabase/types';
-import { AdminRepository, type AttendanceExportRow } from './admin.repository';
+import { AdminRepository, type AttendanceExportRow, type UserRoleCounts } from './admin.repository';
 import type { ExportAttendanceQueryDto } from './dto/export-attendance-query.dto';
+import type { ListUsersQueryDto } from './dto/list-users-query.dto';
 
 @Injectable()
 export class AdminService {
@@ -16,8 +17,22 @@ export class AdminService {
     private readonly config: ConfigService,
   ) {}
 
-  getUsers(): Promise<Profile[]> {
-    return this.repo.findAllUsers();
+  /**
+   * One page of profiles plus the counts the Users tab needs.
+   *
+   * `total` counts every row matching the search/role filter (not just the ones
+   * returned) so the table can paginate, and `roleCounts` is counted in Postgres
+   * over the whole table so the filter pills stay exact no matter how few rows
+   * this page happens to carry.
+   */
+  async getUsers(
+    query: ListUsersQueryDto,
+  ): Promise<{ rows: Profile[]; total: number; roleCounts: UserRoleCounts }> {
+    const [{ rows, total }, roleCounts] = await Promise.all([
+      this.repo.findUsers(query),
+      this.repo.countUsersByRole(),
+    ]);
+    return { rows, total, roleCounts };
   }
 
   getUserTransactions(userId: string): Promise<PointTransaction[]> {

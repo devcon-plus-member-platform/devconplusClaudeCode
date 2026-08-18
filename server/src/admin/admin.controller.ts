@@ -7,6 +7,7 @@ import { IdParamDto } from '../common/dto/id-param.dto';
 import { AdminService } from './admin.service';
 import { ExportAttendanceQueryDto } from './dto/export-attendance-query.dto';
 import { InviteOfficerDto } from './dto/invite-officer.dto';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Controller('admin')
@@ -15,10 +16,13 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 export class AdminController {
   constructor(private readonly service: AdminService) {}
 
-  /** GET /api/admin/users — hq_admin+: all profiles */
+  /**
+   * GET /api/admin/users — hq_admin+: a page of profiles, the total match count,
+   * and exact per-role counts. Omit `pageSize` to get every match.
+   */
   @Get('users')
-  getUsers() {
-    return this.service.getUsers();
+  getUsers(@Query() query: ListUsersQueryDto) {
+    return this.service.getUsers(query);
   }
 
   /** GET /api/admin/users/:id/transactions — hq_admin+: recent point tx for a user */

@@ -139,6 +139,13 @@ export interface ChapterStat {
   chapter: string;
   members: number;
   xp: number;
+  /**
+   * True only for the synthetic "Unassigned" bucket, which carries the members
+   * whose chapter_id is NULL or points at a chapter row that no longer exists.
+   * Their XP counts toward xpDistributed, so without this bucket the chart's
+   * bars could never add up to the KPI above it.
+   */
+  isUnassigned?: boolean;
 }
 
 export interface AdminAnalytics {
