@@ -44,8 +44,8 @@ describe('AdminController', () => {
   });
 
   it('getUsers — delegates to service', async () => {
-    await controller.getUsers();
-    expect(service.getUsers).toHaveBeenCalled();
+    await controller.getUsers({ page: 1, pageSize: 10 });
+    expect(service.getUsers).toHaveBeenCalledWith({ page: 1, pageSize: 10 });
   });
 
   it('getUserTransactions — passes id param to service', async () => {

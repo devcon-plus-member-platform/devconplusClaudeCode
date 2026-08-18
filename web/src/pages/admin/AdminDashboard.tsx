@@ -6,6 +6,7 @@ import {
   Area,
   BarChart,
   Bar,
+  Cell,
   LineChart,
   Line,
   XAxis,
@@ -29,7 +30,9 @@ interface KpiData {
 }
 
 interface GrowthRow { month: string; count: number }
-interface ChapterStat { chapter: string; members: number; xp: number }
+// isUnassigned marks the synthetic bucket for members with no chapter — their XP
+// is inside the "XP Distributed" KPI, so it needs a bar or the two disagree.
+interface ChapterStat { chapter: string; members: number; xp: number; isUnassigned?: boolean }
 interface AttendanceRow { event: string; attendance: number }
 
 type ChapterMetric = 'members' | 'xp'
@@ -181,6 +184,7 @@ export default function AdminDashboard() {
 
   // "Top Chapters" chart: every chapter, ranked by the toggled metric.
   const topChapters = [...chapterStats].sort((a, b) => b[chapterMetric] - a[chapterMetric])
+  const unassignedChapter = chapterStats.find((c) => c.isUnassigned)
   // Grow both charts vertically so no chapter label is dropped.
   const chapterChartHeight = Math.max(CHART_MIN_HEIGHT, chapterStats.length * CHAPTER_BAR_HEIGHT)
 
@@ -299,13 +303,29 @@ export default function AdminDashboard() {
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
               <YAxis dataKey="chapter" type="category" tick={{ fontSize: 11 }} width={96} interval={0} />
               <Tooltip formatter={(v) => [Number(v).toLocaleString(), chapterMetric === 'members' ? 'Members' : 'XP']} />
-              <Bar
-                dataKey={chapterMetric}
-                fill={chapterMetric === 'members' ? '#1152D4' : '#F8C630'}
-                radius={[0, 4, 4, 0]}
-              />
+              <Bar dataKey={chapterMetric} radius={[0, 4, 4, 0]}>
+                {/* Keyed by index, not name — duplicate chapter rows in the DB
+                    produce repeated labels, which would collide as React keys. */}
+                {topChapters.map((row, i) => (
+                  <Cell
+                    key={`${row.chapter}-${i}`}
+                    fill={
+                      row.isUnassigned
+                        ? '#CBD5E1' // slate-300 — not a real chapter
+                        : chapterMetric === 'members' ? '#1152D4' : '#F8C630'
+                    }
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
+        )}
+        {unassignedChapter && (
+          <p className="text-md3-label-md text-slate-500 mt-3">
+            “Unassigned” = {unassignedChapter.members.toLocaleString()} member
+            {unassignedChapter.members === 1 ? '' : 's'} with no chapter set. Their XP is
+            counted in “XP Distributed” above.
+          </p>
         )}
       </div>
 

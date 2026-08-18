@@ -45,10 +45,26 @@ export class ChaptersRepository extends BaseRepository {
   // RPC's live-DB body drifts from the migrations and never counted events at
   // all. Mirrors the rollup admin.repository.ts already uses for chapterStats.
   async getStatsByChapter(): Promise<ChapterStatsRow[]> {
-    const [chaptersRes, profilesRes, eventsRes] = await Promise.all([
+    // profiles/events are PAGED: a plain .select() stops at PostgREST's max-rows
+    // (1000) and reports no error, so once the member table outgrew that cap this
+    // rollup silently under-counted both members and XP for every chapter.
+    const [chaptersRes, profiles, events] = await Promise.all([
       this.db.from('chapters').select('id, name'),
-      this.db.from('profiles').select('chapter_id, lifetime_points'),
-      this.db.from('events').select('chapter_id'),
+      this.fetchAllPages<{ chapter_id: string | null; lifetime_points: number | null }>(
+        (from, to) =>
+          this.db
+            .from('profiles')
+            .select('chapter_id, lifetime_points', { count: 'exact' })
+            .order('id', { ascending: true })
+            .range(from, to),
+      ),
+      this.fetchAllPages<{ chapter_id: string | null }>((from, to) =>
+        this.db
+          .from('events')
+          .select('chapter_id', { count: 'exact' })
+          .order('id', { ascending: true })
+          .range(from, to),
+      ),
     ]);
 
     const chapters = this.unwrap(
@@ -57,12 +73,6 @@ export class ChaptersRepository extends BaseRepository {
         error: { message: string } | null;
       },
     );
-    const profiles =
-      (profilesRes.data as
-        | { chapter_id: string | null; lifetime_points: number | null }[]
-        | null) ?? [];
-    const events =
-      (eventsRes.data as { chapter_id: string | null }[] | null) ?? [];
 
     const rollup = new Map<
       string,
