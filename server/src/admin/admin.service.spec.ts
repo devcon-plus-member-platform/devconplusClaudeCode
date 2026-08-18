@@ -11,7 +11,8 @@ const mockAnalytics = {
 
 function makeRepo() {
   return {
-    findAllUsers:          jest.fn().mockResolvedValue([]),
+    findUsers:             jest.fn().mockResolvedValue({ rows: [], total: 0 }),
+    countUsersByRole:      jest.fn().mockResolvedValue({ all: 0, member: 0, chapter_officer: 0, hq_admin: 0, super_admin: 0 }),
     findUserTransactions:  jest.fn().mockResolvedValue([]),
     updateUserRole:        jest.fn().mockResolvedValue(undefined),
     findRoleById:          jest.fn().mockResolvedValue('member'),
@@ -58,9 +59,11 @@ describe('AdminService', () => {
     service = new AdminService(repo, cache, email, config);
   });
 
-  it('getUsers — delegates to repo', async () => {
-    await service.getUsers();
-    expect(repo.findAllUsers).toHaveBeenCalled();
+  it('getUsers — delegates to repo and counts roles in Postgres', async () => {
+    const result = await service.getUsers({ page: 1, pageSize: 10 });
+    expect(repo.findUsers).toHaveBeenCalledWith({ page: 1, pageSize: 10 });
+    expect(repo.countUsersByRole).toHaveBeenCalled();
+    expect(result).toEqual({ rows: [], total: 0, roleCounts: expect.any(Object) });
   });
 
   it('getUserTransactions — passes userId to repo', async () => {

@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TrashBinTrashOutline, CloseCircleLineDuotone, LetterOutline, CaseOutline, CalendarOutline, StarOutline, MagniferOutline, AltArrowUpOutline, AltArrowDownOutline } from 'solar-icon-set'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase, getBridgeToken } from '../../lib/supabase'
 import { apiFetch } from '../../lib/api'
 import { ROLE_DISPLAY_NAMES } from '../../lib/constants'
 import { useAuthStore } from '../../stores/useAuthStore'
-import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import ConfirmDialog from '../../components/ConfirmDialog'
 
@@ -19,13 +18,17 @@ const ROLE_FILTERS: RoleFilter[] = ['all', ...ROLES]
 type SortColumn = 'name' | 'email' | 'role' | 'points'
 type SortDir = 'asc' | 'desc'
 
-function joinedTime(u: Profile): number {
-  return u.created_at ? new Date(u.created_at).getTime() : 0
-}
+const PAGE_SIZE = 10
 
-function roleRank(role: string | null | undefined): number {
-  const i = ROLES.indexOf((role ?? 'member') as UserRole)
-  return i === -1 ? 0 : i
+/**
+ * GET /api/admin/users returns one page, the total number of matches, and exact
+ * per-role counts from Postgres. `rows.length` is only ever this page — never
+ * use it as a total (that bug is why the pills read "All 1000" against 1089).
+ */
+interface UsersResponse {
+  rows: Profile[]
+  total: number
+  roleCounts: Record<string, number>
 }
 
 function getRolePillClass(role: string): string {
@@ -53,7 +56,11 @@ export default function AdminUsers() {
   const assignableRoles = isSuperAdmin ? ROLES : ROLES.filter((r) => r !== 'super_admin')
 
   const [users, setUsers] = useState<Profile[]>([])
+  const [total, setTotal] = useState(0)
+  const [roleCounts, setRoleCounts] = useState<Record<string, number>>({})
+  const [page, setPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
+  const [isFetching, setIsFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -61,51 +68,79 @@ export default function AdminUsers() {
   const [userTxns, setUserTxns] = useState<PointTransaction[]>([])
   const [txnsLoading, setTxnsLoading] = useState(false)
   const [search, setSearch] = useState('')
+  // Debounced copy of `search` — the query it drives goes to the server now, so
+  // it must not fire on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  // Count of users per role (across the full dataset) for the filter pills.
-  const roleCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    for (const u of users) {
-      const r = u.role ?? 'member'
-      counts[r] = (counts[r] ?? 0) + 1
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  // Search, role filter, sort and paging all happen in Postgres: the browser only
+  // ever holds one page, so it cannot filter or sort the full set itself.
+  const load = useCallback(async () => {
+    setIsFetching(true)
+    const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
+    const term = debouncedSearch.trim()
+    if (term) params.set('search', term)
+    if (roleFilter !== 'all') params.set('role', roleFilter)
+    if (sortColumn) {
+      params.set('sort', sortColumn)
+      params.set('dir', sortDir)
     }
-    return counts
-  }, [users])
+    try {
+      const data = await apiFetch<UsersResponse>(`/api/admin/users?${params.toString()}`)
+      setUsers(data.rows)
+      setTotal(data.total)
+      setRoleCounts(data.roleCounts)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load users')
+    } finally {
+      setIsLoading(false)
+      setIsFetching(false)
+    }
+  }, [page, debouncedSearch, roleFilter, sortColumn, sortDir])
 
-  // Filter by role, then name/email/company, then sort. With no active column
-  // the list stays newest-first (recent on top); clicking a header sorts by it.
-  const visibleUsers = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const matched = users.filter((u) => {
-      if (roleFilter !== 'all' && (u.role ?? 'member') !== roleFilter) return false
-      if (!q) return true
-      return (
-        u.full_name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.school_or_company ?? '').toLowerCase().includes(q)
-      )
-    })
-    return [...matched].sort((a, b) => {
-      if (sortColumn === null) return joinedTime(b) - joinedTime(a)
-      const dir = sortDir === 'asc' ? 1 : -1
-      switch (sortColumn) {
-        case 'name': return a.full_name.localeCompare(b.full_name) * dir
-        case 'email': return a.email.localeCompare(b.email) * dir
-        case 'role': return (roleRank(a.role) - roleRank(b.role)) * dir
-        case 'points': return ((a.spendable_points ?? 0) - (b.spendable_points ?? 0)) * dir
-        default: return 0
-      }
-    })
-  }, [users, search, roleFilter, sortColumn, sortDir])
+  useEffect(() => { void load() }, [load])
 
-  const { pageItems, ...pagination } = usePagination(visibleUsers, 10)
+  // Deleting the last row of the last page (or narrowing a filter) can leave the
+  // active page out of range — walk back rather than showing an empty table.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    if (page > totalPages) setPage(totalPages)
+  }, [total, page])
+
+  // Server-driven stand-in for usePagination's controller, which only knows how
+  // to slice an already-loaded array.
+  const pagination = useMemo(() => {
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    const safePage = Math.min(page, totalPages)
+    const goTo = (next: number) => setPage(Math.min(Math.max(1, next), totalPages))
+    return {
+      page: safePage,
+      totalPages,
+      totalItems: total,
+      pageSize: PAGE_SIZE,
+      startIndex: total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1,
+      endIndex: Math.min(safePage * PAGE_SIZE, total),
+      setPage: goTo,
+      nextPage: () => goTo(safePage + 1),
+      prevPage: () => goTo(safePage - 1),
+    }
+  }, [page, total])
+
 
   // Click cycles a column: asc → desc → back to default (newest first).
   const handleSort = (col: SortColumn) => {
-    pagination.setPage(1)
+    setPage(1)
     if (sortColumn !== col) {
       setSortColumn(col)
       setSortDir('asc')
@@ -136,20 +171,6 @@ export default function AdminUsers() {
     }
   }
 
-  const load = async () => {
-    setIsLoading(true)
-    try {
-      const data = await apiFetch<Profile[]>('/api/admin/users')
-      setUsers(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => { void load() }, [])
-
   const [pendingRole, setPendingRole] = useState<{ user: Profile; role: UserRole } | null>(null)
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
@@ -158,10 +179,12 @@ export default function AdminUsers() {
         method: 'PATCH',
         body: JSON.stringify({ role: newRole }),
       })
-      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: newRole } : u))
       if (selectedUser?.id === userId) {
         setSelectedUser((prev) => prev ? { ...prev, role: newRole } : prev)
       }
+      // Refetch rather than patching locally: the row may no longer belong to the
+      // active role filter, and the pill counts changed.
+      await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Role update failed')
     }
@@ -194,8 +217,8 @@ export default function AdminUsers() {
       setError(msg)
       return
     }
-    setUsers((prev) => prev.filter((u) => u.id !== userId))
     if (selectedUser?.id === userId) setSelectedUser(null)
+    await load()
   }
 
 
@@ -218,7 +241,7 @@ export default function AdminUsers() {
             type="search"
             placeholder="Search by name, email, or company…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); pagination.setPage(1) }}
+            onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue/30 bg-white"
           />
         </div>
@@ -226,12 +249,12 @@ export default function AdminUsers() {
           {ROLE_FILTERS.map((f) => {
             const active = roleFilter === f
             const label = f === 'all' ? 'All' : (ROLE_DISPLAY_NAMES[f] ?? f)
-            const count = f === 'all' ? users.length : (roleCounts[f] ?? 0)
+            const count = roleCounts[f === 'all' ? 'all' : f] ?? 0
             return (
               <button
                 key={f}
                 type="button"
-                onClick={() => { setRoleFilter(f); pagination.setPage(1) }}
+                onClick={() => { setRoleFilter(f); setPage(1) }}
                 className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-md3-label-md font-semibold border transition-colors ${
                   active
                     ? 'bg-blue text-white border-blue'
@@ -245,7 +268,10 @@ export default function AdminUsers() {
           })}
         </div>
         <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-card">
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div
+            aria-busy={isFetching}
+            className={`flex-1 min-h-0 overflow-y-auto transition-opacity ${isFetching ? 'opacity-60' : 'opacity-100'}`}
+          >
           <table className="w-full text-md3-body-md">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-slate-100 bg-slate-50">
@@ -265,7 +291,7 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {pageItems.map((u) => (
+              {users.map((u) => (
                 <tr
                   key={u.id}
                   className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer"
@@ -320,7 +346,7 @@ export default function AdminUsers() {
               ))}
             </tbody>
           </table>
-          {visibleUsers.length === 0 && (
+          {users.length === 0 && (
             <p className="text-center py-10 text-slate-400 text-md3-body-md">
               {search.trim()
                 ? `No users match "${search.trim()}".`

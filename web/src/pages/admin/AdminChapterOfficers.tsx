@@ -77,12 +77,16 @@ export default function AdminChapterOfficers() {
         .select('*, chapters(name)')
         .order('created_at', { ascending: false }),
       supabase.from('chapters').select('id, name').order('name'),
-      // Same source as the Users tab; we keep only the accounts that currently hold the role.
-      apiFetch<Profile[]>('/api/admin/users').catch(() => [] as Profile[]),
+      // Same source as the Users tab, filtered server-side. Omitting pageSize asks
+      // for every match: fetching all profiles and filtering here used to drop the
+      // earliest-created officers, because the response stopped at 1000 rows.
+      apiFetch<{ rows: Profile[] }>('/api/admin/users?role=chapter_officer')
+        .then((r) => r.rows)
+        .catch(() => [] as Profile[]),
     ])
     setAssignments((assignRes.data ?? []) as Assignment[])
     setChapters((chaptersRes.data ?? []) as Chapter[])
-    setOfficers(usersResult.filter((u) => u.role === 'chapter_officer'))
+    setOfficers(usersResult)
     setIsLoading(false)
   }
 
