@@ -121,8 +121,7 @@ Create `web/.env.local` (frontend — see `web/.env.example`) and `server/.env` 
 ```env
 # web/.env.local (frontend)
 VITE_SUPABASE_URL=          # Supabase project URL
-VITE_SUPABASE_ANON_KEY=     # Supabase anon (public) key
-VITE_GOOGLE_CLIENT_ID=      # Google OAuth client ID
+VITE_SUPABASE_ANON_KEY=     # Supabase anon (public) key — bridge-JWT/legacy paths only
 VITE_TURNSTILE_SITE_KEY=    # Cloudflare Turnstile site key
 VITE_FIREBASE_API_KEY=      # Firebase web config (4 keys: API_KEY/AUTH_DOMAIN/PROJECT_ID/APP_ID)
 VITE_FIREBASE_AUTH_DOMAIN=

@@ -47,7 +47,6 @@ VITE_FIREBASE_API_KEY=        # Firebase console → Project settings → your w
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_APP_ID=
-VITE_GOOGLE_CLIENT_ID=        # GCP Console → OAuth 2.0 credentials
 VITE_TURNSTILE_SITE_KEY=      # Cloudflare Turnstile (CAPTCHA on auth forms)
 VITE_API_URL=http://localhost:8000   # the NestJS gateway — most data now flows through here
 VITE_APP_ENV=development      # change to 'production' on Vercel

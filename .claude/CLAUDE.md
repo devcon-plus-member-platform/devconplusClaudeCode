@@ -81,6 +81,7 @@ devcon-plus/
 │   │                        # Contains member UI, organizer UI, AND admin UI
 │   │                        # (separate route trees: MemberLayout / OrganizerLayout / AdminLayout)
 │   ├── src/                 # types live in web/src/types/ (alias @devcon-plus/supabase)
+│   ├── api/                 # Vercel Edge Functions (separate from the NestJS gateway) — see Section 12
 │   ├── public/
 │   ├── package.json         # Frontend deps (framer-motion lives here; React 19 pinned via `overrides`)
 │   ├── vercel.json          # Vercel deployment config + security headers (CSP/HSTS/...)
@@ -1056,6 +1057,19 @@ useKonamiCode.ts     — Konami code easter egg detector (restricted to hq_admin
 > the NestJS origin, and `http://localhost:5173` for local dev. (Audit I2 notes a stale
 > `staging.cloud-engineer.dev` entry to prune.) The gateway's own `CORS_ORIGIN` is set via env.
 
+### Vercel Edge Function (`web/api/keep-alive.ts`) — not a Supabase Edge Function
+
+A separate, single-purpose Vercel Edge Function (Vercel Cron-triggered every 4 days via the `crons`
+config in `web/vercel.json`) that pings Supabase with a lightweight `SELECT` on `chapters` to prevent
+the free-tier project from auto-pausing after 7 days of inactivity. It runs on Vercel's infrastructure
+alongside the frontend, not in `supabase/functions/` and not through the NestJS gateway.
+
+- Auth: rejects any request whose `Authorization` header doesn't match `Bearer <CRON_SECRET>` (the
+  secret Vercel Cron injects on scheduled calls) — this keeps the endpoint from being probed publicly.
+- Env vars are **Vercel-project-only, never `.env.local`**: `CRON_SECRET`, plus plain (non-`VITE_`-prefixed)
+  `SUPABASE_URL` and `SUPABASE_ANON_KEY` — the `VITE_` prefix would bake them into the client bundle,
+  which isn't wanted for a server-side function.
+
 ---
 
 ## 13. SEED DATA
@@ -1104,8 +1118,6 @@ INSERT INTO rewards (name, points_cost, type, claim_method, is_coming_soon) VALU
 # Supabase (bridge-JWT path; anon key is public-by-design)
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
-# Auth
-VITE_GOOGLE_CLIENT_ID=
 # Cloudflare Turnstile (CAPTCHA on auth forms)
 VITE_TURNSTILE_SITE_KEY=
 # Firebase Auth (web app config — public identifiers, not secrets)
