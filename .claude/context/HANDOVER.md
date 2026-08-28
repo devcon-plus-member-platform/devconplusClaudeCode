@@ -613,8 +613,7 @@ cd server && npm run dev     # → http://localhost:8000
 **`web/.env.local`** (frontend — gitignored; see `web/.env.example`)
 ```env
 VITE_SUPABASE_URL=           # Supabase project URL
-VITE_SUPABASE_ANON_KEY=      # Supabase anon (public) key
-VITE_GOOGLE_CLIENT_ID=       # Google OAuth client ID
+VITE_SUPABASE_ANON_KEY=      # Supabase anon (public) key — bridge-JWT/legacy paths only
 VITE_TURNSTILE_SITE_KEY=     # Cloudflare Turnstile site key
 VITE_FIREBASE_API_KEY=       # Firebase web config (4 keys)
 VITE_FIREBASE_AUTH_DOMAIN=
@@ -775,7 +774,7 @@ supabase functions deploy delete-user
 | Setting | Local Dev | Production |
 |---------|-----------|-----------|
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | `web/.env.local` | Vercel env vars |
-| `VITE_GOOGLE_CLIENT_ID` + `VITE_FIREBASE_*` | `web/.env.local` | Vercel env vars |
+| `VITE_FIREBASE_*` | `web/.env.local` | Vercel env vars |
 | `VITE_API_URL` | `http://localhost:8000` (or staging API) | `https://api.devcon.plus` |
 | `VITE_ALLOW_INDEXING` | unset | `true` on prod, unset on staging |
 | `VITE_APP_ENV` | `development` | `production` |

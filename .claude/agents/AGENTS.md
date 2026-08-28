@@ -1,10 +1,17 @@
 # DEVCON+ AI Agent System
 > Version: 1.3 | CLAUDE.md Synced: MVP 1.5 | Last Updated: April 15, 2026
 > Project: DEVCON Plus — Tech Community Unified Platform
-> Live App: https://devconplusbeta-v1.vercel.app
+> Live App: https://devcon.plus
 > Cohort 3 Graduation: April 30, 2026
 > Public Preview: May 15, 2026 (Dev B presents)
 > Claude Code Cutoff: April 26, 2026
+>
+> ⚠️ **This file has not been fully synced past MVP 1.5.** The architecture and "already done"
+> sections below describe the pre-Firebase, pre-NestJS-gateway app (pure Supabase Auth + direct
+> `supabase-js` client calls). That is no longer how the app works — auth is now Firebase Auth,
+> and the frontend talks to a NestJS gateway (`server/`) via `apiFetch`/`publicFetch`, not Supabase
+> directly. For current architecture, always defer to `.claude/CLAUDE.md` (Sections 0, 3, 10–12, 15).
+> The dated checklists further down remain useful as historical sprint records.
 
 ---
 
@@ -54,22 +61,27 @@ then switch to agents/PM_AGENT.md to help me update the remaining MVP checklist.
 
 ## Project Context Summary (Shared Across All Agents)
 
-### Stack
+### Stack (current — see CLAUDE.md for full detail)
 - React 19 + Vite 7 + TypeScript (strict)
 - Tailwind CSS v3 + framer-motion
-- Supabase (Auth + DB + Edge Functions + Realtime)
+- **Auth: Firebase Auth** (Google OAuth + email/password) — Supabase Auth was cut
+- **Backend: NestJS gateway (`server/`)** — frontend calls it via `apiFetch`/`publicFetch`;
+  direct `supabase-js` survives only for a few legacy paths via a short-lived bridge JWT
+- Supabase Postgres (DB) + a small set of Edge Functions (QR check-in flow)
 - Zustand v5 for state, React Hook Form + Zod for forms
 - Font: **Proxima Nova** (self-hosted woff2, 6 weights — `font-proxima` / `font-sans`)
 - MD3 type scale: 15 `text-md3-*` tokens in `tailwind.config.js`
-- Deployed on Vercel → https://devconplusbeta-v1.vercel.app
+- Frontend deployed on Vercel → https://devcon.plus · Backend on EC2 + nginx → https://api.devcon.plus
 
 ### Codebase Location
 ```
 devcon-plus/
-├── apps/member/         ← ALL UI lives here (member + organizer + admin)
-├── packages/supabase/   ← DB types + mock data
-└── supabase/functions/  ← Edge functions
+├── web/                  ← ALL UI lives here (member + organizer + admin); DB types in web/src/types/
+├── server/               ← NestJS gateway (primary backend)
+└── supabase/functions/   ← Edge functions (QR check-in + a few legacy paths)
 ```
+> `apps/` and `packages/` directories, if present locally, are untracked leftovers from an
+> earlier Turbo-monorepo layout — not the live code.
 
 ### Roles
 - `member` — standard user (register, earn points, browse jobs, request upgrade)

@@ -1,5 +1,5 @@
 # DEVCON+ — Agentic Skills
-> Last Updated: April 21, 2026
+> Last Updated: April 21, 2026 (Skill 5 corrected 2026-08 for the polling-first realtime inversion — see its own note)
 > Version: MVP 1.6
 > Structured Claude Code workflows for common recurring tasks.
 > When asked to perform one of these operations, execute the full workflow below — don't improvise.
@@ -34,7 +34,7 @@ supabase db push
 **Step 3 — Regenerate TypeScript types**
 ```bash
 supabase gen types typescript --project-id <project-ref> \
-  > packages/supabase/src/database.types.ts
+  > web/src/types/src/database.types.ts
 ```
 
 **Step 4 — Verify downstream consumers**
@@ -44,7 +44,7 @@ npm run typecheck
 ```
 
 **Step 5 — Update stores if needed**
-- If new table: create a new Zustand store in `apps/member/src/stores/`
+- If new table: create a new Zustand store in `web/src/stores/`
 - If modified table: update the relevant store's select query and TypeScript types
 - If the store uses Realtime: implement the two-layer recovery pattern (see `.claude/rules/db-connection-resilience.md`)
 
@@ -72,9 +72,9 @@ Use when: creating a new screen accessible via a URL.
 **Step 1 — Create the page component**
 
 Determine which layout tree it belongs to:
-- Member experience → `apps/member/src/pages/` (e.g., `profile/NewPage.tsx`)
-- Organizer experience → `apps/member/src/pages/organizer/OrgNewPage.tsx`
-- Admin experience → `apps/member/src/pages/admin/AdminNewPage.tsx`
+- Member experience → `web/src/pages/` (e.g., `profile/NewPage.tsx`)
+- Organizer experience → `web/src/pages/organizer/OrgNewPage.tsx`
+- Admin experience → `web/src/pages/admin/AdminNewPage.tsx`
 
 Component template:
 ```tsx
@@ -103,7 +103,7 @@ Rules:
 
 **Step 2 — Register the route in router.tsx**
 ```tsx
-// apps/member/src/router.tsx
+// web/src/router.tsx
 // Add inside the appropriate layout's children array:
 {
   path: '/new-path',
@@ -240,27 +240,32 @@ Work through each category. Document findings as: **[PASS / FAIL / PARTIAL]** wi
 
 ---
 
-## Skill 5: `RealtimeStoreAdd` — Add a New Zustand Store with Supabase Realtime
+## Skill 5: `PollingStoreAdd` — Add a New Zustand Store for Live-ish Data
 
-Use when: a new domain needs live-updating data (not just one-time fetches).
+> ⚠️ **Superseded (2026-06-14):** this skill used to be called `RealtimeStoreAdd` and taught an
+> always-on Supabase Realtime channel + a layout-level `resubscribe()`. That pattern is now **banned** —
+> see `.claude/rules/db-connection-resilience.md`. Realtime was inverted to polling-first: Supabase's
+> free tier caps Realtime at 200 connections and WAL→JSON replication was ~76% of DB execution time.
+> There is no `resubscribe()` anymore. Do not add a new always-on channel. This rewritten version
+> reflects the current model: fetch through the NestJS gateway, recover via polling only.
+
+Use when: a new domain needs data that should stay reasonably fresh (not just fetched once on mount).
 
 ### Workflow
-
-This is the most accident-prone task in the codebase — the two-layer recovery pattern is easy to get wrong.
 
 **Step 1 — Create the store file**
 
 ```ts
-// apps/member/src/stores/useNewDomainStore.ts
+// web/src/stores/useNewDomainStore.ts
 import { create } from 'zustand'
-import { supabase } from '@/lib/supabase'
+import { apiFetch } from '@/lib/api'   // use publicFetch instead if the data needs no auth
 
 interface NewDomainStore {
   items: Item[]
   isLoading: boolean
   error: string | null
   fetchItems: () => Promise<void>
-  subscribeToChanges: () => () => void  // returns cleanup function
+  subscribeToChanges: () => () => void  // kept for interface parity with other stores — no-op
 }
 
 export const useNewDomainStore = create<NewDomainStore>((set) => ({
@@ -270,43 +275,25 @@ export const useNewDomainStore = create<NewDomainStore>((set) => ({
 
   fetchItems: async () => {
     set({ isLoading: true, error: null })
-    const { data, error } = await supabase.from('table_name').select('*')
-    if (error) {
-      set({ error: error.message, isLoading: false })
-      return
+    try {
+      const items = await apiFetch<Item[]>('/api/new-domain')
+      set({ items, isLoading: false })
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Failed to load', isLoading: false })
     }
-    set({ items: data ?? [], isLoading: false })
   },
 
-  subscribeToChanges: () => {
-    const channel = supabase
-      .channel('new-domain-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'table_name',
-      }, () => {
-        void useNewDomainStore.getState().fetchItems()
-      })
-      .subscribe((status, err) => {
-        // Required — log channel errors per db-connection-resilience.md
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[new-domain] channel error', status, err)
-        }
-      })
-
-    // Required — return cleanup function
-    return () => { void supabase.removeChannel(channel) }
-  },
+  // No always-on channel — see the warning above. Matches useRewardsStore / useMissionsStore.
+  subscribeToChanges: () => () => {},
 }))
 ```
 
-**Step 2 — Wire into the layout's recovery pattern**
+**Step 2 — Wire into the layout's polling recovery**
 
-Open `MemberLayout.tsx` (or `OrganizerLayout.tsx` for organizer data):
+Open `MemberLayout.tsx` (or `OrganizerLayout.tsx` for organizer data) and add the fetch to the
+existing `recover()` function — there is nothing else to wire up:
 
 ```ts
-// In the recover() function — add HTTP refetch
 const recover = useCallback(async () => {
   await Promise.all([
     fetchEvents(),
@@ -314,41 +301,28 @@ const recover = useCallback(async () => {
     fetchNewDomainItems(),  // ← add this
   ])
 }, [...])
-
-// In the resubscribe() function — add channel teardown + recreation
-const resubscribe = useCallback(() => {
-  cleanupEvents?.()
-  cleanupRewards?.()
-  cleanupNewDomain?.()  // ← add this
-  setCleanupEvents(subscribeToEventChanges())
-  setCleanupRewards(subscribeToRewardsChanges())
-  setCleanupNewDomain(subscribeToNewDomainChanges())  // ← add this
-}, [...])
 ```
 
-**Step 3 — Verify the recovery is wired to all three trigger points**
+**Step 3 — Verify `recover()` fires on all the required triggers**
 
 ```bash
-# Check these three exist in MemberLayout.tsx:
-grep -n "recover()" apps/member/src/components/MemberLayout.tsx
-grep -n "resubscribe()" apps/member/src/components/MemberLayout.tsx
-# Should see 3 calls to each: visibilitychange, online event, setInterval
+grep -n "recover()" web/src/components/MemberLayout.tsx
+# Should be called on: visibilitychange (visible), window 'online', a 60s setInterval, and auth-change
 ```
 
 **Step 4 — Verify**
 ```bash
-npm run typecheck
-npm run build
-# Manually test: load the page, put the tab in background for 2 minutes, return — data should refresh
+cd web && npm run typecheck
+cd web && npm run build
+# Manually test: load the page, put the tab in background for a minute, return — data should refresh
 ```
 
 **Checklist before done:**
-- [ ] Store has `subscribeToChanges()` returning a cleanup function
-- [ ] `subscribe()` status callback logs `CHANNEL_ERROR` and `TIMED_OUT`
-- [ ] `fetchItems()` is called in layout's `recover()` function
-- [ ] `subscribeToChanges()` teardown + recreation is in layout's `resubscribe()` function
-- [ ] `resubscribe()` is called on `visibilitychange`, `online` event, and `setInterval`
-- [ ] `npm run typecheck` passes
+- [ ] Data is fetched via `apiFetch`/`publicFetch` against the NestJS gateway — not `supabase.from(...)` directly
+- [ ] No new Supabase Realtime channel was added
+- [ ] `fetchItems()` is called in the layout's `recover()` function
+- [ ] `recover()` still fires on visibility / online / 60s interval / auth-change (unchanged by this addition)
+- [ ] `cd web && npm run typecheck` passes
 
 ---
 
@@ -432,7 +406,7 @@ Paste the extracted values and ask Claude Code to build the component using the 
 
 **Step 3 — Human visual QA**
 
-Open the running dev server (`npm run dev:member`) at `localhost:5173`, set DevTools to 390px width, and compare the component side-by-side with the Figma frame.
+Open the running dev server (`cd web && npm run dev`) at `localhost:5173`, set DevTools to 390px width, and compare the component side-by-side with the Figma frame.
 
 **Step 4 — Claude Code final check**
 ```bash
