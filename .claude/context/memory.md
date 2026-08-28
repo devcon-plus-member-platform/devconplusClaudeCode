@@ -1,6 +1,15 @@
 # DEVCON+ — Context Anchor (memory.md)
 > For AI instances picking up this project mid-stream.
 > Updated: April 17, 2026
+>
+> ⚠️ **This is a historical snapshot from Weeks 1–3 (pre-launch), not current state.** Since this was
+> written: auth moved from Supabase Auth to **Firebase Auth**; the app split from an npm-workspace/Turbo
+> monorepo (`apps/member/`, `packages/supabase/`) into two independent apps (`web/`, `server/`) behind a
+> **NestJS gateway**; and realtime was **inverted to polling-first** (no more always-on WebSocket
+> subscriptions/re-subscribe pattern). The Decision Log below (Section 2) is still useful for *why*
+> things like the points ledger and QR token format work the way they do, but treat any current-tense
+> claim about "what's wired up" as outdated — see `.claude/CLAUDE.md` and `.claude/context/HANDOVER.md`
+> for the current architecture.
 
 ---
 
@@ -113,7 +122,7 @@ Migrating all 117 `.tsx` files to MD3 tokens at once would have been risky and t
 5. **Two-tier typography system** — Legacy and MD3 scales coexist. Future maintainers may not know which to use. The rule: MD3 for new components, legacy for existing ones (don't migrate unless reworking).
 
 ### Where to start (recommended order for a new dev)
-1. Get credentials from Kenshin, set up `.env.local`, run `npm run dev:member`
+1. Get credentials from a teammate, set up `web/.env.local` + `server/.env`, run `cd web && npm run dev` and `cd server && npm run dev`
 2. Read `.claude/CLAUDE.md` Sections 0, 4 (DB schema), 6 (routes), 9 (design system) in that order
 3. Watch the Loom recordings (Section 4.1 of HANDOVER.md) — 2 hours of video context
 4. Coordinate with DEVCON HQ IT on DNS records (custom domain + email) — this unblocks the most L1 items

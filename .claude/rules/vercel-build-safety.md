@@ -13,12 +13,12 @@ Standing protections — do not remove them:
 
 ## The Rule
 
-Every change to `apps/member/src/` must produce a clean `tsc -b` before it is considered done. A TypeScript error is a deployment failure — Vercel runs `tsc -b && vite build` and the entire deploy aborts if `tsc -b` exits non-zero. This has caused two separate rollback incidents (`cfa050d`, `93a368e`).
+Every change to `web/src/` must produce a clean `tsc -b` before it is considered done. A TypeScript error is a deployment failure — Vercel runs `tsc -b && vite build` and the entire deploy aborts if `tsc -b` exits non-zero. This has caused two separate rollback incidents (`cfa050d`, `93a368e`).
 
-**Run this before marking any task complete:**
+**Run this before marking any task complete (from `web/`):**
 ```bash
-npm run typecheck        # tsc --noEmit across all packages
-npm run build            # tsc -b && vite build (mirrors Vercel exactly)
+cd web && npm run typecheck   # tsc -b --noEmit
+cd web && npm run build       # tsc -b && vite build (mirrors Vercel exactly)
 ```
 
 If either fails locally, it will fail on Vercel. Fix it before committing.
@@ -27,7 +27,7 @@ If either fails locally, it will fail on Vercel. Fix it before committing.
 
 ## Why `tsc -b` Is Stricter Than You Expect
 
-The `tsconfig.app.json` enables flags beyond `strict: true`:
+The `tsconfig.app.json` (in `web/`) enables flags beyond `strict: true`:
 
 | Flag | What it catches |
 |------|----------------|
@@ -64,13 +64,13 @@ The `tsconfig.app.json` enables flags beyond `strict: true`:
 ### Types
 - [ ] No `any` — use `unknown` + type narrowing, or the correct generated DB type
 - [ ] No `@ts-ignore` or `@ts-expect-error` without an explanation comment
-- [ ] All Supabase queries use types from `packages/supabase/src/database.types.ts`
-- [ ] After any DB schema change: run `supabase gen types typescript` and commit the updated `database.types.ts`
+- [ ] All Supabase queries use types from `web/src/types/database.types.ts` (imported via the `@devcon-plus/supabase` alias)
+- [ ] After any DB schema change: run `supabase gen types typescript > web/src/types/database.types.ts` and commit the updated file
 - [ ] No type assertions (`as Foo`) that bypass null checks
 
 ### Environment Variables
 - [ ] Always use `import.meta.env.VITE_*` — never `process.env.*` (Vite does not expose `process.env` to the browser bundle)
-- [ ] Every `VITE_*` variable accessed in code must exist in `apps/member/.env.local` (dev) and Vercel environment settings (prod)
+- [ ] Every `VITE_*` variable accessed in code must exist in `web/.env.local` (dev) and Vercel environment settings (prod). Required vars are also enforced at build time by `REQUIRED_ENV` in `web/vite.config.ts` — add new required vars there too.
 
 ### React-Specific
 - [ ] `useEffect` dependency arrays are complete — missing deps cause stale closure bugs AND can trigger ESLint errors that become build errors
@@ -111,12 +111,12 @@ const url = import.meta.env.VITE_SUPABASE_URL
 
 ## Files Most Likely to Cause Build Failures
 
-When editing these files, run `npm run typecheck` immediately after:
+When editing these files, run `cd web && npm run typecheck` immediately after:
 
-- `apps/member/src/stores/` — any store that queries Supabase using DB types
-- `apps/member/src/pages/` — pages with many imports that get refactored
-- `apps/member/src/components/` — components that receive typed props
-- `packages/supabase/src/database.types.ts` — regenerated after schema changes; downstream consumers must be updated
+- `web/src/stores/` — any store that queries Supabase using DB types
+- `web/src/pages/` — pages with many imports that get refactored
+- `web/src/components/` — components that receive typed props
+- `web/src/types/database.types.ts` — regenerated after schema changes; downstream consumers must be updated
 
 ---
 
@@ -124,6 +124,6 @@ When editing these files, run `npm run typecheck` immediately after:
 
 This almost always means `tsc -b` was not run locally — only the dev server was used. The dev server (`vite`) does NOT run the TypeScript compiler. Fixes:
 
-1. Run `npm run typecheck` to surface all TS errors
-2. Run `npm run build` to simulate Vercel's exact build command
+1. Run `cd web && npm run typecheck` to surface all TS errors
+2. Run `cd web && npm run build` to simulate Vercel's exact build command
 3. Never rely on "the dev server didn't show errors" as proof of TypeScript correctness

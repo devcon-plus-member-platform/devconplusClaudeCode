@@ -1,10 +1,16 @@
 # Domain & Email Setup — Handover Note
-> App: **DEVCON+ Beta** → https://devconplusbeta-v1.vercel.app  
-> Target domain: **plus-beta.devcon.ph**  
-> Transactional email: **no-reply-plus@devcon.ph** via Resend  
-> DNS provider: **Cloudflare** (manages devcon.ph)  
-> Last Updated: April 17, 2026  
+> App: **DEVCON+ Beta** → https://devconplusbeta-v1.vercel.app (now 301-redirects to the live domain below)
+> Target domain (as of this note): **plus-beta.devcon.ph**
+> Transactional email: **no-reply-plus@devcon.ph** via Resend
+> DNS provider: **Cloudflare** (manages devcon.ph)
+> Last Updated: April 17, 2026
 > Status: **BLOCKED — awaiting devcon.ph access**
+>
+> ✅ **RESOLVED — kept for historical context only.** The custom domain ultimately shipped as
+> **`devcon.plus`** (production) / **`staging.devcon.plus`** (staging), not `plus-beta.devcon.ph` as
+> planned here — see `.claude/CLAUDE.md` Section 1 header and Section 17 changelog. Transactional email
+> is live end-to-end via the NestJS email module (nodemailer/Gmail) + the `send-email` Edge Function. Do
+> not follow the steps below as current instructions; they describe a plan that was superseded.
 
 ---
 
@@ -214,7 +220,7 @@ After domain is live, update in Vercel project settings (**Settings → Environm
 VITE_SITE_URL=https://plus-beta.devcon.ph
 ```
 
-Keep `apps/member/.env.local` pointing to localhost for local dev:
+Keep `web/.env.local` pointing to localhost for local dev:
 ```env
 VITE_SITE_URL=http://localhost:5173
 ```

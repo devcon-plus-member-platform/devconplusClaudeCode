@@ -29,32 +29,46 @@ Adapt your language to the person you're talking to:
 ## Getting Started (New Developer — Read This First)
 
 ### Step 1: Clone and Install
+`web/` and `server/` are each self-contained (no npm workspace / Turbo at root) — install
+per app, not at the repo root:
 ```bash
 git clone [repo-url]
 cd devcon-plus
-npm install --legacy-peer-deps   # ← this flag is REQUIRED every time
+cd web && npm install      # no --legacy-peer-deps needed — React 19 is pinned via `overrides` in web/package.json
+cd ../server && npm install
 ```
-Why `--legacy-peer-deps`? React 19 has a peer dependency conflict with some packages.
-This flag resolves it safely. The app runs fine — it's just a tooling quirk.
 
 ### Step 2: Set Up Environment Variables
-Create `apps/member/.env.local`:
+Create `web/.env.local` (see `web/.env.example` for the full list):
 ```env
-VITE_SUPABASE_URL=        # Supabase project settings → API → Project URL
-VITE_SUPABASE_ANON_KEY=   # Supabase project settings → API → anon key
-VITE_GOOGLE_CLIENT_ID=    # GCP Console → OAuth 2.0 credentials
-VITE_APP_ENV=development  # change to 'production' on Vercel
+VITE_SUPABASE_URL=            # Supabase project settings → API → Project URL
+VITE_SUPABASE_ANON_KEY=       # Supabase project settings → API → anon key (bridge-JWT/legacy paths)
+VITE_FIREBASE_API_KEY=        # Firebase console → Project settings → your web app
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_APP_ID=
+VITE_GOOGLE_CLIENT_ID=        # GCP Console → OAuth 2.0 credentials
+VITE_TURNSTILE_SITE_KEY=      # Cloudflare Turnstile (CAPTCHA on auth forms)
+VITE_API_URL=http://localhost:8000   # the NestJS gateway — most data now flows through here
+VITE_APP_ENV=development      # change to 'production' on Vercel
 ```
 
-Create `supabase/.env`:
+Create `server/.env` (see `server/.env.example`):
 ```env
-SUPABASE_SERVICE_ROLE_KEY=  # Supabase → API → service_role key (NEVER expose this to client)
+PORT=8000
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=    # server-only — bypasses RLS, NEVER expose to the frontend
+SUPABASE_JWT_SECRET=          # signs the bridge JWT
+FIREBASE_SERVICE_ACCOUNT_JSON=
+QR_JWT_SECRET=
+CORS_ORIGIN=http://localhost:5173
 ```
-Ask Dev A for these values. Never commit them to git.
+Ask a teammate for the actual secret values. Never commit them to git.
 
 ### Step 3: Run the App
 ```bash
-npm run dev:member   # starts at http://localhost:5173
+cd web && npm run dev      # Vite dev server → http://localhost:5173
+cd server && npm run dev   # NestJS watch mode → http://localhost:8000 (needed for most data to load)
 ```
 Open in Chrome DevTools at 390px width, or on a real phone via your local network IP.
 The app is fully responsive — on desktop (md+) you'll see a sidebar layout, not a
@@ -63,26 +77,22 @@ blocked screen. `<DesktopGuard />` is a pass-through as of v1.4.
 ### Step 4: Understand the Folder Structure
 ```
 devcon-plus/
-├── apps/
-│   ├── member/
-│   │   ├── src/
-│   │   │   ├── components/      ← reusable UI components
-│   │   │   ├── screens/
-│   │   │   │   ├── member/      ← member-facing screens
-│   │   │   │   ├── organizer/   ← organizer-facing screens
-│   │   │   │   └── admin/       ← admin panel screens
-│   │   │   ├── stores/          ← Zustand state stores (one per domain)
-│   │   │   ├── lib/             ← utilities (supabase client, animation, dates, themes)
-│   │   │   ├── hooks/           ← custom React hooks
-│   │   │   ├── layouts/         ← MemberLayout, OrganizerLayout, AdminLayout
-│   │   │   └── router.tsx       ← ALL routes defined here
-│   └── landing/                 ← static landing page, ignore for most tasks
-├── packages/
-│   └── supabase/
-│       └── src/
-│           └── database.types.ts  ← auto-generated TypeScript types for all DB tables
+├── web/                        ← React + Vite frontend (member + organizer + admin, one codebase)
+│   ├── src/
+│   │   ├── components/         ← reusable UI components (incl. MemberLayout, OrganizerLayout, AdminLayout)
+│   │   ├── pages/
+│   │   │   ├── (member pages)  ← e.g. dashboard/, events/, jobs/, points/, profile/
+│   │   │   ├── organizer/      ← organizer-facing pages
+│   │   │   └── admin/          ← admin panel pages (lazy-loaded)
+│   │   ├── stores/             ← Zustand state stores (one per domain)
+│   │   ├── lib/                ← utilities (api.ts, firebase.ts, authBridge.ts, supabase.ts, animation, dates, themes)
+│   │   ├── hooks/               ← custom React hooks
+│   │   ├── types/               ← DB types (database.types.ts) + domain types — aliased as @devcon-plus/supabase
+│   │   └── router.tsx           ← ALL routes defined here
+├── server/                     ← NestJS gateway (primary backend — auth, roles, most data endpoints)
+│   └── src/                    ← one module per feature: auth/, users/, events/, points/, rewards/, ...
 └── supabase/
-    ├── functions/               ← Supabase Edge Functions (serverless)
+    ├── functions/               ← Supabase Edge Functions (QR check-in flow + a few legacy paths)
     └── migrations/              ← SQL migration history
 ```
 
@@ -90,7 +100,7 @@ devcon-plus/
 
 ## The Mental Model: Three Separate Experiences in One Codebase
 
-`apps/member/` contains three completely separate user experiences:
+`web/` contains three completely separate user experiences:
 
 ```
 MemberLayout     → /home, /events, /jobs, /points, /rewards, /profile, /notifications
@@ -114,7 +124,7 @@ Do not add a desktop block. The app should work on both mobile and desktop.
 
 ## Routing: How to Find Any Screen
 
-All routes live in one file: `apps/member/src/router.tsx`
+All routes live in one file: `web/src/router.tsx`
 
 Search for any path string to find its screen component immediately.
 
@@ -124,7 +134,10 @@ Search for any path string to find its screen component immediately.
 /onboarding                 → Onboarding (4-step swipeable, real chapter photos)
 /sign-in                    → SignIn
 /sign-up                    → SignUp
-/organizer-code-gate        → OrganizerCodeGate
+/oauth-callback             → OAuthCallback (Firebase Google redirect handler)
+/complete-profile           → CompleteProfile (set name/username/chapter — required post-OAuth/sign-up)
+# /organizer-code-gate      → OrganizerCodeGate (currently DISABLED — commented out in router.tsx;
+#                              organizers self-onboard via the in-app upgrade flow instead)
 /forgot-password            → ForgotPassword
 /email-sent                 → EmailSent
 /reset-password             → ResetPassword
@@ -133,11 +146,11 @@ Search for any path string to find its screen component immediately.
 — MemberLayout —
 /home                       → Dashboard
 /events                     → EventsList
-/events/:id                 → EventDetail
-/events/:id/register        → EventRegister
-/events/:id/pending         → EventPending (Realtime subscription)
-/events/:id/ticket          → EventTicket (QR display)
-/events/:id/volunteer       → EventVolunteer
+/events/:slug               → EventDetail (human-readable slug, not UUID — publicly viewable, no auth)
+/events/:slug/register      → EventRegister
+/events/:slug/pending       → EventPending (polls for approval — best-effort realtime on top, never load-bearing)
+/events/:slug/ticket        → EventTicket (QR display)
+/events/:slug/volunteer     → EventVolunteer
 /jobs                       → JobsList
 /jobs/:id                   → JobDetail
 /points                     → Points
@@ -185,16 +198,16 @@ Search for any path string to find its screen component immediately.
 ## State Management: How Data Flows
 
 Zustand stores manage all client-side state. Each domain has its own store in
-`apps/member/src/stores/`:
+`web/src/stores/`:
 
 | Store | File | What It Manages |
 |-------|------|-----------------|
 | Auth | `useAuthStore.ts` | Logged-in user, profile (incl. spendable_points), sign in/out, upgrade request |
-| Events | `useEventsStore.ts` | Events list, registrations, Realtime subscriptions |
+| Events | `useEventsStore.ts` | Events list, registrations (`subscribeToChanges` is a no-op — polling-first, see `.claude/rules/db-connection-resilience.md`) |
 | Jobs | `useJobsStore.ts` | Jobs board data |
 | Points | `usePointsStore.ts` | Point transactions, totals |
 | News | `useNewsStore.ts` | News posts |
-| Rewards | `useRewardsStore.ts` | Rewards catalog + Realtime |
+| Rewards | `useRewardsStore.ts` | Rewards catalog (`subscribeToChanges` is a no-op) |
 | Notifications | `useNotificationsStore.ts` | Notification inbox, read status |
 | Volunteer | `useVolunteerStore.ts` | Member volunteer applications |
 | Org Volunteer | `useOrgVolunteerStore.ts` | Organizer volunteer approval queue |
@@ -203,7 +216,7 @@ Zustand stores manage all client-side state. Each domain has its own store in
 | Theme | `useThemeStore.ts` | Program theme (persisted to localStorage as 'devcon-theme') |
 
 **Important:** All stores call the real Supabase client. Never import `MOCK_*` data
-from `packages/supabase` into production components — those are reference only.
+from `web/src/types` into production components — those are reference only.
 
 ---
 
@@ -304,7 +317,7 @@ All Edge Functions log structured JSON: `{ level, event, ts, ...data }` → Supa
 
 ---
 
-## Lib Utilities: What's in `apps/member/src/lib/`
+## Lib Utilities: What's in `web/src/lib/`
 
 | File | What It Does |
 |------|--------------|
@@ -315,7 +328,7 @@ All Edge Functions log structured JSON: `{ level, event, ts, ...data }` → Supa
 | `eventTheme.ts` | getEventThemeStyle(devcon_category) — scoped inline CSS vars for per-event themes |
 | `validation.ts` | Reusable Zod schemas and form validators |
 
-### Hooks: `apps/member/src/hooks/`
+### Hooks: `web/src/hooks/`
 
 | Hook | What It Does |
 |------|--------------|
@@ -378,7 +391,7 @@ These apply to every screen, store, and Edge Function you write.
 
 1. **Never hardcode credentials.** API keys, tokens, and secrets live in `.env.local`
    or Vercel environment variables — never in source code. If you see a key in a `.ts`
-   or `.tsx` file, that is a critical bug. Run `grep -r "service_role" apps/member/src`
+   or `.tsx` file, that is a critical bug. Run `grep -r "service_role" web/src`
    before every commit.
 
 2. **Never trust client-side data.** User IDs, roles, and ownership must always be
@@ -394,7 +407,7 @@ These apply to every screen, store, and Edge Function you write.
    went wrong"). Stack traces go to Supabase Edge Function logs — never to the browser.
 
 5. **`SUPABASE_SERVICE_ROLE_KEY` is server-only.** It must never appear in
-   `apps/member/src/` or be prefixed `VITE_`. The anon key (`VITE_SUPABASE_ANON_KEY`)
+   `web/src/` or be prefixed `VITE_`. The anon key (`VITE_SUPABASE_ANON_KEY`)
    is safe to expose. The service role key is not — ever.
 
 6. **Check IDOR on every new endpoint you write.** Before any query that returns or
@@ -468,7 +481,8 @@ const { error } = await requestOrganizerUpgrade(organizerCode)
 ## Things That Will Confuse You
 
 **Q: Why does `npm install` need `--legacy-peer-deps`?**
-A: React 19 has a peer conflict. The flag bypasses it safely. Always use it.
+A: It doesn't, anymore. React 19's peer conflict is now resolved via `overrides` in `web/package.json` —
+   a plain `npm install` (run from `web/`) is enough.
 
 **Q: What happened to `total_points`?**
 A: It was renamed to `spendable_points` in v1.4. `total_points` does not exist
@@ -492,11 +506,11 @@ A: The QR system handles three scenarios:
    - `p`: member is at the door without prior registration (officer can approve on-spot)
 
 **Q: What is `useRecoverOnFocus`?**
-A: A hook that ensures Realtime subscriptions and data fetches recover automatically
-   after the user switches tabs, loses network, or leaves the app idle for 5 minutes.
-   Use it in any screen that shows live data.
+A: A hook that re-fetches data (HTTP, not Realtime) when the tab becomes visible again,
+   the network reconnects, or a 60-second interval elapses — the app is polling-first, so
+   correctness never depends on a live Realtime channel. See `.claude/rules/db-connection-resilience.md`.
 
-**Q: Why is `MOCK_*` data in `packages/supabase`?**
+**Q: Why is `MOCK_*` data in `web/src/types`?**
 A: Kept for reference only. The app uses the real Supabase client for everything.
    Never import mock data into production components.
 

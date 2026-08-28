@@ -1175,7 +1175,7 @@ cd web && npm run typecheck  # tsc -b --noEmit (same strictness as build)
 
 # Backend (server/)
 cd server && npm install     # install NestJS deps
-cd server && npm run dev     # NestJS watch mode (port 3000)
+cd server && npm run dev     # NestJS watch mode (port 8000, per server/.env PORT)
 cd server && npm run build   # compile NestJS to dist/
 ```
 
@@ -1195,7 +1195,8 @@ cd server && npm run build   # compile NestJS to dist/
 >       (`20260528_firebase_auth_foundation.sql`, `20260531_phase4_cut_supabase_auth.sql`). Profiles gain
 >       `auth_uid`; `profiles.id` FK dropped (`20260615`). `/oauth-callback` + `/complete-profile` flows added.
 > - [x] **NestJS gateway (`server/`) is the primary backend** — deployed to EC2 + nginx at
->       `https://api.cloud-engineer.dev`. Frontend stores moved off direct Supabase to `apiFetch`/`publicFetch`.
+>       `https://api.devcon.plus` (previously `api.cloud-engineer.dev`, retired after the custom-domain
+>       cutover — see Section 1 header). Frontend stores moved off direct Supabase to `apiFetch`/`publicFetch`.
 >       Auth = Firebase ID-token verify + `email_verified` + role/chapter/owner scoping; Upstash Redis cache + rate limits.
 > - [x] **Bridge-JWT era** — gateway mints a short-lived Supabase JWT so residual direct PostgREST calls keep
 >       working; "Phase 7" will retire `supabase-js` entirely.

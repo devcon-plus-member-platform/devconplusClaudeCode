@@ -174,7 +174,7 @@ Act as the PM Agent. Generate a README.md for DEVCON+ that covers:
 - What the product is (1 paragraph, non-technical)
 - Prerequisites (Node version, env vars needed)
 - How to run locally step by step
-  (must include: npm install --legacy-peer-deps — this flag is required)
+  (web/ and server/ are separate installs — no --legacy-peer-deps needed; React 19 is pinned via `overrides` in web/package.json)
 - How to deploy to Vercel
 - Links to all other docs
 Keep it beginner-friendly. Dev A will maintain this.

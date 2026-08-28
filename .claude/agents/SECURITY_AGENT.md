@@ -5,6 +5,19 @@
 > Foundation: Jumpstart Cohort 3 SOP — "Protecting the Asset" (Sir Dom)
 > Cohort 3 Graduation: April 30, 2026 | Public Preview: May 15, 2026
 > Read AGENTS.md first for full project context before acting on any request.
+>
+> 🚨 **Auth architecture below is stale — do not audit against it as written.** This file predates the
+> Firebase Auth migration. **Supabase Auth was cut entirely** (`20260531_phase4_cut_supabase_auth.sql`);
+> every checklist item below that says "verify in Supabase Auth Settings" (bcrypt cost factor, session
+> inactivity expiry, refresh token rotation, auth logs) is checking a system no longer in the auth path.
+> Password hashing, session handling, and token rotation are now **Firebase Auth's** responsibility on
+> Firebase's side, and request-level authorization is enforced by the NestJS gateway's `AuthGuard` +
+> `RolesGuard` (`server/src/auth/`), not by Supabase session settings. The `auth.uid()`-based RLS checks
+> further down are still structurally the right idea, but note the live security-audit finding
+> (`.claude/CLAUDE.md` Section 5 / Section 17 "Remaining") that several RLS policies and `SECURITY DEFINER`
+> RPCs are weaker than the gateway sitting in front of them — treat every RLS policy/RPC as reachable by
+> any authenticated user via the bridge JWT until "Phase 7" retires direct `supabase-js`. Rewrite this
+> file's Supabase-Auth-Settings checks as Firebase-Auth + NestJS-gateway equivalents before relying on it.
 
 ---
 
@@ -92,10 +105,10 @@ Fail behavior: `check-rate-limit` fails **open** on RPC error. Document as accep
 > or version control."
 
 - [ ] Scan codebase for hardcoded secrets:
-      `grep -r "supabase\|api_key\|apikey\|secret\|password\|token" apps/member/src -i --include="*.ts" --include="*.tsx" | grep -v "node_modules\|import\|type\|interface\|placeholder"`
+      `grep -r "supabase\|api_key\|apikey\|secret\|password\|token" web/src -i --include="*.ts" --include="*.tsx" | grep -v "node_modules\|import\|type\|interface\|placeholder"`
 - [ ] Scan git history for accidentally committed secrets:
       `git log --all --full-history --follow -p -- "*.env*" | grep -E "KEY|SECRET|PASSWORD|TOKEN"`
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` is never in `apps/member/src/` — server-only
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` is never in `web/src/` — server-only
 - [ ] No secret key is prefixed `VITE_` in Vercel env vars (VITE_ prefix exposes to browser bundle)
 - [ ] `VITE_SUPABASE_ANON_KEY` is safe to expose (public by design); `SERVICE_ROLE_KEY` is not
 - [ ] No credentials in `turbo.json`, `package.json`, or any committed config file
@@ -218,7 +231,7 @@ Content-Security-Policy:
 - [ ] HTTPS enforced (HSTS present)
 - [ ] bcrypt cost factor = 12
 - [ ] Session tokens HttpOnly + Secure
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` not in `apps/member/src/` (grep)
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` not in `web/src/` (grep)
 - [ ] Refresh token rotation enabled
 - [ ] No sensitive data in localStorage (spot check browser DevTools)
 - [ ] QR tokens are signed JWTs (HMAC-SHA256)
