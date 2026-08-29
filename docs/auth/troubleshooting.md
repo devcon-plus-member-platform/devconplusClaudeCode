@@ -18,7 +18,8 @@
 2. **Bridge token not being sent** — `getBridgeToken()` returned null at call time.
    - Check that `setupSupabaseSession()` was called before the Edge Function invocation
    - Add a log: `console.log('[debug] bridge token:', getBridgeToken()?.slice(0, 20))`
-   - Ensure `VITE_AUTH_PROVIDER=firebase` is set and the exchange succeeded
+   - Ensure the Firebase token exchange succeeded (`exchangeFirebaseToken` in `authBridge.ts` — there is
+     no env flag gating this; the Firebase auth path is unconditional)
 
 3. **Bridge token expired** — TTL is 1 hour; `onIdTokenChanged` should refresh it.
    - Check if Firebase `onIdTokenChanged` is firing (add a log in `useAuthStore.ts:283`)

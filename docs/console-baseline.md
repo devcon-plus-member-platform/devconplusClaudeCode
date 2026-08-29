@@ -1,6 +1,9 @@
 # Console Baseline — Known-Harmless Browser Console Lines
 
-> Last verified: June 12, 2026 (staging.cloud-engineer.dev)
+> Last verified: June 12, 2026, on the old staging domain (`staging.cloud-engineer.dev`) — staging has
+> since moved to `staging.devcon.plus` (custom-domain cutover, mid-June 2026). The console lines below
+> are about auth-page behavior (Turnstile, Firebase popup COOP), not the domain itself, so they likely
+> still hold — but this baseline has not been explicitly re-verified against the new domain.
 >
 > The browser console on auth pages shows a handful of recurring lines that are
 > **not bugs**. They've been investigated; do not re-investigate them. Anything

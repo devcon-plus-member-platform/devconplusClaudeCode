@@ -85,8 +85,7 @@ You need two env files (both gitignored — never commit). Ask the team lead for
 # Supabase (bridge-JWT path; anon key is public-by-design)
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon-key>
-# Auth
-VITE_GOOGLE_CLIENT_ID=<gcp-oauth-client-id>
+# Auth (Cloudflare Turnstile CAPTCHA)
 VITE_TURNSTILE_SITE_KEY=<turnstile-site-key>
 # Firebase Auth (web config — public identifiers, not secrets)
 VITE_FIREBASE_API_KEY=<firebase-web-api-key>

@@ -19,7 +19,6 @@ All contributors must follow this contract. Do not deviate without team review.
 |---|---|---|---|
 | `VITE_SUPABASE_URL` | Public config | Vercel env vars, `web/.env.local` | Never a secret — safe to expose |
 | `VITE_SUPABASE_ANON_KEY` | Public config | Vercel env vars, `web/.env.local` | Governed by RLS — safe to expose |
-| `VITE_GOOGLE_CLIENT_ID` | Public config | Vercel env vars, `web/.env.local` | — |
 | `VITE_TURNSTILE_SITE_KEY` | Public config | Vercel env vars, `web/.env.local` | — |
 | `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_AUTH_DOMAIN` / `VITE_FIREBASE_PROJECT_ID` / `VITE_FIREBASE_APP_ID` | Public config (Firebase web app identifiers) | Vercel env vars, `web/.env.local` | — |
 | `VITE_API_URL` | Plain config | Vercel env vars, `web/.env.local` | — |
@@ -106,7 +105,7 @@ staged or untracked, do not commit. Add it to `.gitignore` if missing.
 
 **Vercel (frontend, `web/`):**
 - [ ] Set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` in Vercel → Settings → Environment Variables
-- [ ] Set `VITE_GOOGLE_CLIENT_ID`, `VITE_TURNSTILE_SITE_KEY` in Vercel
+- [ ] Set `VITE_TURNSTILE_SITE_KEY` in Vercel
 - [ ] Set `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID` in Vercel
 - [ ] Set `VITE_API_URL` to `https://api.devcon.plus`
 - [ ] Set `VITE_ALLOW_INDEXING=true` on the production project only (leave unset on staging)
