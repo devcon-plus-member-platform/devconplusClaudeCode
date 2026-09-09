@@ -16,7 +16,8 @@ INSERT INTO chapters (name, region) VALUES
   ('Davao',            'Mindanao'),
   ('Cagayan de Oro',   'Mindanao'),
   ('General Santos',   'Mindanao'),
-  ('Zamboanga',        'Mindanao');
+  ('Zamboanga',        'Mindanao')
+ON CONFLICT DO NOTHING;
 
 
 -- ── ORGANIZER CODES ──────────────────────────────────────────────────────────
