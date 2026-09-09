@@ -1,9 +1,18 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Chapter } from '../supabase/types';
 import type { CreateChapterDto } from './dto/create-chapter.dto';
 import type { UpdateChapterDto } from './dto/update-chapter.dto';
+
+/** Escapes `%` and `_` so a chapter name can't be misread as an ilike wildcard pattern. */
+function escapeIlike(value: string): string {
+  return value.replace(/[%_]/g, (char) => `\\${char}`);
+}
 
 export interface ChapterStatsRow {
   chapter_id: string;
@@ -102,15 +111,28 @@ export class ChaptersRepository extends BaseRepository {
     }));
   }
 
+  async findByNameCaseInsensitive(
+    name: string,
+    excludeId?: string,
+  ): Promise<Chapter | null> {
+    let query = this.db
+      .from('chapters')
+      .select('*')
+      .ilike('name', escapeIlike(name));
+    if (excludeId) query = query.neq('id', excludeId);
+    const result = await query.maybeSingle();
+    return this.unwrapMaybe(
+      result as { data: Chapter | null; error: { message: string } | null },
+    );
+  }
+
   async create(dto: CreateChapterDto): Promise<Chapter> {
     const result = await this.db
       .from('chapters')
       .insert(dto)
       .select()
       .single();
-    return this.unwrap(
-      result as { data: Chapter | null; error: { message: string } | null },
-    );
+    return this.unwrap(this.mapUniqueViolation(result));
   }
 
   async update(id: string, dto: UpdateChapterDto): Promise<Chapter> {
@@ -120,9 +142,23 @@ export class ChaptersRepository extends BaseRepository {
       .eq('id', id)
       .select()
       .single();
-    return this.unwrap(
-      result as { data: Chapter | null; error: { message: string } | null },
-    );
+    return this.unwrap(this.mapUniqueViolation(result));
+  }
+
+  /**
+   * BaseRepository.unwrap() maps any error to a 500, which is wrong for a
+   * user-correctable unique-name clash — surface it as a 409 instead.
+   */
+  private mapUniqueViolation(result: {
+    data: Chapter | null;
+    error: { message: string; code?: string } | null;
+  }): { data: Chapter | null; error: { message: string } | null } {
+    if (result.error?.code === '23505') {
+      throw new ConflictException(
+        'A chapter with this name already exists.',
+      );
+    }
+    return result as { data: Chapter | null; error: { message: string } | null };
   }
 
   async delete(id: string): Promise<void> {

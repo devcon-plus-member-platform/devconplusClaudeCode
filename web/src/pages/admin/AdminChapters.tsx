@@ -3,6 +3,7 @@ import { PenOutline, CheckCircleOutline, CloseCircleLineDuotone, AddCircleOutlin
 import { apiFetch, publicFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
+import { findChapterNameConflict, normalizeChapterName, pageForIndex } from '../../lib/chapters'
 import type { Chapter, Region } from '@devcon-plus/supabase'
 
 const REGIONS: Region[] = ['Luzon', 'Visayas', 'Mindanao']
@@ -54,6 +55,27 @@ export default function AdminChapters() {
 
   const [statsLookup, setStatsLookup] = useState<Record<string, ChapterStats>>({})
 
+  // Feedback for "did my add work?" — jump to the new chapter's page + confirm/highlight it.
+  const [focusChapterId, setFocusChapterId] = useState<string | null>(null)
+  const [addedChapterName, setAddedChapterName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!focusChapterId) return
+    const index = chapters.findIndex((c) => c.id === focusChapterId)
+    if (index === -1) return
+    pagination.setPage(pageForIndex(index, pagination.pageSize))
+    setFocusChapterId(null)
+  }, [chapters, focusChapterId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!addedChapterName) return
+    const timer = window.setTimeout(() => setAddedChapterName(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [addedChapterName])
+
+  const addConflict = findChapterNameConflict(addName, chapters)
+  const editConflict = editingId ? findChapterNameConflict(editName, chapters, editingId) : null
+
   useEffect(() => {
     const load = async () => {
       setIsLoading(true)
@@ -89,12 +111,13 @@ export default function AdminChapters() {
   const cancelEdit = () => { setEditingId(null) }
 
   const saveEdit = async (id: string) => {
+    if (editConflict?.kind === 'duplicate') return
     setSaving(true)
     setError(null)
     try {
       const updated = await apiFetch<Chapter>(`/api/chapters/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name: editName, region: editRegion }),
+        body: JSON.stringify({ name: normalizeChapterName(editName), region: editRegion }),
       })
       setChapters((prev) => prev.map((c) => c.id === id ? updated : c))
       setEditingId(null)
@@ -106,13 +129,13 @@ export default function AdminChapters() {
   }
 
   const addChapter = async () => {
-    if (!addName.trim()) return
+    if (!addName.trim() || addConflict?.kind === 'duplicate') return
     setAdding(true)
     setError(null)
     try {
       const created = await apiFetch<Chapter>('/api/chapters', {
         method: 'POST',
-        body: JSON.stringify({ name: addName.trim(), region: addRegion }),
+        body: JSON.stringify({ name: normalizeChapterName(addName), region: addRegion }),
       })
 
       setChapters((prev) =>
@@ -120,6 +143,8 @@ export default function AdminChapters() {
       )
       setAddName('')
       setAddRegion('Luzon')
+      setFocusChapterId(created.id)
+      setAddedChapterName(created.name)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Create failed')
     } finally {
@@ -150,6 +175,12 @@ export default function AdminChapters() {
         <p className="text-red text-md3-label-md bg-red/5 border border-red/20 rounded-lg px-3 py-2 mb-4">{error}</p>
       )}
 
+      {addedChapterName && (
+        <p className="text-green text-md3-label-md bg-green/5 border border-green/20 rounded-lg px-3 py-2 mb-4">
+          "{addedChapterName}" was added.
+        </p>
+      )}
+
       {/* Add chapter form */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4 shadow-card flex flex-col sm:flex-row sm:items-end gap-3 shrink-0">
         <div className="flex-1 min-w-0">
@@ -161,6 +192,16 @@ export default function AdminChapters() {
             placeholder="e.g. Batangas"
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue"
           />
+          {addConflict?.kind === 'duplicate' && (
+            <p className="text-red text-md3-label-md mt-1">
+              A chapter named "{addConflict.existing.name}" already exists.
+            </p>
+          )}
+          {addConflict?.kind === 'inactive-variant' && (
+            <p className="text-gold text-md3-label-md mt-1">
+              An inactive chapter "{addConflict.existing.name}" already exists — rename that chapter instead of creating a new one.
+            </p>
+          )}
         </div>
         <div className="sm:w-auto">
           <label className="text-md3-label-md font-medium text-slate-700 block mb-1">Region</label>
@@ -174,7 +215,7 @@ export default function AdminChapters() {
         </div>
         <button
           onClick={() => void addChapter()}
-          disabled={adding || !addName.trim()}
+          disabled={adding || !addName.trim() || addConflict?.kind === 'duplicate'}
           className="flex items-center justify-center gap-2 px-4 py-2 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark disabled:opacity-60 transition-colors shrink-0"
         >
           <AddCircleOutline className="w-4 h-4" />
@@ -210,16 +251,33 @@ export default function AdminChapters() {
                   const xp = stats?.xp ?? 0
                   const isEditing = editingId === chapter.id
 
+                  const isHighlighted = addedChapterName !== null && chapter.name === addedChapterName
+
                   return (
-                    <tr key={chapter.id} className="bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                    <tr
+                      key={chapter.id}
+                      className={`bg-white border-b border-slate-50 hover:bg-slate-50 transition-colors ${isHighlighted ? 'bg-green/5' : ''}`}
+                    >
                       <td className="sticky left-0 z-[5] bg-inherit border-r border-slate-100 px-4 py-3 font-semibold text-slate-900">
                         {isEditing ? (
-                          <input
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="border border-slate-200 rounded-lg px-2 py-1.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue w-36"
-                            autoFocus
-                          />
+                          <>
+                            <input
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="border border-slate-200 rounded-lg px-2 py-1.5 text-md3-body-md focus:outline-none focus:ring-2 focus:ring-blue w-36"
+                              autoFocus
+                            />
+                            {editConflict?.kind === 'duplicate' && (
+                              <p className="text-red text-md3-label-md mt-1 font-normal">
+                                Already used by "{editConflict.existing.name}".
+                              </p>
+                            )}
+                            {editConflict?.kind === 'inactive-variant' && (
+                              <p className="text-gold text-md3-label-md mt-1 font-normal">
+                                Inactive chapter "{editConflict.existing.name}" exists — rename it instead.
+                              </p>
+                            )}
+                          </>
                         ) : (
                           chapter.name
                         )}
@@ -255,7 +313,7 @@ export default function AdminChapters() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => void saveEdit(chapter.id)}
-                              disabled={saving || !editName.trim()}
+                              disabled={saving || !editName.trim() || editConflict?.kind === 'duplicate'}
                               className="p-1.5 rounded-lg bg-green/10 text-green hover:bg-green/20 disabled:opacity-50"
                             >
                               <CheckCircleOutline className="w-4 h-4" />
