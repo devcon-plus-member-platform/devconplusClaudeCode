@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
@@ -26,7 +30,11 @@ export class ChaptersService {
   }
 
   async create(dto: CreateChapterDto, _user: AuthenticatedUser): Promise<Chapter> {
-    const chapter = await this.repo.create(dto);
+    const name = dto.name.trim();
+    if (await this.repo.findByNameCaseInsensitive(name)) {
+      throw new ConflictException(`A chapter named "${name}" already exists.`);
+    }
+    const chapter = await this.repo.create({ ...dto, name });
     await this.cache.del(CacheKeys.CHAPTERS_LIST);
     return chapter;
   }
@@ -38,7 +46,17 @@ export class ChaptersService {
   ): Promise<Chapter> {
     const existing = await this.repo.findById(id);
     if (!existing) throw new NotFoundException(`Chapter ${id} not found`);
-    const updated = await this.repo.update(id, dto);
+
+    let updateDto = dto;
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (await this.repo.findByNameCaseInsensitive(name, id)) {
+        throw new ConflictException(`A chapter named "${name}" already exists.`);
+      }
+      updateDto = { ...dto, name };
+    }
+
+    const updated = await this.repo.update(id, updateDto);
     await this.cache.del(CacheKeys.CHAPTERS_LIST);
     return updated;
   }
