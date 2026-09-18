@@ -20,8 +20,8 @@ const admin: AuthenticatedUser = {
   profile: { id: 'admin-1', role: 'hq_admin' } as Profile,
 };
 
-const manilaRow = { id: 'chapter-manila', name: 'Manila', region: 'Luzon', created_at: '2026-01-01' };
-const cebuRow = { id: 'chapter-cebu', name: 'Cebu', region: 'Visayas', created_at: '2026-01-01' };
+const manilaRow = { id: 'chapter-manila', name: 'Manila', region: 'Luzon', is_active: true, created_at: '2026-01-01' };
+const cebuRow = { id: 'chapter-cebu', name: 'Cebu', region: 'Visayas', is_active: true, created_at: '2026-01-01' };
 
 // ── Mock repository ────────────────────────────────────────────────────────────
 
@@ -664,15 +664,18 @@ describe('ChaptersService.getStandings', () => {
     id: string,
     name: string,
     region: string | null,
+    isActive = true,
   ): {
     id: string;
     name: string;
     region: string | null;
+    is_active: boolean;
     created_at: string;
   } => ({
     id,
     name,
     region,
+    is_active: isActive,
     created_at: day(-400),
   });
 
@@ -745,6 +748,23 @@ describe('ChaptersService.getStandings', () => {
     repo.findEventRegistrations.mockResolvedValue(regs);
     repo.findSeasonTransactions.mockResolvedValue([]);
   }
+
+  it('leaves inactive chapters off the board entirely', async () => {
+    // A dormant chapter holds no events, so including it would print
+    // "No events this season" — indistinguishable from an active chapter that
+    // tried and drew nobody.
+    arrangeFourChapters();
+    repo.findAll.mockResolvedValue([
+      chapter('ch-a', 'Alpha', 'Luzon'),
+      chapter('ch-b', 'Beta', 'Visayas'),
+      chapter('ch-c', 'Gamma', 'Mindanao'),
+      chapter('ch-d', 'Delta', 'Luzon', false),
+    ]);
+
+    const { standings } = await service.getStandings();
+
+    expect(standings.map((s) => s.chapter)).toEqual(['Alpha', 'Beta', 'Gamma']);
+  });
 
   it('orders ranked chapters first by descending rate, then unranked, then no-events', async () => {
     arrangeFourChapters();

@@ -52,6 +52,7 @@ export interface Chapter {
   id: string
   name: string
   region: Region
+  is_active: boolean
   created_at: string
 }
 
