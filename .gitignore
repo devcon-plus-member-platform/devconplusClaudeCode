@@ -43,3 +43,6 @@ infra/terraform.tfstate
 infra/terraform.tfstate.*
 infra/terraform.tfstate.d/
 !infra/terraform.tfvars.example
+
+# Claude Code worktrees live here; never commit them (a stray gitlink shipped once)
+.claude/worktrees/
