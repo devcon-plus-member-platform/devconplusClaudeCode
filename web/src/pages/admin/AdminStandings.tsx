@@ -4,7 +4,7 @@ import { useChapterStandingStore, type ChapterStanding } from '../../stores/useC
 import { regionBadgeClass } from '../../lib/chapters'
 import { formatDate } from '../../lib/dates'
 
-type StandingSortColumn =
+export type StandingSortColumn =
   | 'chapter'
   | 'region'
   | 'participationRate'
@@ -39,7 +39,7 @@ function compareNumbers(a: number | null, b: number | null, dir: 1 | -1): number
   return (a - b) * dir
 }
 
-function sortStandings(
+export function sortStandings(
   rows: ChapterStanding[],
   column: StandingSortColumn,
   dir: SortDir,
@@ -108,10 +108,13 @@ export default function AdminStandings() {
     [standings, sortColumn, sortDir],
   )
 
-  // Click cycles a column: asc → desc → back to the default (participation rate, descending).
+  // Click cycles a column: asc → desc → back to the default. The default
+  // column needs its own arm: from (participationRate, desc) a plain reset
+  // would re-set the state it already has, leaving ascending unreachable.
   const handleSort = (col: StandingSortColumn) => {
     if (sortColumn !== col) { setSortColumn(col); setSortDir('asc') }
     else if (sortDir === 'asc') { setSortDir('desc') }
+    else if (col === DEFAULT_SORT_COLUMN) { setSortDir('asc') }
     else { setSortColumn(DEFAULT_SORT_COLUMN); setSortDir(DEFAULT_SORT_DIR) }
   }
 
@@ -187,7 +190,11 @@ export default function AdminStandings() {
                         <span className="font-normal text-slate-400">No events this season</span>
                       ) : (
                         <>
-                          {row.participationRate}%
+                          {row.participationRate === null ? (
+                            <span className="font-normal text-slate-400">—</span>
+                          ) : (
+                            `${row.participationRate}%`
+                          )}
                           {row.status === 'unranked' && (
                             <span className="inline-block ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold/10" style={{ color: '#92700a' }}>
                               Unranked
