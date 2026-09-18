@@ -49,11 +49,17 @@ const mockStanding: ChapterStanding = {
   computedAt: '2026-09-18T00:00:00.000Z',
 };
 
+const mockStandingsResponse = {
+  standings: [mockStanding],
+  computedAt: '2026-09-18T00:00:00.000Z',
+};
+
 function makeService() {
   return {
     getAll: jest.fn().mockResolvedValue([]),
     getStatsByChapter: jest.fn().mockResolvedValue([]),
     getChapterStanding: jest.fn().mockResolvedValue(mockStanding),
+    getStandings: jest.fn().mockResolvedValue(mockStandingsResponse),
     create: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -97,5 +103,11 @@ describe('ChaptersController', () => {
   it('getStatsByChapter — delegates to the service (existing endpoint, unchanged shape)', async () => {
     await controller.getStatsByChapter();
     expect(service.getStatsByChapter).toHaveBeenCalledWith();
+  });
+
+  it('getStandings — delegates to the service, same list for every officer', async () => {
+    const result = await controller.getStandings();
+    expect(service.getStandings).toHaveBeenCalledWith();
+    expect(result).toEqual(mockStandingsResponse);
   });
 });

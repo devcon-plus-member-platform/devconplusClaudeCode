@@ -14,6 +14,7 @@
  *   NEWS_LIST/newsItem   GET /news, /news/:id      NewsService create/update/delete
  *   FEATURED_STORIES_*   GET /featured-stories(/admin) FeaturedStoriesService create/update/delete
  *   CHAPTERS_LIST        GET /chapters             ChaptersService create/update/delete
+ *   CHAPTERS_STANDINGS   GET /chapters/standings   (no writes — read-only feature, 1h TTL only)
  *   REWARDS_CATALOG/ALL  GET /rewards, /rewards/all RewardsService create/update/delete
  *                                                  + redeem/refund (rewards.stock_remaining)
  *   XP_TIERS             GET /points/tiers         PointsService tier create/update/delete
@@ -34,6 +35,8 @@ export const CACHE_TTL = {
   REWARDS: 120,
   MISSIONS: 120,
   CHAPTERS: 600,
+  /** Standings are read-only aggregates recomputed at most hourly — no write invalidates them. */
+  STANDINGS: 3600,
   TIERS: 600,
   INTERESTS: 3600,
   /** Short — bounds role/chapter staleness if a cross-user bust is ever missed. */
@@ -49,6 +52,9 @@ export const CacheKeys = {
   FEATURED_STORIES_ACTIVE: 'featured-stories:list:active',
   FEATURED_STORIES_ALL: 'featured-stories:list:all',
   CHAPTERS_LIST: 'chapters:list',
+  /** Season-scoped: a new season computes a new key, the old one ages out. */
+  standings: (seasonStartIso: string): string =>
+    `chapters:standings:${seasonStartIso}`,
   REWARDS_CATALOG: 'rewards:catalog',
   REWARDS_ALL: 'rewards:all',
   XP_TIERS: 'points:tiers',

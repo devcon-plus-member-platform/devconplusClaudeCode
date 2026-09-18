@@ -10,7 +10,9 @@ import { assertSameChapter } from '../common/authz/chapter-scope';
 import { ChaptersRepository, type ChapterStatsRow } from './chapters.repository';
 import {
   computeChapterStanding,
+  orderStandings,
   type ChapterStanding,
+  type StandingsResponse,
 } from './chapter-standing';
 import { getCurrentSeason } from './season';
 import type { Chapter } from '../supabase/types';
@@ -75,6 +77,82 @@ export class ChaptersService {
       seasonStartIso: startIso,
       computedAtIso: new Date().toISOString(),
     });
+  }
+
+  /**
+   * All-chapters standings for the current season (ticket 02).
+   *
+   * Every officer sees the same ordered list of aggregate figures — no
+   * member names cross a chapter boundary. Ordering and rank assignment are
+   * the server's responsibility so both surfaces agree. Cached for one hour:
+   * the feature is read-only, so hourly staleness is acceptable and no write
+   * invalidates the key.
+   */
+  async getStandings(): Promise<StandingsResponse> {
+    const season = getCurrentSeason(new Date());
+    const startIso = season.start.toISOString();
+    const endIso = season.end.toISOString();
+
+    return this.cache.getOrSet(
+      CacheKeys.standings(startIso),
+      CACHE_TTL.STANDINGS,
+      async () => {
+        const [chapters, seasonEvents, profiles] = await Promise.all([
+          this.repo.findAll(),
+          this.repo.findAllSeasonEvents(startIso, endIso),
+          this.repo.findAllProfiles(),
+        ]);
+        const [registrations, transactions] = await Promise.all([
+          this.repo.findEventRegistrations(seasonEvents.map((e) => e.id)),
+          this.repo.findSeasonTransactions(startIso, endIso),
+        ]);
+
+        const computedAtIso = new Date().toISOString();
+        const eventsByChapter = new Map<string, typeof seasonEvents>();
+        for (const e of seasonEvents) {
+          if (!e.chapter_id) continue;
+          const list = eventsByChapter.get(e.chapter_id) ?? [];
+          list.push(e);
+          eventsByChapter.set(e.chapter_id, list);
+        }
+        const profilesByChapter = new Map<string, typeof profiles>();
+        for (const p of profiles) {
+          if (!p.chapter_id) continue;
+          const list = profilesByChapter.get(p.chapter_id) ?? [];
+          list.push(p);
+          profilesByChapter.set(p.chapter_id, list);
+        }
+        const eventChapterById = new Map(
+          seasonEvents
+            .filter((e) => e.chapter_id !== null)
+            .map((e) => [e.id, e.chapter_id as string]),
+        );
+        const regsByChapter = new Map<string, typeof registrations>();
+        for (const r of registrations) {
+          const chapterId = eventChapterById.get(r.event_id);
+          if (!chapterId) continue;
+          const list = regsByChapter.get(chapterId) ?? [];
+          list.push(r);
+          regsByChapter.set(chapterId, list);
+        }
+
+        const standings = chapters.map((c) =>
+          computeChapterStanding({
+            chapterId: c.id,
+            chapter: c.name,
+            region: c.region,
+            seasonEvents: eventsByChapter.get(c.id) ?? [],
+            profiles: profilesByChapter.get(c.id) ?? [],
+            registrations: regsByChapter.get(c.id) ?? [],
+            transactions,
+            seasonStartIso: startIso,
+            computedAtIso,
+          }),
+        );
+
+        return { standings: orderStandings(standings), computedAt: computedAtIso };
+      },
+    );
   }
 
   async create(dto: CreateChapterDto, _user: AuthenticatedUser): Promise<Chapter> {

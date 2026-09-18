@@ -168,3 +168,43 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
 export function currentSeasonStartIso(now: Date = new Date()): string {
   return getCurrentSeason(now).start.toISOString();
 }
+
+export interface StandingsResponse {
+  standings: ChapterStanding[];
+  computedAt: string;
+}
+
+function compareRateDescThenName(
+  a: ChapterStanding,
+  b: ChapterStanding,
+): number {
+  return (
+    (b.participationRate ?? 0) - (a.participationRate ?? 0) ||
+    a.chapter.localeCompare(b.chapter)
+  );
+}
+
+/**
+ * Server-owned ordering so the officer surface and the HQ surface agree
+ * without duplicating the rule: ranked chapters first by descending
+ * participation rate (positions 1..N assigned here), then unranked chapters
+ * (rate still shown, no position, never displacing ranked chapters), then
+ * chapters with no events this season.
+ */
+export function orderStandings(
+  standings: ChapterStanding[],
+): ChapterStanding[] {
+  const ranked = standings
+    .filter((s) => s.status === 'ranked')
+    .sort(compareRateDescThenName)
+    .map((s, i) => ({ ...s, rank: i + 1 }));
+  const unranked = standings
+    .filter((s) => s.status === 'unranked')
+    .sort(compareRateDescThenName)
+    .map((s) => ({ ...s, rank: null }));
+  const noEvents = standings
+    .filter((s) => s.status === 'no-events')
+    .sort((a, b) => a.chapter.localeCompare(b.chapter))
+    .map((s) => ({ ...s, rank: null }));
+  return [...ranked, ...unranked, ...noEvents];
+}
