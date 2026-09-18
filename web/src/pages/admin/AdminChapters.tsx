@@ -3,7 +3,7 @@ import { PenOutline, CheckCircleOutline, CloseCircleLineDuotone, AddCircleOutlin
 import { apiFetch, publicFetch } from '../../lib/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
-import { findChapterNameConflict, normalizeChapterName, pageForIndex } from '../../lib/chapters'
+import { findChapterNameConflict, normalizeChapterName, pageForIndex, regionBadgeClass } from '../../lib/chapters'
 import type { Chapter, Region } from '@devcon-plus/supabase'
 
 const REGIONS: Region[] = ['Luzon', 'Visayas', 'Mindanao']
@@ -20,15 +20,6 @@ interface ChapterStats {
   members: number
   events: number
   xp: number
-}
-
-function regionBadgeClass(region: string | null | undefined): string {
-  switch (region) {
-    case 'Luzon': return 'bg-blue/10 text-blue'
-    case 'Visayas': return 'bg-gold/10 text-gold'
-    case 'Mindanao': return 'bg-green/10 text-green'
-    default: return 'bg-slate-100 text-slate-400'
-  }
 }
 
 export default function AdminChapters() {
