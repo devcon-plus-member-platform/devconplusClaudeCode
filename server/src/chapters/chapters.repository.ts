@@ -111,6 +111,98 @@ export class ChaptersRepository extends BaseRepository {
     }));
   }
 
+  // ── Chapter leaderboard (ticket 01: single-chapter standing) ─────────────
+  // Every list below is PAGED via fetchAllPages: a plain .select() stops at
+  // PostgREST's max-rows (1000) with no error, and several chapters exceed it.
+
+  async findSeasonEvents(
+    chapterId: string,
+    startIso: string,
+    endIso: string,
+  ): Promise<{ id: string; event_date: string | null }[]> {
+    return this.fetchAllPages<{ id: string; event_date: string | null }>(
+      (from, to) =>
+        this.db
+          .from('events')
+          .select('id, event_date', { count: 'exact' })
+          .eq('chapter_id', chapterId)
+          .gte('event_date', startIso)
+          .lt('event_date', endIso)
+          .or('is_external.is.null,is_external.eq.false')
+          .order('id', { ascending: true })
+          .range(from, to),
+    );
+  }
+
+  async findChapterProfiles(
+    chapterId: string,
+  ): Promise<{ id: string; created_at: string }[]> {
+    return this.fetchAllPages<{ id: string; created_at: string }>((from, to) =>
+      this.db
+        .from('profiles')
+        .select('id, created_at', { count: 'exact' })
+        .eq('chapter_id', chapterId)
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  }
+
+  async findEventRegistrations(
+    eventIds: string[],
+  ): Promise<
+    {
+      event_id: string;
+      user_id: string;
+      status: string | null;
+      checked_in: boolean | null;
+    }[]
+  > {
+    if (eventIds.length === 0) return [];
+    return this.fetchAllPages<{
+      event_id: string;
+      user_id: string;
+      status: string | null;
+      checked_in: boolean | null;
+    }>((from, to) =>
+      this.db
+        .from('event_registrations')
+        .select('event_id, user_id, status, checked_in', { count: 'exact' })
+        .in('event_id', eventIds)
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  }
+
+  /**
+   * Season-filtered point transactions across ALL chapters, narrowed to one
+   * chapter in memory by the service. Filtering by thousands of member ids
+   * with `.in('user_id', …)` would blow past URL limits on large chapters;
+   * paging the season window is bounded by the same helper as everything else.
+   * Reset ledger rows are accounting entries, not earnings — excluded here
+   * (and defensively in the computation too).
+   */
+  async findSeasonTransactions(
+    startIso: string,
+    endIso: string,
+  ): Promise<
+    { user_id: string | null; amount: number | null; source: string | null }[]
+  > {
+    return this.fetchAllPages<{
+      user_id: string | null;
+      amount: number | null;
+      source: string | null;
+    }>((from, to) =>
+      this.db
+        .from('point_transactions')
+        .select('user_id, amount, source', { count: 'exact' })
+        .gte('created_at', startIso)
+        .lt('created_at', endIso)
+        .neq('source', 'reset')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  }
+
   async findByNameCaseInsensitive(
     name: string,
     excludeId?: string,
