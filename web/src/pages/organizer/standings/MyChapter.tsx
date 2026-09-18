@@ -7,6 +7,7 @@ import { useChapterStandingStore, type ChapterStanding } from '../../../stores/u
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
 import { regionBadgeClass } from '../../../lib/chapters'
 import { formatDate } from '../../../lib/dates'
+import { participationRateDisplay } from '../../../lib/standings'
 import logoMark from '../../../assets/logos/logo-mark.svg'
 
 // Flower-of-life pattern matching the organizer header branding
@@ -280,32 +281,38 @@ export function MyChapter() {
                     <p className="text-md3-label-md text-slate-400 uppercase tracking-wide">
                       {standing.chapter} · Participation rate
                     </p>
-                    {standing.status === 'no-events' ? (
-                      <>
-                        <p className="text-md3-headline-sm font-black text-slate-700 mt-2">
-                          No events this season
-                        </p>
-                        <p className="text-md3-body-md text-slate-400 mt-1">
-                          Your chapter hasn&apos;t held an event yet this season, so there&apos;s no rate to show.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-[48px] leading-none font-black text-blue mt-2">
-                          {standing.participationRate}%
-                        </p>
-                        <p className="text-md3-body-md text-slate-400 mt-2">
-                          of eligible members checked in to at least one event this season
-                        </p>
-                        {standing.status === 'unranked' && (
-                          <span className="inline-block mt-3 bg-gold/10 text-md3-label-md font-bold px-3 py-1.5 rounded-full" style={{ color: '#92700a' }}>
-                            Unranked — fewer than 25 eligible members
-                          </span>
-                        )}
-                      </>
-                    )}
+                    {(() => {
+                      const display = participationRateDisplay(standing)
+                      if (display.kind === 'no-events') {
+                        return (
+                          <>
+                            <p className="text-md3-headline-sm font-black text-slate-700 mt-2">
+                              {display.text}
+                            </p>
+                            <p className="text-md3-body-md text-slate-400 mt-1">
+                              Your chapter hasn&apos;t held an event yet this season, so there&apos;s no rate to show.
+                            </p>
+                          </>
+                        )
+                      }
+                      return (
+                        <>
+                          <p className="text-[48px] leading-none font-black text-blue mt-2">
+                            {display.text}
+                          </p>
+                          <p className="text-md3-body-md text-slate-400 mt-2">
+                            of eligible members checked in to at least one event this season
+                          </p>
+                          {standing.status === 'unranked' && (
+                            <span className="inline-block mt-3 bg-gold/10 text-md3-label-md font-bold px-3 py-1.5 rounded-full" style={{ color: '#92700a' }}>
+                              Unranked — fewer than 25 eligible members
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
                     <p className="text-md3-label-sm text-slate-400 mt-3">
-                      Updated {formatDate.dateTime(standing.computedAt)}
+                      Updated {formatDate.dateTime(standing.computedAt)} · Refreshes hourly
                     </p>
                   </motion.div>
 

@@ -13,8 +13,9 @@
  *   JOBS_ACTIVE/ALL      GET /jobs, /jobs/all      JobsService create/update/delete
  *   NEWS_LIST/newsItem   GET /news, /news/:id      NewsService create/update/delete
  *   FEATURED_STORIES_*   GET /featured-stories(/admin) FeaturedStoriesService create/update/delete
- *   CHAPTERS_LIST        GET /chapters             ChaptersService create/update/delete
- *   CHAPTERS_STANDINGS   GET /chapters/standings   (no writes — read-only feature, 1h TTL only)
+  *   CHAPTERS_LIST        GET /chapters             ChaptersService create/update/delete
+  *   CHAPTERS_STANDINGS   GET /chapters/standings   (no writes — read-only feature, 1h TTL only)
+  *   CHAPTER_STANDING     GET /chapters/:id/standing (no writes — read-only feature, 1h TTL only)
  *   REWARDS_CATALOG/ALL  GET /rewards, /rewards/all RewardsService create/update/delete
  *                                                  + redeem/refund (rewards.stock_remaining)
  *   XP_TIERS             GET /points/tiers         PointsService tier create/update/delete
@@ -55,6 +56,14 @@ export const CacheKeys = {
   /** Season-scoped: a new season computes a new key, the old one ages out. */
   standings: (seasonStartIso: string): string =>
     `chapters:standings:${seasonStartIso}`,
+  /**
+   * Season- and chapter-scoped single-chapter standing for the My Chapter tab.
+   * Same one-hour TTL as the list; no write invalidates it. The chapter id is
+   * part of the key, but authorisation still runs before the cache is
+   * consulted — a cached row must never be served across a chapter boundary.
+   */
+  standing: (seasonStartIso: string, chapterId: string): string =>
+    `chapters:standing:${seasonStartIso}:${chapterId}`,
   REWARDS_CATALOG: 'rewards:catalog',
   REWARDS_ALL: 'rewards:all',
   XP_TIERS: 'points:tiers',

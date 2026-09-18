@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { sortStandings } from './AdminStandings'
-import type { ChapterStanding } from '../../stores/useChapterStandingStore'
+import { participationRateDisplay, sortStandings } from './standings'
+import type { ChapterStanding } from '../stores/useChapterStandingStore'
 
 const base: ChapterStanding = {
   chapterId: 'x',
@@ -102,5 +102,31 @@ describe('sortStandings', () => {
       'Cebu',
       'Manila',
     ])
+  })
+})
+
+describe('participationRateDisplay', () => {
+  it('renders a defined rate with a percent sign', () => {
+    expect(participationRateDisplay({ status: 'ranked', participationRate: 48.4 })).toEqual({
+      kind: 'rate',
+      text: '48.4%',
+    })
+    expect(participationRateDisplay({ status: 'unranked', participationRate: 100 })).toEqual({
+      kind: 'rate',
+      text: '100%',
+    })
+  })
+
+  it('reserves "No events this season" for the no-events status', () => {
+    expect(
+      participationRateDisplay({ status: 'no-events', participationRate: null }),
+    ).toEqual({ kind: 'no-events', text: 'No events this season' })
+  })
+
+  it('renders an em dash — never a bare % and never 0% — for events with no eligible members', () => {
+    const display = participationRateDisplay({ status: 'unranked', participationRate: null })
+    expect(display.kind).toBe('unavailable')
+    expect(display.text).toBe('—')
+    expect(display.text).not.toContain('%')
   })
 })
