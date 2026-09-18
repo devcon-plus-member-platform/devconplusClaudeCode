@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline, ShieldCheckOutline } from 'solar-icon-set'
+import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline, ShieldCheckOutline, CupStarOutline, AltArrowRightOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ApprovalCard, type Registration } from '../../components/ApprovalCard'
 import { VolunteerApprovalCard } from '../../components/VolunteerApprovalCard'
@@ -256,6 +256,24 @@ export function OrgDashboard() {
               <span className="font-proxima font-semibold text-[#0d121b] text-[10px] text-center leading-tight">Training and Policy</span>
             </motion.button>
           </div>
+        </motion.section>
+
+        {/* Chapter Standings — officer-only participation figures for this chapter */}
+        <motion.section variants={fadeUp} className="mb-5">
+          <motion.button
+            onClick={() => navigate('/organizer/standings')}
+            className="w-full bg-white border border-slate-200 rounded-2xl shadow-card p-4 flex items-center gap-3 text-left"
+            whileTap={{ scale: 0.97 }}
+          >
+            <div className="w-10 h-10 rounded-xl bg-blue/10 flex items-center justify-center shrink-0">
+              <CupStarOutline className="w-5 h-5" color="#1152D4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-proxima font-bold text-slate-900 text-[14px]">Chapter Standings</p>
+              <p className="font-proxima text-slate-400 text-[12px] truncate">How your chapter is doing this season</p>
+            </div>
+            <AltArrowRightOutline className="w-5 h-5 shrink-0" color="#94A3B8" />
+          </motion.button>
         </motion.section>
 
         <motion.div variants={fadeUp} className="bg-[#eef4ff] inline-flex self-start items-center p-1 rounded-full mb-4">
