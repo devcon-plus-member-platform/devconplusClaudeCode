@@ -155,6 +155,10 @@ export const router = createBrowserRouter([
         lazy: () => import('./pages/admin/AdminChapters').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/admin/standings',
+        lazy: () => import('./pages/admin/AdminStandings').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/admin/upgrades',
         lazy: () => import('./pages/admin/AdminCMS').then((m) => ({ Component: m.default })),
       },
