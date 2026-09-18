@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '../../../stores/useAuthStore'
 import { useChapterStandingStore, type ChapterStanding } from '../../../stores/useChapterStandingStore'
 import { fadeUp, staggerContainer, cardItem } from '../../../lib/animation'
+import { regionBadgeClass } from '../../../lib/chapters'
 import { formatDate } from '../../../lib/dates'
 import logoMark from '../../../assets/logos/logo-mark.svg'
 
@@ -22,15 +23,6 @@ function ordinal(n: number): string {
     case 2: return `${n}nd`
     case 3: return `${n}rd`
     default: return `${n}th`
-  }
-}
-
-function regionBadgeClass(region: string | null): string {
-  switch (region) {
-    case 'Luzon': return 'bg-blue/10 text-blue'
-    case 'Visayas': return 'bg-gold/10 text-gold'
-    case 'Mindanao': return 'bg-green/10 text-green'
-    default: return 'bg-slate-100 text-slate-400'
   }
 }
 
@@ -70,7 +62,7 @@ function StandingRow({ row, isOwn }: { row: ChapterStanding; isOwn: boolean }) {
           </p>
         )}
       </div>
-      {row.status !== 'no-events' && (
+      {row.participationRate !== null && (
         <p className="text-md3-headline-sm font-black text-blue shrink-0">
           {row.participationRate}%
         </p>
@@ -93,7 +85,7 @@ export function MyChapter() {
   useEffect(() => {
     void loadStandings()
     if (chapterId) void loadMyChapter(chapterId)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chapterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rankedCount = standings.filter((s) => s.status === 'ranked').length
   const ownRow = chapterId ? standings.find((s) => s.chapterId === chapterId) : undefined

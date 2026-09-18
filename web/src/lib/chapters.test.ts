@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findChapterNameConflict, normalizeChapterName, pageForIndex } from './chapters'
+import { findChapterNameConflict, normalizeChapterName, pageForIndex, regionBadgeClass } from './chapters'
 
 describe('normalizeChapterName', () => {
   it('trims surrounding whitespace', () => {
@@ -75,5 +75,19 @@ describe('pageForIndex', () => {
   it('guards a non-positive pageSize by returning page 1', () => {
     expect(pageForIndex(5, 0)).toBe(1)
     expect(pageForIndex(5, -3)).toBe(1)
+  })
+})
+
+describe('regionBadgeClass', () => {
+  it('maps each region to its badge colours', () => {
+    expect(regionBadgeClass('Luzon')).toBe('bg-blue/10 text-blue')
+    expect(regionBadgeClass('Visayas')).toBe('bg-gold/10 text-gold')
+    expect(regionBadgeClass('Mindanao')).toBe('bg-green/10 text-green')
+  })
+
+  it('falls back for null, undefined, and unknown regions', () => {
+    expect(regionBadgeClass(null)).toBe('bg-slate-100 text-slate-400')
+    expect(regionBadgeClass(undefined)).toBe('bg-slate-100 text-slate-400')
+    expect(regionBadgeClass('NCR')).toBe('bg-slate-100 text-slate-400')
   })
 })
