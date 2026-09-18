@@ -16,7 +16,7 @@ import { Roles } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { IdParamDto } from '../common/dto/id-param.dto';
 import { ChaptersService } from './chapters.service';
-import type { ChapterStanding } from './chapter-standing';
+import type { ChapterStanding, StandingsResponse } from './chapter-standing';
 import type { ChapterStatsRow } from './chapters.repository';
 import type { Chapter } from '../supabase/types';
 import { CreateChapterDto } from './dto/create-chapter.dto';
@@ -38,6 +38,18 @@ export class ChaptersController {
   @Roles('hq_admin')
   getStatsByChapter(): Promise<ChapterStatsRow[]> {
     return this.service.getStatsByChapter();
+  }
+
+  /**
+   * GET /api/chapters/standings — chapter_officer+: every chapter ranked by
+   * participation rate for the current season, aggregates only. All officers
+   * see the same ordered list.
+   */
+  @Get('standings')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('chapter_officer')
+  getStandings(): Promise<StandingsResponse> {
+    return this.service.getStandings();
   }
 
   /**

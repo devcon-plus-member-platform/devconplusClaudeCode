@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from '../auth/auth.guard';
 import type { AppCacheService } from '../cache/app-cache.service';
 import type { SupabaseService } from '../supabase/supabase.service';
 import type { Profile } from '../supabase/types';
+import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
 import { ChaptersRepository } from './chapters.repository';
 import { ChaptersService } from './chapters.service';
 import { getCurrentSeason } from './season';
@@ -32,6 +33,8 @@ function makeRepo() {
     getStatsByChapter: jest.fn().mockResolvedValue([]),
     findSeasonEvents: jest.fn().mockResolvedValue([]),
     findChapterProfiles: jest.fn().mockResolvedValue([]),
+    findAllSeasonEvents: jest.fn().mockResolvedValue([]),
+    findAllProfiles: jest.fn().mockResolvedValue([]),
     findEventRegistrations: jest.fn().mockResolvedValue([]),
     findSeasonTransactions: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockResolvedValue({ id: 'new-id', name: 'Davao', region: 'Mindanao' }),
@@ -446,6 +449,177 @@ describe('ChaptersService.getChapterStanding', () => {
     await expect(
       service.getChapterStanding(admin, 'chapter-missing'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+// ── getStandings (ticket 02: ranked standings across all chapters) ──────────
+
+describe('ChaptersService.getStandings', () => {
+  const season = getCurrentSeason(new Date());
+  const START_ISO = season.start.toISOString();
+  const END_ISO = season.end.toISOString();
+  const day = (n: number): string =>
+    new Date(season.start.getTime() + n * 86_400_000).toISOString();
+
+  const E = day(10);
+  const JOINED = day(-30);
+
+  const chapter = (
+    id: string,
+    name: string,
+    region: string | null,
+  ): {
+    id: string;
+    name: string;
+    region: string | null;
+    created_at: string;
+  } => ({
+    id,
+    name,
+    region,
+    created_at: day(-400),
+  });
+
+  const membersOf = (
+    chapterId: string,
+    n: number,
+    prefix: string,
+  ): { id: string; chapter_id: string; created_at: string }[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `${prefix}-${i}`,
+      chapter_id: chapterId,
+      created_at: JOINED,
+    }));
+
+  let service: ChaptersService;
+  let repo: jest.Mocked<ChaptersRepository>;
+  let cache: jest.Mocked<AppCacheService>;
+
+  beforeEach(() => {
+    repo = makeRepo();
+    cache = makeCache();
+    service = new ChaptersService(repo, cache);
+  });
+
+  function arrangeFourChapters(): void {
+    const chapters = [
+      chapter('ch-a', 'Alpha', 'Luzon'),
+      chapter('ch-b', 'Beta', 'Visayas'),
+      chapter('ch-c', 'Gamma', 'Mindanao'),
+      chapter('ch-d', 'Delta', 'Luzon'),
+    ];
+    // Alpha: 30 eligible, 27 checked in → 90%, ranked.
+    // Beta: 30 eligible, 15 checked in → 50%, ranked.
+    // Gamma: 10 eligible, all 10 checked in → 100% but unranked (floor).
+    // Delta: no events → no-events, null rate.
+    const profiles = [
+      ...membersOf('ch-a', 30, 'a'),
+      ...membersOf('ch-b', 30, 'b'),
+      ...membersOf('ch-c', 10, 'c'),
+      ...membersOf('ch-d', 5, 'd'),
+    ];
+    const events = [
+      { id: 'e-a', chapter_id: 'ch-a', event_date: E },
+      { id: 'e-b', chapter_id: 'ch-b', event_date: E },
+      { id: 'e-c', chapter_id: 'ch-c', event_date: E },
+    ];
+    const regs = [
+      ...Array.from({ length: 27 }, (_, i) => ({
+        event_id: 'e-a',
+        user_id: `a-${i}`,
+        status: 'approved',
+        checked_in: true,
+      })),
+      ...Array.from({ length: 15 }, (_, i) => ({
+        event_id: 'e-b',
+        user_id: `b-${i}`,
+        status: 'approved',
+        checked_in: true,
+      })),
+      ...Array.from({ length: 10 }, (_, i) => ({
+        event_id: 'e-c',
+        user_id: `c-${i}`,
+        status: 'approved',
+        checked_in: true,
+      })),
+    ];
+    repo.findAll.mockResolvedValue(chapters);
+    repo.findAllSeasonEvents.mockResolvedValue(events);
+    repo.findAllProfiles.mockResolvedValue(profiles);
+    repo.findEventRegistrations.mockResolvedValue(regs);
+    repo.findSeasonTransactions.mockResolvedValue([]);
+  }
+
+  it('orders ranked chapters first by descending rate, then unranked, then no-events', async () => {
+    arrangeFourChapters();
+    const { standings } = await service.getStandings();
+
+    expect(standings.map((s) => s.chapter)).toEqual([
+      'Alpha',
+      'Beta',
+      'Gamma',
+      'Delta',
+    ]);
+    expect(standings.map((s) => s.status)).toEqual([
+      'ranked',
+      'ranked',
+      'unranked',
+      'no-events',
+    ]);
+  });
+
+  it('assigns contiguous positions to ranked chapters only', async () => {
+    arrangeFourChapters();
+    const { standings } = await service.getStandings();
+
+    expect(standings.map((s) => s.rank)).toEqual([1, 2, null, null]);
+    expect(standings[0].participationRate).toBe(90);
+    expect(standings[1].participationRate).toBe(50);
+  });
+
+  it('keeps an unranked high rate from displacing ranked chapters, rate still shown', async () => {
+    arrangeFourChapters();
+    const { standings } = await service.getStandings();
+
+    const gamma = standings.find((s) => s.chapter === 'Gamma');
+    expect(gamma?.status).toBe('unranked');
+    expect(gamma?.rank).toBeNull();
+    expect(gamma?.participationRate).toBe(100);
+    // Gamma's 100% does not take position 1 from Alpha's 90%.
+    expect(standings[0].chapter).toBe('Alpha');
+    expect(standings[0].rank).toBe(1);
+  });
+
+  it('marks event-less chapters last with a null rate, not zero', async () => {
+    arrangeFourChapters();
+    const { standings } = await service.getStandings();
+
+    const delta = standings[standings.length - 1];
+    expect(delta.chapter).toBe('Delta');
+    expect(delta.status).toBe('no-events');
+    expect(delta.participationRate).toBeNull();
+    expect(delta.rank).toBeNull();
+  });
+
+  it('caches the standings for one hour under the season-scoped catalogue key', async () => {
+    arrangeFourChapters();
+    await service.getStandings();
+
+    expect(cache.getOrSet).toHaveBeenCalledWith(
+      CacheKeys.standings(START_ISO),
+      CACHE_TTL.STANDINGS,
+      expect.any(Function),
+    );
+    expect(CACHE_TTL.STANDINGS).toBe(3600);
+    expect(END_ISO).not.toBe(START_ISO);
+  });
+
+  it('carries the computation time on the response', async () => {
+    arrangeFourChapters();
+    const result = await service.getStandings();
+
+    expect(typeof result.computedAt).toBe('string');
+    expect(result.standings[0].computedAt).toBe(result.computedAt);
   });
 });
 

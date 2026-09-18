@@ -203,6 +203,46 @@ export class ChaptersRepository extends BaseRepository {
     );
   }
 
+  // ── Chapter leaderboard, all-chapters scan (ticket 02) ────────────────────
+  // One season-wide pass per table, grouped in memory by the service — eleven
+  // per-chapter round trips would multiply PostgREST overhead for no benefit.
+
+  async findAllSeasonEvents(
+    startIso: string,
+    endIso: string,
+  ): Promise<{ id: string; chapter_id: string | null; event_date: string | null }[]> {
+    return this.fetchAllPages<{
+      id: string;
+      chapter_id: string | null;
+      event_date: string | null;
+    }>((from, to) =>
+      this.db
+        .from('events')
+        .select('id, chapter_id, event_date', { count: 'exact' })
+        .gte('event_date', startIso)
+        .lt('event_date', endIso)
+        .or('is_external.is.null,is_external.eq.false')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  }
+
+  async findAllProfiles(): Promise<
+    { id: string; chapter_id: string | null; created_at: string }[]
+  > {
+    return this.fetchAllPages<{
+      id: string;
+      chapter_id: string | null;
+      created_at: string;
+    }>((from, to) =>
+      this.db
+        .from('profiles')
+        .select('id, chapter_id, created_at', { count: 'exact' })
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+  }
+
   async findByNameCaseInsensitive(
     name: string,
     excludeId?: string,

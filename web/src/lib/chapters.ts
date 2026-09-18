@@ -32,3 +32,13 @@ export function pageForIndex(index: number, pageSize: number): number {
   if (index < 0 || pageSize <= 0) return 1
   return Math.floor(index / pageSize) + 1
 }
+
+/** Shared region badge colours — single source for admin + standings screens. */
+export function regionBadgeClass(region: string | null | undefined): string {
+  switch (region) {
+    case 'Luzon': return 'bg-blue/10 text-blue'
+    case 'Visayas': return 'bg-gold/10 text-gold'
+    case 'Mindanao': return 'bg-green/10 text-green'
+    default: return 'bg-slate-100 text-slate-400'
+  }
+}
