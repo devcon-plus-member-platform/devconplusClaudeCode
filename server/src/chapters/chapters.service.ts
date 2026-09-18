@@ -43,6 +43,11 @@ export class ChaptersService {
    * A chapter officer may request only their own chapter, enforced through
    * the existing chapter-scope helper; HQ admin and above may request any
    * chapter. Returns aggregate counts only — no member names or identifiers.
+   *
+   * The season filter ends at the present moment, not at next June: an event
+   * that has not taken place yet is not counted as held, so it neither
+   * creates eligibility nor divides the average. Cached for one hour like the
+   * standings list; the scope check runs before the cache is consulted.
    */
   async getChapterStanding(
     user: AuthenticatedUser,
@@ -50,33 +55,43 @@ export class ChaptersService {
   ): Promise<ChapterStanding> {
     assertSameChapter(user, chapterId);
 
-    const chapter = await this.repo.findById(chapterId);
-    if (!chapter) throw new NotFoundException(`Chapter ${chapterId} not found`);
-
-    const season = getCurrentSeason(new Date());
+    const now = new Date();
+    const season = getCurrentSeason(now);
     const startIso = season.start.toISOString();
     const endIso = season.end.toISOString();
+    // Upper bound of the season window: the earlier of the season end and now.
+    const heldThroughIso = now.toISOString() < endIso ? now.toISOString() : endIso;
 
-    const [seasonEvents, profiles] = await Promise.all([
-      this.repo.findSeasonEvents(chapterId, startIso, endIso),
-      this.repo.findChapterProfiles(chapterId),
-    ]);
-    const [registrations, transactions] = await Promise.all([
-      this.repo.findEventRegistrations(seasonEvents.map((e) => e.id)),
-      this.repo.findSeasonTransactions(startIso, endIso),
-    ]);
+    return this.cache.getOrSet(
+      CacheKeys.standing(startIso, chapterId),
+      CACHE_TTL.STANDINGS,
+      async () => {
+        const chapter = await this.repo.findById(chapterId);
+        if (!chapter)
+          throw new NotFoundException(`Chapter ${chapterId} not found`);
 
-    return computeChapterStanding({
-      chapterId: chapter.id,
-      chapter: chapter.name,
-      region: chapter.region,
-      seasonEvents,
-      profiles,
-      registrations,
-      transactions,
-      seasonStartIso: startIso,
-      computedAtIso: new Date().toISOString(),
-    });
+        const [seasonEvents, profiles] = await Promise.all([
+          this.repo.findSeasonEvents(chapterId, startIso, heldThroughIso),
+          this.repo.findChapterProfiles(chapterId),
+        ]);
+        const [registrations, transactions] = await Promise.all([
+          this.repo.findEventRegistrations(seasonEvents.map((e) => e.id)),
+          this.repo.findSeasonTransactions(startIso, endIso),
+        ]);
+
+        return computeChapterStanding({
+          chapterId: chapter.id,
+          chapter: chapter.name,
+          region: chapter.region,
+          seasonEvents,
+          profiles,
+          registrations,
+          transactions,
+          seasonStartIso: startIso,
+          computedAtIso: new Date().toISOString(),
+        });
+      },
+    );
   }
 
   /**
@@ -89,9 +104,13 @@ export class ChaptersService {
    * invalidates the key.
    */
   async getStandings(): Promise<StandingsResponse> {
-    const season = getCurrentSeason(new Date());
+    const now = new Date();
+    const season = getCurrentSeason(now);
     const startIso = season.start.toISOString();
     const endIso = season.end.toISOString();
+    // Same present-moment bound as the single-chapter view: scheduled events
+    // are not held events.
+    const heldThroughIso = now.toISOString() < endIso ? now.toISOString() : endIso;
 
     return this.cache.getOrSet(
       CacheKeys.standings(startIso),
@@ -99,7 +118,7 @@ export class ChaptersService {
       async () => {
         const [chapters, seasonEvents, profiles] = await Promise.all([
           this.repo.findAll(),
-          this.repo.findAllSeasonEvents(startIso, endIso),
+          this.repo.findAllSeasonEvents(startIso, heldThroughIso),
           this.repo.findAllProfiles(),
         ]);
         const [registrations, transactions] = await Promise.all([

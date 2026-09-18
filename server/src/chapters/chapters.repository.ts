@@ -179,7 +179,11 @@ export class ChaptersRepository extends BaseRepository {
    * with `.in('user_id', …)` would blow past URL limits on large chapters;
    * paging the season window is bounded by the same helper as everything else.
    * Reset ledger rows are accounting entries, not earnings — excluded here
-   * (and defensively in the computation too).
+   * (and defensively in the computation too). The predicate is null-safe:
+   * `.neq('source', 'reset')` compiles to `source <> 'reset'`, which is NULL
+   * for a null source and would silently drop hand-created dashboard rows on
+   * the nullable column — so null sources pass through here and the
+   * in-memory filter decides their fate.
    */
   async findSeasonTransactions(
     startIso: string,
@@ -197,7 +201,7 @@ export class ChaptersRepository extends BaseRepository {
         .select('user_id, amount, source', { count: 'exact' })
         .gte('created_at', startIso)
         .lt('created_at', endIso)
-        .neq('source', 'reset')
+        .or('source.is.null,source.neq.reset')
         .order('id', { ascending: true })
         .range(from, to),
     );

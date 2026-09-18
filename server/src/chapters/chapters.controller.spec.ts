@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
 import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
+import { ROLES_KEY } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import type { Profile } from '../supabase/types';
 import { ChaptersController } from './chapters.controller';
@@ -13,21 +15,11 @@ const officerProfile: Partial<Profile> = {
   role: 'chapter_officer',
   chapter_id: CH_MANILA,
 };
-const memberProfile: Partial<Profile> = {
-  id: 'member-1',
-  role: 'member',
-  chapter_id: CH_MANILA,
-};
 
 const mockOfficer: AuthenticatedUser = {
   firebaseUid: 'fb-officer',
   profileId: 'officer-1',
   profile: officerProfile as Profile,
-};
-const mockMember: AuthenticatedUser = {
-  firebaseUid: 'fb-member',
-  profileId: 'member-1',
-  profile: memberProfile as Profile,
 };
 
 const mockStanding: ChapterStanding = {
@@ -93,9 +85,12 @@ describe('ChaptersController', () => {
   });
 
   it('getChapterStanding — returns the service standing unchanged', async () => {
+    // Fixture is an officer on purpose: members never reach the handler —
+    // RolesGuard refuses them first. The refusal itself is proven by the
+    // role-metadata tests below and the guard spec, not by calling through.
     const result = await controller.getChapterStanding(
       { id: CH_MANILA },
-      mockMember,
+      mockOfficer,
     );
     expect(result).toEqual(mockStanding);
   });
@@ -109,5 +104,32 @@ describe('ChaptersController', () => {
     const result = await controller.getStandings();
     expect(service.getStandings).toHaveBeenCalledWith();
     expect(result).toEqual(mockStandingsResponse);
+  });
+
+  // The @Roles() decorator is the only thing refusing members on the two
+  // standings routes (the suite stubs RolesGuard to always pass, matching
+  // house style). These assertions read the decorator metadata and fail if
+  // the decorator is removed or weakened.
+  describe('standings authorisation metadata', () => {
+    const reflector = new Reflector();
+    const requiredRoles = (
+      handler: (...args: never[]) => unknown,
+    ): unknown =>
+      reflector.getAllAndOverride<unknown>(ROLES_KEY, [
+        handler,
+        ChaptersController,
+      ]);
+
+    it('requires chapter_officer on getStandings', () => {
+      expect(
+        requiredRoles(ChaptersController.prototype.getStandings),
+      ).toEqual(['chapter_officer']);
+    });
+
+    it('requires chapter_officer on getChapterStanding', () => {
+      expect(
+        requiredRoles(ChaptersController.prototype.getChapterStanding),
+      ).toEqual(['chapter_officer']);
+    });
   });
 });

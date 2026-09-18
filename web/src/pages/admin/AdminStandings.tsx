@@ -1,76 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AltArrowDownOutline, AltArrowUpOutline } from 'solar-icon-set'
-import { useChapterStandingStore, type ChapterStanding } from '../../stores/useChapterStandingStore'
+import { useChapterStandingStore } from '../../stores/useChapterStandingStore'
 import { regionBadgeClass } from '../../lib/chapters'
 import { formatDate } from '../../lib/dates'
+import {
+  participationRateDisplay,
+  sortStandings,
+  type StandingSortColumn,
+  type StandingSortDir,
+} from '../../lib/standings'
 
-export type StandingSortColumn =
-  | 'chapter'
-  | 'region'
-  | 'participationRate'
-  | 'eligibleMembers'
-  | 'participants'
-  | 'events'
-  | 'checkIns'
-  | 'avgPerEvent'
-  | 'showUpRate'
-  | 'newMembers'
-  | 'xp'
+export type { StandingSortColumn }
+export { sortStandings }
 
-type SortDir = 'asc' | 'desc'
+type SortDir = StandingSortDir
 
 const DEFAULT_SORT_COLUMN: StandingSortColumn = 'participationRate'
 const DEFAULT_SORT_DIR: SortDir = 'desc'
-
-/** Ranked chapters hold positions; unranked ones carry a rate but no position; */
-/** chapters with no events this season have no rate at all. */
-function statusOrder(status: ChapterStanding['status']): number {
-  switch (status) {
-    case 'ranked': return 0
-    case 'unranked': return 1
-    case 'no-events': return 2
-  }
-}
-
-function compareNumbers(a: number | null, b: number | null, dir: 1 | -1): number {
-  if (a === null && b === null) return 0
-  if (a === null) return 1
-  if (b === null) return -1
-  return (a - b) * dir
-}
-
-export function sortStandings(
-  rows: ChapterStanding[],
-  column: StandingSortColumn,
-  dir: SortDir,
-): ChapterStanding[] {
-  const d = dir === 'asc' ? 1 : -1
-  return [...rows].sort((a, b) => {
-    // Participation rate keeps the server's group order (ranked, then
-    // unranked, then no events this season) in both directions, so the
-    // default view is the same ranking officers see — an unranked chapter
-    // never interleaves with ranked chapters however high its rate.
-    if (column === 'participationRate') {
-      return (
-        statusOrder(a.status) - statusOrder(b.status) ||
-        compareNumbers(a.participationRate, b.participationRate, d) ||
-        a.chapter.localeCompare(b.chapter)
-      )
-    }
-    switch (column) {
-      case 'chapter': return a.chapter.localeCompare(b.chapter) * d
-      case 'region': return (a.region ?? '').localeCompare(b.region ?? '') * d || a.chapter.localeCompare(b.chapter)
-      case 'eligibleMembers': return (a.eligibleMembers - b.eligibleMembers) * d || a.chapter.localeCompare(b.chapter)
-      case 'participants': return (a.participants - b.participants) * d || a.chapter.localeCompare(b.chapter)
-      case 'events': return (a.events - b.events) * d || a.chapter.localeCompare(b.chapter)
-      case 'checkIns': return (a.checkIns - b.checkIns) * d || a.chapter.localeCompare(b.chapter)
-      case 'avgPerEvent': return (a.avgPerEvent - b.avgPerEvent) * d || a.chapter.localeCompare(b.chapter)
-      case 'showUpRate': return compareNumbers(a.showUpRate, b.showUpRate, d) || a.chapter.localeCompare(b.chapter)
-      case 'newMembers': return (a.newMembers - b.newMembers) * d || a.chapter.localeCompare(b.chapter)
-      case 'xp': return (a.xp - b.xp) * d || a.chapter.localeCompare(b.chapter)
-    }
-  })
-}
 
 interface Column {
   key: StandingSortColumn
@@ -186,22 +132,26 @@ export default function AdminStandings() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-slate-900">
-                      {row.status === 'no-events' ? (
-                        <span className="font-normal text-slate-400">No events this season</span>
-                      ) : (
-                        <>
-                          {row.participationRate === null ? (
-                            <span className="font-normal text-slate-400">—</span>
-                          ) : (
-                            `${row.participationRate}%`
-                          )}
-                          {row.status === 'unranked' && (
-                            <span className="inline-block ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold/10" style={{ color: '#92700a' }}>
-                              Unranked
-                            </span>
-                          )}
-                        </>
-                      )}
+                      {(() => {
+                        const display = participationRateDisplay(row)
+                        if (display.kind === 'no-events') {
+                          return <span className="font-normal text-slate-400">{display.text}</span>
+                        }
+                        return (
+                          <>
+                            {display.kind === 'unavailable' ? (
+                              <span className="font-normal text-slate-400">{display.text}</span>
+                            ) : (
+                              display.text
+                            )}
+                            {row.status === 'unranked' && (
+                              <span className="inline-block ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold/10" style={{ color: '#92700a' }}>
+                                Unranked
+                              </span>
+                            )}
+                          </>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-700 font-semibold">{row.eligibleMembers.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right text-slate-700 font-semibold">{row.participants.toLocaleString()}</td>

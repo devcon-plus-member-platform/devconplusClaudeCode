@@ -18,7 +18,7 @@ export interface ChapterStanding {
   region: string | null;
   rank: number | null;
   status: ChapterStandingStatus;
-  /** Percentage to one decimal place; null when the rate is undefined. */
+  /** Percentage to one decimal place; null when the rate is undefined — no events, or no eligible members. */
   participationRate: number | null;
   eligibleMembers: number;
   participants: number;
@@ -29,7 +29,7 @@ export interface ChapterStanding {
   /** Check-ins as a percentage of approved registrations; null when none. */
   showUpRate: number | null;
   newMembers: number;
-  /** Season-filtered points earned (reset ledger rows excluded). */
+  /** Season-filtered points earned (reset and redemption ledger rows excluded). */
   xp: number;
   computedAt: string;
 }
@@ -76,16 +76,25 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
     computedAt: input.computedAtIso,
   };
 
+  // PostgREST timestamps carry an explicit offset (2026-05-13T16:35:49.975623+00:00)
+  // while the season bound is rendered with Z — compare parsed instants so a
+  // member who joined within the same second as the boundary is not misordered.
+  const seasonStartMs = Date.parse(input.seasonStartIso);
   const newMembers = input.profiles.filter(
-    (p) => p.created_at >= input.seasonStartIso,
+    (p) => Date.parse(p.created_at) >= seasonStartMs,
   ).length;
   const memberIds = new Set(input.profiles.map((p) => p.id));
+  // Earned, not net of spending: reward redemptions carry negative amounts
+  // under source 'redemption' (rewards catalogue debits spendable_points only,
+  // leaving the HQ lifetime_points column untouched). Excluded by source, not
+  // by sign, so a future negative source cannot slip through.
   const xp = input.transactions
     .filter(
       (t) =>
         t.user_id !== null &&
         memberIds.has(t.user_id) &&
-        t.source !== 'reset',
+        t.source !== 'reset' &&
+        t.source !== 'redemption',
     )
     .reduce((sum, t) => sum + (t.amount ?? 0), 0);
 
@@ -124,13 +133,16 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
       .map((p) => p.id),
   );
 
+  // Total check-ins, average per event and the show-up ratio are not cohort
+  // measures: they count everyone who attended the chapter's events, whatever
+  // chapter they belong to. Only the participation-rate numerator is
+  // restricted to the chapter's own eligible members.
   const checkedRows = input.registrations.filter(
-    (r) =>
-      r.checked_in === true &&
-      r.status !== 'cancelled' &&
-      eligibleIds.has(r.user_id),
+    (r) => r.checked_in === true && r.status !== 'cancelled',
   );
-  const participants = new Set(checkedRows.map((r) => r.user_id)).size;
+  const participants = new Set(
+    checkedRows.filter((r) => eligibleIds.has(r.user_id)).map((r) => r.user_id),
+  ).size;
   const checkIns = checkedRows.length;
   const approvedRegistrations = input.registrations.filter(
     (r) => r.status === 'approved',

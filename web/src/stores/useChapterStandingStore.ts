@@ -9,6 +9,7 @@ export interface ChapterStanding {
   region: string | null
   rank: number | null
   status: ChapterStandingStatus
+  /** Percentage to one decimal place; null when the rate is undefined — no events, or no eligible members. */
   participationRate: number | null
   eligibleMembers: number
   participants: number
