@@ -191,7 +191,10 @@ export default function CompleteProfile() {
               <option value="">Select your chapter…</option>
               {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
                 const group = chapters
-                  .filter((c) => c.region === region)
+                  .filter(
+                    (c) =>
+                      (c.is_active || c.id === user?.chapter_id) && c.region === region,
+                  )
                   .sort((a, b) => {
                     if (region === 'Luzon') {
                       if (a.name === 'Manila' && b.name !== 'Manila') return -1

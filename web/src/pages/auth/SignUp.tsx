@@ -408,7 +408,7 @@ export default function SignUp() {
                 <option value="">Select Location</option>
                 {['Luzon', 'Visayas', 'Mindanao'].map((region) => {
                   const group = chapters
-                    .filter((c) => c.region === region)
+                    .filter((c) => c.is_active && c.region === region)
                     .sort((a, b) => {
                       if (region === 'Luzon') {
                         if (a.name === 'Manila' && b.name !== 'Manila') return -1

@@ -22,6 +22,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          is_active: boolean
           name: string
           region: string | null
         }

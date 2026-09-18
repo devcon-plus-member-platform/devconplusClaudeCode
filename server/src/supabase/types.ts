@@ -231,6 +231,7 @@ export interface Chapter {
   id: string;
   name: string;
   region: string | null;
+  is_active: boolean;
   created_at: string | null;
 }
 

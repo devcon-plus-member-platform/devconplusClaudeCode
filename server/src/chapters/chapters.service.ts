@@ -155,19 +155,25 @@ export class ChaptersService {
           regsByChapter.set(chapterId, list);
         }
 
-        const standings = chapters.map((c) =>
-          computeChapterStanding({
-            chapterId: c.id,
-            chapter: c.name,
-            region: c.region,
-            seasonEvents: eventsByChapter.get(c.id) ?? [],
-            profiles: profilesByChapter.get(c.id) ?? [],
-            registrations: regsByChapter.get(c.id) ?? [],
-            transactions,
-            seasonStartIso: startIso,
-            computedAtIso,
-          }),
-        );
+        // Inactive chapters are off the board entirely. A dormant chapter holds no
+        // events, so it would otherwise render as "No events this season" — which
+        // per CONTEXT.md asserts a chapter tried and nobody came. Its members keep
+        // their chapter; only the ranking excludes it.
+        const standings = chapters
+          .filter((c) => c.is_active)
+          .map((c) =>
+            computeChapterStanding({
+              chapterId: c.id,
+              chapter: c.name,
+              region: c.region,
+              seasonEvents: eventsByChapter.get(c.id) ?? [],
+              profiles: profilesByChapter.get(c.id) ?? [],
+              registrations: regsByChapter.get(c.id) ?? [],
+              transactions,
+              seasonStartIso: startIso,
+              computedAtIso,
+            }),
+          );
 
         return { standings: orderStandings(standings), computedAt: computedAtIso };
       },
