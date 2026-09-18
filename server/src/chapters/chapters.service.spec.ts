@@ -1,10 +1,15 @@
-import { ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import type { AppCacheService } from '../cache/app-cache.service';
 import type { SupabaseService } from '../supabase/supabase.service';
 import type { Profile } from '../supabase/types';
 import { ChaptersRepository } from './chapters.repository';
 import { ChaptersService } from './chapters.service';
+import { getCurrentSeason } from './season';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +30,10 @@ function makeRepo() {
     findById: jest.fn().mockResolvedValue(cebuRow),
     findByNameCaseInsensitive: jest.fn().mockResolvedValue(null),
     getStatsByChapter: jest.fn().mockResolvedValue([]),
+    findSeasonEvents: jest.fn().mockResolvedValue([]),
+    findChapterProfiles: jest.fn().mockResolvedValue([]),
+    findEventRegistrations: jest.fn().mockResolvedValue([]),
+    findSeasonTransactions: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockResolvedValue({ id: 'new-id', name: 'Davao', region: 'Mindanao' }),
     update: jest.fn().mockResolvedValue({ ...cebuRow, name: 'Cebu' }),
     delete: jest.fn().mockResolvedValue(undefined),
@@ -116,6 +125,327 @@ describe('ChaptersService', () => {
         service.create({ name: 'Davao', region: 'Mindanao' }, admin),
       ).rejects.toBeInstanceOf(ConflictException);
     });
+  });
+});
+
+// ── getChapterStanding (ticket 01: single-chapter participation rate) ─────────
+
+describe('ChaptersService.getChapterStanding', () => {
+  const CH_MANILA = 'chapter-manila';
+  const season = getCurrentSeason(new Date());
+  const START_ISO = season.start.toISOString();
+  const END_ISO = season.end.toISOString();
+  const day = (n: number): string =>
+    new Date(season.start.getTime() + n * 86_400_000).toISOString();
+
+  const E1 = day(10);
+  const E2 = day(20);
+  const JOINED_BEFORE_SEASON = day(-30);
+  const JOINED_MID_SEASON = day(15);
+  const JOINED_AFTER_LAST_EVENT = day(25);
+
+  const officerOf = (chapterId: string, id = 'officer-1'): AuthenticatedUser => ({
+    firebaseUid: `fb-${id}`,
+    profileId: id,
+    profile: { id, role: 'chapter_officer', chapter_id: chapterId } as Profile,
+  });
+
+  const members = (
+    n: number,
+    joinedIso: string,
+    prefix: string,
+  ): { id: string; created_at: string }[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `${prefix}-${i}`,
+      created_at: joinedIso,
+    }));
+
+  const checkedIn = (
+    userId: string,
+    eventId: string,
+  ): {
+    event_id: string;
+    user_id: string;
+    status: string | null;
+    checked_in: boolean | null;
+  } => ({ event_id: eventId, user_id: userId, status: 'approved', checked_in: true });
+
+  let service: ChaptersService;
+  let repo: jest.Mocked<ChaptersRepository>;
+
+  beforeEach(() => {
+    repo = makeRepo();
+    const cache = makeCache();
+    service = new ChaptersService(repo, cache);
+    repo.findById.mockResolvedValue(manilaRow);
+  });
+
+  function arrangeSeason(opts: {
+    events?: { id: string; event_date: string | null }[];
+    profiles?: { id: string; created_at: string }[];
+    registrations?: {
+      event_id: string;
+      user_id: string;
+      status: string | null;
+      checked_in: boolean | null;
+    }[];
+    transactions?: {
+      user_id: string | null;
+      amount: number | null;
+      source: string | null;
+    }[];
+  }): void {
+    repo.findSeasonEvents.mockResolvedValue(
+      opts.events ?? [
+        { id: 'e1', event_date: E1 },
+        { id: 'e2', event_date: E2 },
+      ],
+    );
+    repo.findChapterProfiles.mockResolvedValue(opts.profiles ?? []);
+    repo.findEventRegistrations.mockResolvedValue(opts.registrations ?? []);
+    repo.findSeasonTransactions.mockResolvedValue(opts.transactions ?? []);
+  }
+
+  it('computes the participation rate from members, events and check-ins', async () => {
+    const profiles = members(30, JOINED_BEFORE_SEASON, 'm');
+    arrangeSeason({
+      profiles,
+      registrations: profiles
+        .slice(0, 15)
+        .map((p) => checkedIn(p.id, 'e1')),
+      transactions: [
+        { user_id: 'm-0', amount: 100, source: 'event_attendance' },
+        { user_id: 'm-1', amount: 200, source: 'volunteering' },
+      ],
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.chapterId).toBe(CH_MANILA);
+    expect(result.participationRate).toBe(50);
+    expect(result.status).toBe('ranked');
+    expect(result.rank).toBeNull();
+    expect(result.eligibleMembers).toBe(30);
+    expect(result.participants).toBe(15);
+    expect(result.events).toBe(2);
+    expect(result.checkIns).toBe(15);
+    expect(result.approvedRegistrations).toBe(15);
+    expect(result.showUpRate).toBe(100);
+    expect(result.newMembers).toBe(0);
+    expect(result.xp).toBe(300);
+    expect(typeof result.computedAt).toBe('string');
+  });
+
+  it('counts a multi-event member once in the numerator and many times in check-ins', async () => {
+    arrangeSeason({
+      profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
+      registrations: [checkedIn('m-0', 'e1'), checkedIn('m-0', 'e2')],
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.participants).toBe(1);
+    expect(result.checkIns).toBe(2);
+    expect(result.participationRate).toBe(3.3);
+    expect(result.avgPerEvent).toBe(1);
+  });
+
+  it('does not count an approved registration that was never checked in', async () => {
+    arrangeSeason({
+      profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
+      registrations: Array.from({ length: 5 }, (_, i) => ({
+        event_id: 'e1',
+        user_id: `m-${i}`,
+        status: 'approved',
+        checked_in: false,
+      })),
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.participants).toBe(0);
+    expect(result.checkIns).toBe(0);
+    expect(result.participationRate).toBe(0);
+    expect(result.approvedRegistrations).toBe(5);
+    expect(result.showUpRate).toBe(0);
+  });
+
+  it('excludes a member who joined after the most recent event from numerator and denominator', async () => {
+    const profiles = [
+      ...members(30, JOINED_BEFORE_SEASON, 'm'),
+      ...members(5, JOINED_AFTER_LAST_EVENT, 'late'),
+    ];
+    arrangeSeason({
+      profiles,
+      // late-0 appears in the raw check-in rows (data anomaly) but joined
+      // after the chapter's most recent event, so they count nowhere.
+      registrations: [checkedIn('m-0', 'e1'), checkedIn('late-0', 'e2')],
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.eligibleMembers).toBe(30);
+    expect(result.participants).toBe(1);
+    expect(result.newMembers).toBe(5);
+  });
+
+  it('counts a mid-season joiner who attended in both numerator and denominator', async () => {
+    arrangeSeason({
+      profiles: [
+        ...members(30, JOINED_BEFORE_SEASON, 'm'),
+        { id: 'mid-0', created_at: JOINED_MID_SEASON },
+      ],
+      registrations: [checkedIn('mid-0', 'e2')],
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.eligibleMembers).toBe(31);
+    expect(result.participants).toBe(1);
+  });
+
+  it('keeps the rate unchanged when members with no opportunity to attend join', async () => {
+    const oldProfiles = members(30, JOINED_BEFORE_SEASON, 'm');
+    const regs = oldProfiles.slice(0, 15).map((p) => checkedIn(p.id, 'e1'));
+
+    arrangeSeason({ profiles: oldProfiles, registrations: regs });
+    const before = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    arrangeSeason({
+      profiles: [...oldProfiles, ...members(10, JOINED_AFTER_LAST_EVENT, 'late')],
+      registrations: regs,
+    });
+    const after = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(after.participationRate).toBe(before.participationRate);
+    expect(after.eligibleMembers).toBe(30);
+  });
+
+  it('queries the repository with the current season window', async () => {
+    arrangeSeason({ profiles: members(2, JOINED_BEFORE_SEASON, 'm') });
+    await service.getChapterStanding(officerOf(CH_MANILA), CH_MANILA);
+
+    expect(repo.findSeasonEvents).toHaveBeenCalledWith(
+      CH_MANILA,
+      START_ISO,
+      END_ISO,
+    );
+    expect(repo.findSeasonTransactions).toHaveBeenCalledWith(
+      START_ISO,
+      END_ISO,
+    );
+    expect(repo.findEventRegistrations).toHaveBeenCalledWith(['e1', 'e2']);
+  });
+
+  it('marks a chapter with no events as no-events with a null rate, not zero', async () => {
+    arrangeSeason({
+      events: [],
+      profiles: members(3, JOINED_AFTER_LAST_EVENT, 'm'),
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.status).toBe('no-events');
+    expect(result.participationRate).toBeNull();
+    expect(result.eligibleMembers).toBe(0);
+    expect(result.events).toBe(0);
+    expect(result.showUpRate).toBeNull();
+    expect(result.newMembers).toBe(3);
+  });
+
+  it('marks a chapter below the member floor as unranked but still carries its rate', async () => {
+    const profiles = members(10, JOINED_BEFORE_SEASON, 'm');
+    arrangeSeason({
+      profiles,
+      registrations: profiles.slice(0, 5).map((p) => checkedIn(p.id, 'e1')),
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.status).toBe('unranked');
+    expect(result.rank).toBeNull();
+    expect(result.participationRate).toBe(50);
+  });
+
+  it('reports exactly 100% when every eligible member attended', async () => {
+    const profiles = members(30, JOINED_BEFORE_SEASON, 'm');
+    arrangeSeason({
+      profiles,
+      registrations: profiles.map((p) => checkedIn(p.id, 'e1')),
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.participationRate).toBe(100);
+  });
+
+  it('excludes reset ledger rows from season XP', async () => {
+    arrangeSeason({
+      profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
+      transactions: [
+        { user_id: 'm-0', amount: 100, source: 'event_attendance' },
+        { user_id: 'm-0', amount: -500, source: 'reset' },
+      ],
+    });
+
+    const result = await service.getChapterStanding(
+      officerOf(CH_MANILA),
+      CH_MANILA,
+    );
+
+    expect(result.xp).toBe(100);
+  });
+
+  it('refuses a chapter officer requesting another chapter without touching data', async () => {
+    await expect(
+      service.getChapterStanding(officerOf('chapter-other'), CH_MANILA),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repo.findById).not.toHaveBeenCalled();
+  });
+
+  it('allows an HQ admin to request any chapter', async () => {
+    repo.findById.mockResolvedValue(cebuRow);
+    arrangeSeason({ profiles: members(2, JOINED_BEFORE_SEASON, 'm') });
+    const result = await service.getChapterStanding(admin, 'chapter-cebu');
+    expect(repo.findById).toHaveBeenCalledWith('chapter-cebu');
+    expect(result.chapterId).toBe('chapter-cebu');
+  });
+
+  it('throws NotFoundException for an unknown chapter', async () => {
+    repo.findById.mockResolvedValue(null);
+    await expect(
+      service.getChapterStanding(admin, 'chapter-missing'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
