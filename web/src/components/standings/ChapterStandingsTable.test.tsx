@@ -106,6 +106,12 @@ describe('ChapterStandingsTable', () => {
     expect(screen.getByText('Swipe the table to see more columns')).toBeInTheDocument()
   })
 
+  it('shows 0 instead of crashing when the API predates the points total', () => {
+    const legacy = row({ chapterId: 'chapter-legacy', chapter: 'Legacy', totalPoints: undefined as unknown as number })
+    render(<ChapterStandingsTable standings={[legacy]} />)
+    expect(screen.getByText('Legacy')).toBeInTheDocument()
+  })
+
   it('renders one row per chapter', () => {
     render(<ChapterStandingsTable standings={standings} />)
     const table = screen.getByRole('table')

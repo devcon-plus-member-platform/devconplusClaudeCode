@@ -66,7 +66,7 @@ export default function OfficerStandings() {
                       : `Checked in ${own.participants} of ${own.eligibleMembers} eligible members`}
                   </p>
                   <p className="text-md3-body-md text-white/80">
-                    {POINTS_TOTAL_LABEL}: {own.totalPoints.toLocaleString()}
+                    {POINTS_TOTAL_LABEL}: {(own.totalPoints ?? 0).toLocaleString()}
                   </p>
                   {own.participationRate !== null && (
                     <p className="text-md3-body-md text-white/80">

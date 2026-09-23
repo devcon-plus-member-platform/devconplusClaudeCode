@@ -126,7 +126,9 @@ export default function ChapterStandingsTable({ standings, yourChapterId }: Prop
           </span>
         )
       case 'totalPoints':
-        return <span className="text-slate-700 font-semibold">{row.totalPoints.toLocaleString()}</span>
+        // Old API responses (preview builds, stale cache) carry no total —
+        // show 0 rather than crashing the whole table.
+        return <span className="text-slate-700 font-semibold">{(row.totalPoints ?? 0).toLocaleString()}</span>
       case 'eligibleMembers':
         return <span className="text-slate-700 font-semibold">{row.eligibleMembers.toLocaleString()}</span>
       case 'participants':
