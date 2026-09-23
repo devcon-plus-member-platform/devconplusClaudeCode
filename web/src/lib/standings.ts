@@ -2,11 +2,12 @@ import type { ChapterStanding } from '../stores/useChapterStandingStore'
 
 /**
  * Heading for the chapter points-total column. Chosen once by the owner in
- * ticket 01 with a read-only database check: "Total points (since 24 June)"
- * when the annual 24 June reset ran (it zeroes the lifetime column too),
- * otherwise "Lifetime points". Flip this one line if the check says otherwise.
+ * ticket 01 with a read-only database check: the 24 June reset never ran
+ * (zero `reset` ledger rows since the 2026 reset moment), so the lifetime
+ * column was never zeroed and the honest label is "Lifetime points". If a
+ * future reset runs, flip this one line to "Total points (since 24 June)".
  */
-export const POINTS_TOTAL_LABEL = 'Total points (since 24 June)'
+export const POINTS_TOTAL_LABEL = 'Lifetime points'
 
 /** A rate is always shown to one decimal place, so a tie reads the same in every pill. */
 export function formatRate(rate: number): string {

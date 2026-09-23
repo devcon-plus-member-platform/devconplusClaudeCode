@@ -53,7 +53,7 @@ describe('ChapterStandingsTable', () => {
       'Chapter',
       'Region',
       'Participation rate',
-      'Total points (since 24 June)',
+      'Lifetime points',
       'Eligible members',
       'Checked in',
       'Events',
@@ -85,7 +85,7 @@ describe('ChapterStandingsTable', () => {
   it('does not reorder rows when either points heading is clicked', () => {
     render(<ChapterStandingsTable standings={standings} />)
     const before = chapterOrder()
-    fireEvent.click(screen.getByText('Total points (since 24 June)'))
+    fireEvent.click(screen.getByText('Lifetime points'))
     expect(chapterOrder()).toEqual(before)
     fireEvent.click(screen.getByText('Points earned this season'))
     expect(chapterOrder()).toEqual(before)
