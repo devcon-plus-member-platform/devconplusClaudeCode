@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import type { AppCacheService } from '../cache/app-cache.service';
 import type { SupabaseService } from '../supabase/supabase.service';
@@ -31,8 +27,6 @@ function makeRepo() {
     findById: jest.fn().mockResolvedValue(cebuRow),
     findByNameCaseInsensitive: jest.fn().mockResolvedValue(null),
     getStatsByChapter: jest.fn().mockResolvedValue([]),
-    findSeasonEvents: jest.fn().mockResolvedValue([]),
-    findChapterProfiles: jest.fn().mockResolvedValue([]),
     findAllSeasonEvents: jest.fn().mockResolvedValue([]),
     findAllProfiles: jest.fn().mockResolvedValue([]),
     findEventRegistrations: jest.fn().mockResolvedValue([]),
@@ -131,9 +125,12 @@ describe('ChaptersService', () => {
   });
 });
 
-// ── getChapterStanding (ticket 01: single-chapter participation rate) ─────────
+// ── getStandings rate rules (re-pointed from the removed single-chapter path) ─
+// The single-chapter endpoint (GET /chapters/:id/standing) is gone — only the
+// deleted My Chapter page called it. Every rate rule it used to cover is now
+// proven through the all-chapters computation, so no rule loses its coverage.
 
-describe('ChaptersService.getChapterStanding', () => {
+describe('ChaptersService.getStandings rate rules', () => {
   const CH_MANILA = 'chapter-manila';
   const season = getCurrentSeason(new Date());
   const START_ISO = season.start.toISOString();
@@ -147,20 +144,23 @@ describe('ChaptersService.getChapterStanding', () => {
   const JOINED_MID_SEASON = day(15);
   const JOINED_AFTER_LAST_EVENT = day(25);
 
-  const officerOf = (chapterId: string, id = 'officer-1'): AuthenticatedUser => ({
-    firebaseUid: `fb-${id}`,
-    profileId: id,
-    profile: { id, role: 'chapter_officer', chapter_id: chapterId } as Profile,
-  });
+  interface StandingProfile {
+    id: string;
+    created_at: string;
+    role: string | null;
+    lifetime_points: number | null;
+  }
 
   const members = (
     n: number,
     joinedIso: string,
     prefix: string,
-  ): { id: string; created_at: string }[] =>
+  ): StandingProfile[] =>
     Array.from({ length: n }, (_, i) => ({
       id: `${prefix}-${i}`,
       created_at: joinedIso,
+      role: 'member',
+      lifetime_points: 0,
     }));
 
   const checkedIn = (
@@ -180,12 +180,11 @@ describe('ChaptersService.getChapterStanding', () => {
     repo = makeRepo();
     const cache = makeCache();
     service = new ChaptersService(repo, cache);
-    repo.findById.mockResolvedValue(manilaRow);
   });
 
-  function arrangeSeason(opts: {
+  function arrangeChapter(opts: {
     events?: { id: string; event_date: string | null }[];
-    profiles?: { id: string; created_at: string }[];
+    profiles?: StandingProfile[];
     registrations?: {
       event_id: string;
       user_id: string;
@@ -198,20 +197,29 @@ describe('ChaptersService.getChapterStanding', () => {
       source: string | null;
     }[];
   }): void {
-    repo.findSeasonEvents.mockResolvedValue(
-      opts.events ?? [
+    repo.findAll.mockResolvedValue([manilaRow]);
+    repo.findAllSeasonEvents.mockResolvedValue(
+      (opts.events ?? [
         { id: 'e1', event_date: E1 },
         { id: 'e2', event_date: E2 },
-      ],
+      ]).map((e) => ({ ...e, chapter_id: CH_MANILA })),
     );
-    repo.findChapterProfiles.mockResolvedValue(opts.profiles ?? []);
+    repo.findAllProfiles.mockResolvedValue(
+      (opts.profiles ?? []).map((p) => ({ ...p, chapter_id: CH_MANILA })),
+    );
     repo.findEventRegistrations.mockResolvedValue(opts.registrations ?? []);
     repo.findSeasonTransactions.mockResolvedValue(opts.transactions ?? []);
   }
 
+  async function singleStanding() {
+    const { standings } = await service.getStandings();
+    expect(standings).toHaveLength(1);
+    return standings[0];
+  }
+
   it('computes the participation rate from members, events and check-ins', async () => {
     const profiles = members(30, JOINED_BEFORE_SEASON, 'm');
-    arrangeSeason({
+    arrangeChapter({
       profiles,
       registrations: profiles
         .slice(0, 15)
@@ -222,15 +230,12 @@ describe('ChaptersService.getChapterStanding', () => {
       ],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.chapterId).toBe(CH_MANILA);
     expect(result.participationRate).toBe(50);
     expect(result.status).toBe('ranked');
-    expect(result.rank).toBeNull();
+    expect(result.rank).toBe(1);
     expect(result.eligibleMembers).toBe(30);
     expect(result.participants).toBe(15);
     expect(result.events).toBe(2);
@@ -239,19 +244,17 @@ describe('ChaptersService.getChapterStanding', () => {
     expect(result.showUpRate).toBe(100);
     expect(result.newMembers).toBe(0);
     expect(result.xp).toBe(300);
+    expect(result.totalPoints).toBe(0);
     expect(typeof result.computedAt).toBe('string');
   });
 
   it('counts a multi-event member once in the numerator and many times in check-ins', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
       registrations: [checkedIn('m-0', 'e1'), checkedIn('m-0', 'e2')],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.participants).toBe(1);
     expect(result.checkIns).toBe(2);
@@ -260,7 +263,7 @@ describe('ChaptersService.getChapterStanding', () => {
   });
 
   it('does not count an approved registration that was never checked in', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
       registrations: Array.from({ length: 5 }, (_, i) => ({
         event_id: 'e1',
@@ -270,10 +273,7 @@ describe('ChaptersService.getChapterStanding', () => {
       })),
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.participants).toBe(0);
     expect(result.checkIns).toBe(0);
@@ -287,17 +287,14 @@ describe('ChaptersService.getChapterStanding', () => {
       ...members(30, JOINED_BEFORE_SEASON, 'm'),
       ...members(5, JOINED_AFTER_LAST_EVENT, 'late'),
     ];
-    arrangeSeason({
+    arrangeChapter({
       profiles,
       // late-0 appears in the raw check-in rows (data anomaly) but joined
       // after the chapter's most recent event, so they count nowhere.
       registrations: [checkedIn('m-0', 'e1'), checkedIn('late-0', 'e2')],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.eligibleMembers).toBe(30);
     expect(result.participants).toBe(1);
@@ -305,18 +302,15 @@ describe('ChaptersService.getChapterStanding', () => {
   });
 
   it('counts a mid-season joiner who attended in both numerator and denominator', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: [
         ...members(30, JOINED_BEFORE_SEASON, 'm'),
-        { id: 'mid-0', created_at: JOINED_MID_SEASON },
+        { id: 'mid-0', created_at: JOINED_MID_SEASON, role: 'member', lifetime_points: 0 },
       ],
       registrations: [checkedIn('mid-0', 'e2')],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.eligibleMembers).toBe(31);
     expect(result.participants).toBe(1);
@@ -326,35 +320,28 @@ describe('ChaptersService.getChapterStanding', () => {
     const oldProfiles = members(30, JOINED_BEFORE_SEASON, 'm');
     const regs = oldProfiles.slice(0, 15).map((p) => checkedIn(p.id, 'e1'));
 
-    arrangeSeason({ profiles: oldProfiles, registrations: regs });
-    const before = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    arrangeChapter({ profiles: oldProfiles, registrations: regs });
+    const before = await singleStanding();
 
-    arrangeSeason({
+    arrangeChapter({
       profiles: [...oldProfiles, ...members(10, JOINED_AFTER_LAST_EVENT, 'late')],
       registrations: regs,
     });
-    const after = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const after = await singleStanding();
 
     expect(after.participationRate).toBe(before.participationRate);
     expect(after.eligibleMembers).toBe(30);
   });
 
   it('bounds the event query at the present moment, not at next June', async () => {
-    arrangeSeason({ profiles: members(2, JOINED_BEFORE_SEASON, 'm') });
-    await service.getChapterStanding(officerOf(CH_MANILA), CH_MANILA);
+    arrangeChapter({ profiles: members(2, JOINED_BEFORE_SEASON, 'm') });
+    await singleStanding();
 
-    expect(repo.findSeasonEvents).toHaveBeenCalledWith(
-      CH_MANILA,
+    expect(repo.findAllSeasonEvents).toHaveBeenCalledWith(
       START_ISO,
       expect.any(String),
     );
-    const endArg: string = repo.findSeasonEvents.mock.calls[0][2];
+    const endArg: string = repo.findAllSeasonEvents.mock.calls[0][1];
     // The season end is next June — the bound actually sent is now, so an
     // event scheduled for next month never reaches the computation.
     expect(endArg < END_ISO).toBe(true);
@@ -369,15 +356,12 @@ describe('ChaptersService.getChapterStanding', () => {
   it('reports no-events when a chapter holds nothing yet this season', async () => {
     // What the repository returns once the upper bound is now: a chapter
     // whose only season event is dated in the future has no held events.
-    arrangeSeason({
+    arrangeChapter({
       events: [],
       profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.status).toBe('no-events');
     expect(result.participationRate).toBeNull();
@@ -392,18 +376,17 @@ describe('ChaptersService.getChapterStanding', () => {
     const joinedAfterHeld = new Date(
       Date.parse(heldDay) + 7 * 86_400_000,
     ).toISOString();
-    repo.findSeasonEvents.mockResolvedValue([{ id: 'e1', event_date: heldDay }]);
-    repo.findChapterProfiles.mockResolvedValue([
-      ...members(30, JOINED_BEFORE_SEASON, 'm'),
-      ...members(5, joinedAfterHeld, 'late'),
-    ]);
-    repo.findEventRegistrations.mockResolvedValue([]);
-    repo.findSeasonTransactions.mockResolvedValue([]);
+    arrangeChapter({
+      events: [{ id: 'e1', event_date: heldDay }],
+      profiles: [
+        ...members(30, JOINED_BEFORE_SEASON, 'm'),
+        ...members(5, joinedAfterHeld, 'late'),
+      ],
+      registrations: [],
+      transactions: [],
+    });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.eligibleMembers).toBe(30);
     expect(result.newMembers).toBe(5);
@@ -411,7 +394,7 @@ describe('ChaptersService.getChapterStanding', () => {
 
   it('divides average check-ins by events held, not events scheduled', async () => {
     const profiles = members(30, JOINED_BEFORE_SEASON, 'm');
-    arrangeSeason({
+    arrangeChapter({
       events: [{ id: 'e1', event_date: E1 }],
       profiles,
       registrations: profiles
@@ -419,10 +402,7 @@ describe('ChaptersService.getChapterStanding', () => {
         .map((p) => checkedIn(p.id, 'e1')),
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.events).toBe(1);
     expect(result.checkIns).toBe(15);
@@ -430,15 +410,12 @@ describe('ChaptersService.getChapterStanding', () => {
   });
 
   it('marks a chapter with no events as no-events with a null rate, not zero', async () => {
-    arrangeSeason({
+    arrangeChapter({
       events: [],
       profiles: members(3, JOINED_AFTER_LAST_EVENT, 'm'),
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.status).toBe('no-events');
     expect(result.participationRate).toBeNull();
@@ -450,15 +427,12 @@ describe('ChaptersService.getChapterStanding', () => {
 
   it('marks a chapter below the member floor as unranked but still carries its rate', async () => {
     const profiles = members(10, JOINED_BEFORE_SEASON, 'm');
-    arrangeSeason({
+    arrangeChapter({
       profiles,
       registrations: profiles.slice(0, 5).map((p) => checkedIn(p.id, 'e1')),
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.status).toBe('unranked');
     expect(result.rank).toBeNull();
@@ -467,21 +441,18 @@ describe('ChaptersService.getChapterStanding', () => {
 
   it('reports exactly 100% when every eligible member attended', async () => {
     const profiles = members(30, JOINED_BEFORE_SEASON, 'm');
-    arrangeSeason({
+    arrangeChapter({
       profiles,
       registrations: profiles.map((p) => checkedIn(p.id, 'e1')),
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.participationRate).toBe(100);
   });
 
   it('excludes reset ledger rows from season XP', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
       transactions: [
         { user_id: 'm-0', amount: 100, source: 'event_attendance' },
@@ -489,17 +460,14 @@ describe('ChaptersService.getChapterStanding', () => {
       ],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.xp).toBe(100);
   });
 
   it('counts a visitor check-in in total check-ins and show-up rate, not in the rate', async () => {
     const profiles = members(30, JOINED_BEFORE_SEASON, 'm');
-    arrangeSeason({
+    arrangeChapter({
       profiles,
       registrations: [
         checkedIn('m-0', 'e1'),
@@ -508,10 +476,7 @@ describe('ChaptersService.getChapterStanding', () => {
       ],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.checkIns).toBe(2);
     expect(result.approvedRegistrations).toBe(2);
@@ -523,7 +488,7 @@ describe('ChaptersService.getChapterStanding', () => {
   });
 
   it('does not let a reward redemption reduce season XP', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
       transactions: [
         { user_id: 'm-0', amount: 10000, source: 'event_attendance' },
@@ -531,24 +496,18 @@ describe('ChaptersService.getChapterStanding', () => {
       ],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.xp).toBe(10000);
   });
 
   it('marks events with zero eligible members as unranked with a null rate, not 0%', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: members(5, JOINED_AFTER_LAST_EVENT, 'late'),
       registrations: [],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.events).toBe(2);
     expect(result.eligibleMembers).toBe(0);
@@ -558,7 +517,7 @@ describe('ChaptersService.getChapterStanding', () => {
   });
 
   it('counts a transaction with a null source in season XP', async () => {
-    arrangeSeason({
+    arrangeChapter({
       profiles: members(30, JOINED_BEFORE_SEASON, 'm'),
       transactions: [
         { user_id: 'm-0', amount: 100, source: 'event_attendance' },
@@ -568,10 +527,7 @@ describe('ChaptersService.getChapterStanding', () => {
       ],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.xp).toBe(150);
   });
@@ -581,20 +537,84 @@ describe('ChaptersService.getChapterStanding', () => {
     // strings the identical instant misorders ('+' < 'Z'), so the comparison
     // must parse both sides.
     const seasonStartPlusOffset = START_ISO.replace('.000Z', '.000+00:00');
-    arrangeSeason({
+    arrangeChapter({
       profiles: [
         ...members(30, JOINED_BEFORE_SEASON, 'm'),
-        { id: 'edge-0', created_at: seasonStartPlusOffset },
+        { id: 'edge-0', created_at: seasonStartPlusOffset, role: 'member', lifetime_points: 0 },
       ],
       registrations: [],
     });
 
-    const result = await service.getChapterStanding(
-      officerOf(CH_MANILA),
-      CH_MANILA,
-    );
+    const result = await singleStanding();
 
     expect(result.newMembers).toBe(1);
+  });
+
+  it('leaves HQ staff out of both sides of the rate but keeps their check-ins in the room count', async () => {
+    arrangeChapter({
+      profiles: [
+        ...members(3, JOINED_BEFORE_SEASON, 'm'),
+        // National staff whose profile sits in this chapter; joined this
+        // season, so they would also pollute new members if counted.
+        { id: 'hq-0', created_at: JOINED_MID_SEASON, role: 'hq_admin', lifetime_points: 500 },
+      ],
+      registrations: [checkedIn('hq-0', 'e1')],
+    });
+
+    const result = await singleStanding();
+
+    expect(result.eligibleMembers).toBe(3);
+    expect(result.participants).toBe(0);
+    expect(result.participationRate).toBe(0);
+    expect(result.checkIns).toBe(1);
+    expect(result.approvedRegistrations).toBe(1);
+    expect(result.showUpRate).toBe(100);
+    expect(result.newMembers).toBe(0);
+  });
+
+  it('counts a chapter_officer exactly like a member', async () => {
+    arrangeChapter({
+      profiles: [
+        ...members(3, JOINED_BEFORE_SEASON, 'm'),
+        { id: 'off-0', created_at: JOINED_BEFORE_SEASON, role: 'chapter_officer', lifetime_points: 0 },
+      ],
+      registrations: [checkedIn('off-0', 'e1')],
+    });
+
+    const result = await singleStanding();
+
+    expect(result.eligibleMembers).toBe(4);
+    expect(result.participants).toBe(1);
+  });
+
+  it('counts a null role as a member', async () => {
+    arrangeChapter({
+      profiles: [
+        ...members(3, JOINED_BEFORE_SEASON, 'm'),
+        { id: 'null-0', created_at: JOINED_BEFORE_SEASON, role: null, lifetime_points: 0 },
+      ],
+      registrations: [checkedIn('null-0', 'e1')],
+    });
+
+    const result = await singleStanding();
+
+    expect(result.eligibleMembers).toBe(4);
+    expect(result.participants).toBe(1);
+  });
+
+  it('sums the points total from members lifetime points, HQ staff excluded', async () => {
+    arrangeChapter({
+      profiles: [
+        { id: 'm-0', created_at: JOINED_BEFORE_SEASON, role: 'member', lifetime_points: 100 },
+        { id: 'm-1', created_at: JOINED_BEFORE_SEASON, role: 'member', lifetime_points: 50 },
+        { id: 'hq-0', created_at: JOINED_BEFORE_SEASON, role: 'hq_admin', lifetime_points: 500 },
+        { id: 'sup-0', created_at: JOINED_BEFORE_SEASON, role: 'super_admin', lifetime_points: 700 },
+      ],
+    });
+
+    const result = await singleStanding();
+
+    expect(result.totalPoints).toBe(150);
   });
 
   it('serves a second call within the TTL from the cache without re-querying', async () => {
@@ -609,42 +629,18 @@ describe('ChaptersService.getChapterStanding', () => {
       del: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<AppCacheService>;
     const cached = new ChaptersService(repo, cachingCache);
-    repo.findById.mockResolvedValue(manilaRow);
-    arrangeSeason({ profiles: members(30, JOINED_BEFORE_SEASON, 'm') });
+    arrangeChapter({ profiles: members(30, JOINED_BEFORE_SEASON, 'm') });
 
-    const officer = officerOf(CH_MANILA);
-    const first = await cached.getChapterStanding(officer, CH_MANILA);
-    const second = await cached.getChapterStanding(officer, CH_MANILA);
+    const first = await cached.getStandings();
+    const second = await cached.getStandings();
 
     expect(second).toEqual(first);
-    expect(repo.findById).toHaveBeenCalledTimes(1);
+    expect(repo.findAll).toHaveBeenCalledTimes(1);
     expect(cachingCache.getOrSet).toHaveBeenCalledWith(
-      CacheKeys.standing(START_ISO, CH_MANILA),
+      CacheKeys.standings(START_ISO),
       CACHE_TTL.STANDINGS,
       expect.any(Function),
     );
-  });
-
-  it('refuses a chapter officer requesting another chapter without touching data', async () => {
-    await expect(
-      service.getChapterStanding(officerOf('chapter-other'), CH_MANILA),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(repo.findById).not.toHaveBeenCalled();
-  });
-
-  it('allows an HQ admin to request any chapter', async () => {
-    repo.findById.mockResolvedValue(cebuRow);
-    arrangeSeason({ profiles: members(2, JOINED_BEFORE_SEASON, 'm') });
-    const result = await service.getChapterStanding(admin, 'chapter-cebu');
-    expect(repo.findById).toHaveBeenCalledWith('chapter-cebu');
-    expect(result.chapterId).toBe('chapter-cebu');
-  });
-
-  it('throws NotFoundException for an unknown chapter', async () => {
-    repo.findById.mockResolvedValue(null);
-    await expect(
-      service.getChapterStanding(admin, 'chapter-missing'),
-    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -683,11 +679,13 @@ describe('ChaptersService.getStandings', () => {
     chapterId: string,
     n: number,
     prefix: string,
-  ): { id: string; chapter_id: string; created_at: string }[] =>
+  ): { id: string; chapter_id: string; created_at: string; role: string | null; lifetime_points: number | null }[] =>
     Array.from({ length: n }, (_, i) => ({
       id: `${prefix}-${i}`,
       chapter_id: chapterId,
       created_at: JOINED,
+      role: 'member',
+      lifetime_points: 0,
     }));
 
   let service: ChaptersService;

@@ -6,12 +6,10 @@ import {
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
-import { assertSameChapter } from '../common/authz/chapter-scope';
 import { ChaptersRepository, type ChapterStatsRow } from './chapters.repository';
 import {
   computeChapterStanding,
   orderStandings,
-  type ChapterStanding,
   type StandingsResponse,
 } from './chapter-standing';
 import { getCurrentSeason } from './season';
@@ -35,63 +33,6 @@ export class ChaptersService {
   // NOT cached: member/event/XP counts change on every signup, event, or point award.
   getStatsByChapter(): Promise<ChapterStatsRow[]> {
     return this.repo.getStatsByChapter();
-  }
-
-  /**
-   * Single-chapter participation standing (ticket 01).
-   *
-   * A chapter officer may request only their own chapter, enforced through
-   * the existing chapter-scope helper; HQ admin and above may request any
-   * chapter. Returns aggregate counts only — no member names or identifiers.
-   *
-   * The season filter ends at the present moment, not at next June: an event
-   * that has not taken place yet is not counted as held, so it neither
-   * creates eligibility nor divides the average. Cached for one hour like the
-   * standings list; the scope check runs before the cache is consulted.
-   */
-  async getChapterStanding(
-    user: AuthenticatedUser,
-    chapterId: string,
-  ): Promise<ChapterStanding> {
-    assertSameChapter(user, chapterId);
-
-    const now = new Date();
-    const season = getCurrentSeason(now);
-    const startIso = season.start.toISOString();
-    const endIso = season.end.toISOString();
-    // Upper bound of the season window: the earlier of the season end and now.
-    const heldThroughIso = now.toISOString() < endIso ? now.toISOString() : endIso;
-
-    return this.cache.getOrSet(
-      CacheKeys.standing(startIso, chapterId),
-      CACHE_TTL.STANDINGS,
-      async () => {
-        const chapter = await this.repo.findById(chapterId);
-        if (!chapter)
-          throw new NotFoundException(`Chapter ${chapterId} not found`);
-
-        const [seasonEvents, profiles] = await Promise.all([
-          this.repo.findSeasonEvents(chapterId, startIso, heldThroughIso),
-          this.repo.findChapterProfiles(chapterId),
-        ]);
-        const [registrations, transactions] = await Promise.all([
-          this.repo.findEventRegistrations(seasonEvents.map((e) => e.id)),
-          this.repo.findSeasonTransactions(startIso, endIso),
-        ]);
-
-        return computeChapterStanding({
-          chapterId: chapter.id,
-          chapter: chapter.name,
-          region: chapter.region,
-          seasonEvents,
-          profiles,
-          registrations,
-          transactions,
-          seasonStartIso: startIso,
-          computedAtIso: new Date().toISOString(),
-        });
-      },
-    );
   }
 
   /**

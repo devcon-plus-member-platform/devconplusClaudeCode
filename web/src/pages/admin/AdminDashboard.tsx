@@ -20,7 +20,10 @@ import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import { EventStatusBadge } from '../../components/EventStatusBadge'
 import { formatDate, computeEventStatus } from '../../lib/dates'
+import { useAuthStore } from '../../stores/useAuthStore'
 import { useRewardsStore } from '../../stores/useRewardsStore'
+import ChapterStandingsSection from '../../components/standings/ChapterStandingsSection'
+import OfficerStandings from '../../components/standings/OfficerStandings'
 
 interface KpiData {
   totalMembers: number
@@ -67,6 +70,10 @@ const CHART_MIN_HEIGHT = 200
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
+  const { user } = useAuthStore()
+  // Chapter officers see only the standings view below — the HQ-only fetches
+  // (analytics and reward redemptions, both 403 for officers) are skipped.
+  const isOfficer = user?.role === 'chapter_officer'
   const [kpis, setKpis] = useState<KpiData>(KPI_SKELETON)
   const [memberGrowth, setMemberGrowth] = useState<GrowthRow[]>([])
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([])
@@ -84,6 +91,10 @@ export default function AdminDashboard() {
   const { allRedemptions, fetchAllRedemptions, isLoadingClaims } = useRewardsStore()
 
   useEffect(() => {
+    if (isOfficer) {
+      setIsLoading(false)
+      return
+    }
     const load = async () => {
       setIsLoading(true)
       try {
@@ -107,9 +118,13 @@ export default function AdminDashboard() {
       }
     }
     void load()
-  }, [])
+  }, [isOfficer])
 
   useEffect(() => {
+    if (isOfficer) {
+      setIsRecentEventsLoading(false)
+      return
+    }
     const loadRecentEvents = async () => {
       setIsRecentEventsLoading(true)
       try {
@@ -124,11 +139,12 @@ export default function AdminDashboard() {
       }
     }
     void loadRecentEvents()
-  }, [])
+  }, [isOfficer])
 
   useEffect(() => {
+    if (isOfficer) return
     void fetchAllRedemptions()
-  }, [fetchAllRedemptions])
+  }, [fetchAllRedemptions, isOfficer])
 
   const pendingClaims = useMemo(
     () =>
@@ -216,6 +232,12 @@ export default function AdminDashboard() {
       color: 'bg-promoted/10 text-promoted',
     },
   ]
+
+  // Officers enter the admin area for the standings only — none of the HQ
+  // sections below render for them, and the HQ-only fetches above are skipped.
+  if (isOfficer) {
+    return <OfficerStandings />
+  }
 
   return (
     <div className="p-4 md:p-8">
@@ -481,6 +503,9 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Row 7 — Chapter Standings (shared table, also shown to officers) */}
+      <ChapterStandingsSection />
     </div>
   )
 }

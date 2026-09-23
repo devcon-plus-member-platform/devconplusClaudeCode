@@ -12,6 +12,20 @@ import { getCurrentSeason } from './season';
 
 export type ChapterStandingStatus = 'ranked' | 'unranked' | 'no-events';
 
+/**
+ * Roles that sit on the national team. Their profile belongs to a chapter
+ * only because every profile must, so they are left out of that chapter's
+ * own-member figures on both sides — participation rate numerator and
+ * denominator, new members, points earned this season and the points total.
+ * Their check-ins still count in whole-event measures (total check-ins,
+ * average per event, show-up rate), which count everyone in the room.
+ */
+export const HQ_STAFF_ROLES = ['hq_admin', 'super_admin'] as const;
+
+export function isHqStaff(role: string | null | undefined): boolean {
+  return role === 'hq_admin' || role === 'super_admin';
+}
+
 export interface ChapterStanding {
   chapterId: string;
   chapter: string;
@@ -31,6 +45,8 @@ export interface ChapterStanding {
   newMembers: number;
   /** Season-filtered points earned (reset and redemption ledger rows excluded). */
   xp: number;
+  /** Sum of chapter members' lifetime points, HQ staff excluded. */
+  totalPoints: number;
   computedAt: string;
 }
 
@@ -47,7 +63,12 @@ export interface StandingInput {
   chapter: string;
   region: string | null;
   seasonEvents: { id: string; event_date: string | null }[];
-  profiles: { id: string; created_at: string }[];
+  profiles: {
+    id: string;
+    created_at: string;
+    role: string | null;
+    lifetime_points: number | null;
+  }[];
   registrations: {
     event_id: string;
     user_id: string;
@@ -76,14 +97,25 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
     computedAt: input.computedAtIso,
   };
 
+  // HQ staff leave every chapter-member figure on both sides, applied once
+  // here so eligible members, checked-in members, new members, points earned
+  // this season and the points total all follow one rule. Whole-event
+  // measures below (total check-ins, average per event, show-up rate) count
+  // every checked-in registration and are untouched by this filter.
+  const memberProfiles = input.profiles.filter((p) => !isHqStaff(p.role));
+
   // PostgREST timestamps carry an explicit offset (2026-05-13T16:35:49.975623+00:00)
   // while the season bound is rendered with Z — compare parsed instants so a
   // member who joined within the same second as the boundary is not misordered.
   const seasonStartMs = Date.parse(input.seasonStartIso);
-  const newMembers = input.profiles.filter(
+  const newMembers = memberProfiles.filter(
     (p) => Date.parse(p.created_at) >= seasonStartMs,
   ).length;
-  const memberIds = new Set(input.profiles.map((p) => p.id));
+  const memberIds = new Set(memberProfiles.map((p) => p.id));
+  const totalPoints = memberProfiles.reduce(
+    (sum, p) => sum + (p.lifetime_points ?? 0),
+    0,
+  );
   // Earned, not net of spending: reward redemptions carry negative amounts
   // under source 'redemption' (rewards catalogue debits spendable_points only,
   // leaving the HQ lifetime_points column untouched). Excluded by source, not
@@ -114,6 +146,7 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
       showUpRate: null,
       newMembers,
       xp,
+      totalPoints,
     };
   }
 
@@ -128,7 +161,7 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
   // Recruiting stays rank-neutral: a member who joined after the most recent
   // event is excluded from both numerator and denominator.
   const eligibleIds = new Set(
-    input.profiles
+    memberProfiles
       .filter((p) => Date.parse(p.created_at) <= latestEventMs)
       .map((p) => p.id),
   );
@@ -174,6 +207,7 @@ export function computeChapterStanding(input: StandingInput): ChapterStanding {
         : null,
     newMembers,
     xp,
+    totalPoints,
   };
 }
 
