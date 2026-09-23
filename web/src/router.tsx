@@ -54,7 +54,6 @@ import { OrgEventSummary } from './pages/organizer/events/EventSummary'
 import { OrgProfile } from './pages/organizer/profile/Profile'
 import { OrgProfileEdit } from './pages/organizer/profile/ProfileEdit'
 import { OrgCoOrganizers } from './pages/organizer/profile/OrgCoOrganizers'
-import { MyChapter } from './pages/organizer/standings/MyChapter'
 
 // OrgQRScanner is lazy-loaded: it pulls in @zxing (large barcode library)
 // which is only needed when an officer scans tickets at the door.
@@ -155,10 +154,6 @@ export const router = createBrowserRouter([
         lazy: () => import('./pages/admin/AdminChapters').then((m) => ({ Component: m.default })),
       },
       {
-        path: '/admin/standings',
-        lazy: () => import('./pages/admin/AdminStandings').then((m) => ({ Component: m.default })),
-      },
-      {
         path: '/admin/upgrades',
         lazy: () => import('./pages/admin/AdminCMS').then((m) => ({ Component: m.default })),
       },
@@ -200,7 +195,6 @@ export const router = createBrowserRouter([
       // Organizers see the same rewards experience as members — catalog + redemption.
       // Reward management (add/edit/remove, claim approval) lives in /admin/rewards.
       { path: '/organizer/rewards',                      element: <Rewards /> },
-      { path: '/organizer/standings',                   element: <MyChapter /> },
       { path: '/organizer/profile',                      element: <OrgProfile /> },
       { path: '/organizer/profile/edit',                 element: <OrgProfileEdit /> },
       { path: '/organizer/profile/co-organizers',        element: <OrgCoOrganizers /> },

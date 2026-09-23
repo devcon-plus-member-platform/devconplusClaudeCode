@@ -111,41 +111,9 @@ export class ChaptersRepository extends BaseRepository {
     }));
   }
 
-  // ── Chapter leaderboard (ticket 01: single-chapter standing) ─────────────
+  // ── Chapter standings (all-chapters scan) ─────────────────────────────────
   // Every list below is PAGED via fetchAllPages: a plain .select() stops at
   // PostgREST's max-rows (1000) with no error, and several chapters exceed it.
-
-  async findSeasonEvents(
-    chapterId: string,
-    startIso: string,
-    endIso: string,
-  ): Promise<{ id: string; event_date: string | null }[]> {
-    return this.fetchAllPages<{ id: string; event_date: string | null }>(
-      (from, to) =>
-        this.db
-          .from('events')
-          .select('id, event_date', { count: 'exact' })
-          .eq('chapter_id', chapterId)
-          .gte('event_date', startIso)
-          .lt('event_date', endIso)
-          .or('is_external.is.null,is_external.eq.false')
-          .order('id', { ascending: true })
-          .range(from, to),
-    );
-  }
-
-  async findChapterProfiles(
-    chapterId: string,
-  ): Promise<{ id: string; created_at: string }[]> {
-    return this.fetchAllPages<{ id: string; created_at: string }>((from, to) =>
-      this.db
-        .from('profiles')
-        .select('id, created_at', { count: 'exact' })
-        .eq('chapter_id', chapterId)
-        .order('id', { ascending: true })
-        .range(from, to),
-    );
-  }
 
   async findEventRegistrations(
     eventIds: string[],
@@ -232,16 +200,26 @@ export class ChaptersRepository extends BaseRepository {
   }
 
   async findAllProfiles(): Promise<
-    { id: string; chapter_id: string | null; created_at: string }[]
+    {
+      id: string;
+      chapter_id: string | null;
+      created_at: string;
+      role: string | null;
+      lifetime_points: number | null;
+    }[]
   > {
     return this.fetchAllPages<{
       id: string;
       chapter_id: string | null;
       created_at: string;
+      role: string | null;
+      lifetime_points: number | null;
     }>((from, to) =>
       this.db
         .from('profiles')
-        .select('id, chapter_id, created_at', { count: 'exact' })
+        .select('id, chapter_id, created_at, role, lifetime_points', {
+          count: 'exact',
+        })
         .order('id', { ascending: true })
         .range(from, to),
     );

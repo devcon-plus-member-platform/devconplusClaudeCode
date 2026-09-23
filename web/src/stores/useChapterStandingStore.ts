@@ -19,7 +19,10 @@ export interface ChapterStanding {
   approvedRegistrations: number
   showUpRate: number | null
   newMembers: number
+  /** Points earned this season (reset and redemption ledger rows excluded). */
   xp: number
+  /** Sum of chapter members' lifetime points, HQ staff excluded. */
+  totalPoints: number
   computedAt: string
 }
 
@@ -29,10 +32,6 @@ export interface StandingsResponse {
 }
 
 interface ChapterStandingState {
-  standing: ChapterStanding | null
-  loading: boolean
-  error: string | null
-  loadMyChapter: (chapterId: string) => Promise<void>
   standings: ChapterStanding[]
   standingsComputedAt: string | null
   standingsLoading: boolean
@@ -42,22 +41,6 @@ interface ChapterStandingState {
 }
 
 export const useChapterStandingStore = create<ChapterStandingState>((set) => ({
-  standing: null,
-  loading: false,
-  error: null,
-
-  loadMyChapter: async (chapterId) => {
-    set({ loading: true, error: null })
-    try {
-      const data = await apiFetch<ChapterStanding>(`/api/chapters/${chapterId}/standing`)
-      set({ standing: data })
-    } catch (err) {
-      set({ standing: null, error: err instanceof Error ? err.message : String(err) })
-    } finally {
-      set({ loading: false })
-    }
-  },
-
   standings: [],
   standingsComputedAt: null,
   standingsLoading: false,
@@ -75,5 +58,5 @@ export const useChapterStandingStore = create<ChapterStandingState>((set) => ({
     }
   },
 
-  reset: () => set({ standing: null, loading: false, error: null, standings: [], standingsComputedAt: null, standingsLoading: false, standingsError: null }),
+  reset: () => set({ standings: [], standingsComputedAt: null, standingsLoading: false, standingsError: null }),
 }))

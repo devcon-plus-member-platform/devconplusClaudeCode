@@ -1,26 +1,13 @@
 import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
-import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 import { ROLES_KEY } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
-import type { Profile } from '../supabase/types';
 import { ChaptersController } from './chapters.controller';
 import { ChaptersService } from './chapters.service';
 import type { ChapterStanding } from './chapter-standing';
 
 const CH_MANILA = 'chapter-manila';
-
-const officerProfile: Partial<Profile> = {
-  id: 'officer-1',
-  role: 'chapter_officer',
-  chapter_id: CH_MANILA,
-};
-
-const mockOfficer: AuthenticatedUser = {
-  firebaseUid: 'fb-officer',
-  profileId: 'officer-1',
-  profile: officerProfile as Profile,
-};
 
 const mockStanding: ChapterStanding = {
   chapterId: CH_MANILA,
@@ -38,6 +25,7 @@ const mockStanding: ChapterStanding = {
   showUpRate: 75,
   newMembers: 4,
   xp: 3000,
+  totalPoints: 4500,
   computedAt: '2026-09-18T00:00:00.000Z',
 };
 
@@ -50,7 +38,6 @@ function makeService() {
   return {
     getAll: jest.fn().mockResolvedValue([]),
     getStatsByChapter: jest.fn().mockResolvedValue([]),
-    getChapterStanding: jest.fn().mockResolvedValue(mockStanding),
     getStandings: jest.fn().mockResolvedValue(mockStandingsResponse),
     create: jest.fn(),
     update: jest.fn(),
@@ -76,25 +63,6 @@ describe('ChaptersController', () => {
     controller = module.get(ChaptersController);
   });
 
-  it('getChapterStanding — chapter id from path, caller from token (never from body)', async () => {
-    await controller.getChapterStanding({ id: CH_MANILA }, mockOfficer);
-    expect(service.getChapterStanding).toHaveBeenCalledWith(
-      mockOfficer,
-      CH_MANILA,
-    );
-  });
-
-  it('getChapterStanding — returns the service standing unchanged', async () => {
-    // Fixture is an officer on purpose: members never reach the handler —
-    // RolesGuard refuses them first. The refusal itself is proven by the
-    // role-metadata tests below and the guard spec, not by calling through.
-    const result = await controller.getChapterStanding(
-      { id: CH_MANILA },
-      mockOfficer,
-    );
-    expect(result).toEqual(mockStanding);
-  });
-
   it('getStatsByChapter — delegates to the service (existing endpoint, unchanged shape)', async () => {
     await controller.getStatsByChapter();
     expect(service.getStatsByChapter).toHaveBeenCalledWith();
@@ -106,9 +74,16 @@ describe('ChaptersController', () => {
     expect(result).toEqual(mockStandingsResponse);
   });
 
-  // The @Roles() decorator is the only thing refusing members on the two
-  // standings routes (the suite stubs RolesGuard to always pass, matching
-  // house style). These assertions read the decorator metadata and fail if
+  it('single-chapter standing route no longer exists — only the deleted My Chapter page called it', async () => {
+    expect(
+      (ChaptersController.prototype as unknown as Record<string, unknown>)
+        .getChapterStanding,
+    ).toBeUndefined();
+  });
+
+  // The @Roles() decorator is the only thing refusing members on the
+  // standings route (the suite stubs RolesGuard to always pass, matching
+  // house style). This assertion reads the decorator metadata and fails if
   // the decorator is removed or weakened.
   describe('standings authorisation metadata', () => {
     const reflector = new Reflector();
@@ -123,12 +98,6 @@ describe('ChaptersController', () => {
     it('requires chapter_officer on getStandings', () => {
       expect(
         requiredRoles(ChaptersController.prototype.getStandings),
-      ).toEqual(['chapter_officer']);
-    });
-
-    it('requires chapter_officer on getChapterStanding', () => {
-      expect(
-        requiredRoles(ChaptersController.prototype.getChapterStanding),
       ).toEqual(['chapter_officer']);
     });
   });

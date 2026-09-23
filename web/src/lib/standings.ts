@@ -1,5 +1,19 @@
 import type { ChapterStanding } from '../stores/useChapterStandingStore'
 
+/**
+ * Heading for the chapter points-total column. Chosen once by the owner in
+ * ticket 01 with a read-only database check: the 24 June reset never ran
+ * (zero `reset` ledger rows since the 2026 reset moment), so the lifetime
+ * column was never zeroed and the honest label is "Lifetime points". If a
+ * future reset runs, flip this one line to "Total points (since 24 June)".
+ */
+export const POINTS_TOTAL_LABEL = 'Lifetime points'
+
+/** A rate is always shown to one decimal place, so a tie reads the same in every pill. */
+export function formatRate(rate: number): string {
+  return `${rate.toFixed(1)}%`
+}
+
 export type StandingSortColumn =
   | 'chapter'
   | 'region'
@@ -11,7 +25,6 @@ export type StandingSortColumn =
   | 'avgPerEvent'
   | 'showUpRate'
   | 'newMembers'
-  | 'xp'
 
 export type StandingSortDir = 'asc' | 'desc'
 
@@ -60,7 +73,6 @@ export function sortStandings(
       case 'avgPerEvent': return (a.avgPerEvent - b.avgPerEvent) * d || a.chapter.localeCompare(b.chapter)
       case 'showUpRate': return compareNumbers(a.showUpRate, b.showUpRate, d) || a.chapter.localeCompare(b.chapter)
       case 'newMembers': return (a.newMembers - b.newMembers) * d || a.chapter.localeCompare(b.chapter)
-      case 'xp': return (a.xp - b.xp) * d || a.chapter.localeCompare(b.chapter)
     }
   })
 }
@@ -81,10 +93,62 @@ export function participationRateDisplay(
   standing: Pick<ChapterStanding, 'status' | 'participationRate'>,
 ): ParticipationRateDisplay {
   if (standing.participationRate !== null) {
-    return { kind: 'rate', text: `${standing.participationRate}%` }
+    return { kind: 'rate', text: formatRate(standing.participationRate) }
   }
   if (standing.status === 'no-events') {
     return { kind: 'no-events', text: 'No events this season' }
   }
   return { kind: 'unavailable', text: '—' }
+}
+
+/** Manila is UTC+8 year-round (no DST) — mirrors getPointsExpiry in dates.ts. */
+const PH_OFFSET_MS = 8 * 3_600_000
+
+/**
+ * Season name derived from the 24 June boundaries, never hard-coded: a season
+ * runs from one 24 June 00:00 Philippine time to the next and is named by the
+ * two years it spans, e.g. "Season 2026–27".
+ */
+export function seasonLabel(now: Date = new Date()): string {
+  const phYear = new Date(now.getTime() + PH_OFFSET_MS).getUTCFullYear()
+  const startYear =
+    now.getTime() >= Date.UTC(phYear, 5, 24) - PH_OFFSET_MS ? phYear : phYear - 1
+  return `Season ${startYear}–${String(startYear + 1).slice(2)}`
+}
+
+/**
+ * Officer's hero comparison line, in the same unit as the ranking — never
+ * "pts", which names the points columns. Null when the chapter is unranked,
+ * has no events, or the board has no chapter to compare against.
+ */
+export function heroComparison(
+  own: Pick<ChapterStanding, 'status' | 'rank' | 'participationRate'>,
+  standings: Pick<ChapterStanding, 'rank' | 'participationRate'>[],
+): string | null {
+  if (own.status !== 'ranked' || own.rank === null || own.participationRate === null) {
+    return null
+  }
+  if (own.rank === 1) {
+    const second = standings.find((s) => s.rank === 2)
+    if (!second || second.participationRate === null) return null
+    return `Ahead of 2nd: ${formatRate(own.participationRate)} vs ${formatRate(second.participationRate)}`
+  }
+  const first = standings.find((s) => s.rank === 1)
+  if (!first || first.participationRate === null) return null
+  return `Behind 1st: ${formatRate(own.participationRate)} vs ${formatRate(first.participationRate)}`
+}
+
+/**
+ * Participation rates shared by two or more ranked chapters. Those rows carry
+ * a "tied at … · A–Z" pill, since the server breaks ties alphabetically.
+ */
+export function tiedRates(
+  standings: Pick<ChapterStanding, 'status' | 'participationRate'>[],
+): Set<number> {
+  const counts = new Map<number, number>()
+  for (const s of standings) {
+    if (s.status !== 'ranked' || s.participationRate === null) continue
+    counts.set(s.participationRate, (counts.get(s.participationRate) ?? 0) + 1)
+  }
+  return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([rate]) => rate))
 }
