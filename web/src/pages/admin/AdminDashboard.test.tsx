@@ -85,28 +85,8 @@ function apiUrls(): string[] {
   return apiFetch.mock.calls.map((call) => String(call[0]))
 }
 
-describe('AdminDashboard role split', () => {
-  it('shows an officer only the standings view and skips the HQ-only fetches', async () => {
-    setUser('chapter_officer')
-    render(
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText('Behind 1st: 34.0% vs 40.0%')).toBeInTheDocument()
-    expect(screen.getByText('Your chapter')).toBeInTheDocument()
-    expect(screen.queryByText('Admin Dashboard')).toBeNull()
-    expect(screen.queryByText('Recent Events')).toBeNull()
-    expect(screen.queryByText('Rewards Claims')).toBeNull()
-
-    const urls = apiUrls()
-    expect(urls).toContain('/api/chapters/standings')
-    expect(urls).not.toContain('/api/admin/analytics')
-    expect(urls).not.toContain('/api/rewards/redemptions')
-  })
-
-  it('shows HQ the existing dashboard plus the standings section', async () => {
+describe('AdminDashboard', () => {
+  it('shows HQ the full dashboard with its admin shortcuts', async () => {
     setUser('hq_admin')
     render(
       <MemoryRouter>
@@ -118,10 +98,32 @@ describe('AdminDashboard role split', () => {
     expect(screen.getByText('Recent Events')).toBeInTheDocument()
     expect(screen.getByText('Rewards Claims')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Chapter Standings' })).toBeInTheDocument()
+    expect(screen.getByText('Create Event')).toBeInTheDocument()
+    expect(screen.getByText('View All')).toBeInTheDocument()
 
     const urls = apiUrls()
     expect(urls).toContain('/api/admin/analytics')
     expect(urls).toContain('/api/chapters/standings')
+    expect(urls).toContain('/api/rewards/redemptions')
+  })
+
+  it('gives officers the same data read-only, without the admin shortcuts', async () => {
+    setUser('chapter_officer')
+    render(
+      <MemoryRouter>
+        <AdminDashboard readOnly />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByText('Recent Events')).toBeInTheDocument()
+    expect(screen.getByText('Rewards Claims')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Chapter Standings' })).toBeInTheDocument()
+    expect(screen.queryByText('Create Event')).toBeNull()
+    expect(screen.queryByText('View All')).toBeNull()
+
+    const urls = apiUrls()
+    expect(urls).toContain('/api/admin/analytics')
     expect(urls).toContain('/api/rewards/redemptions')
   })
 })

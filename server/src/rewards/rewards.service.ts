@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { isAtLeast } from '../common/authz/authz';
 import { AppCacheService } from '../cache/app-cache.service';
 import { CACHE_TTL, CacheKeys } from '../cache/cache-keys';
 import type {
+  ProfileRole,
   Reward,
   RewardRedemption,
   RewardRedemptionWithDetails,
@@ -82,8 +84,12 @@ export class RewardsService {
     return this.rewardsRepo.getMemberRedemptions(userId);
   }
 
-  getAllRedemptions(): Promise<RewardRedemptionWithDetails[]> {
-    return this.rewardsRepo.getAllRedemptions();
+  async getAllRedemptions(role: ProfileRole): Promise<RewardRedemptionWithDetails[]> {
+    const rows = await this.rewardsRepo.getAllRedemptions();
+    if (isAtLeast(role, 'hq_admin')) return rows;
+    // Officers only read the dashboard's claims preview: no member emails, and
+    // never the claim PIN a member uses to collect the reward.
+    return rows.map((row) => ({ ...row, member_email: '', claim_pin: null }));
   }
 
   approveClaim(redemptionId: string, organizerId: string): Promise<void> {

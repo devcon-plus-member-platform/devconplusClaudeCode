@@ -178,6 +178,10 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: '/organizer',                              element: <OrgDashboard /> },
+      {
+        path: '/organizer/dashboard',
+        lazy: () => import('./pages/admin/AdminDashboard').then((m) => ({ Component: () => <m.default readOnly /> })),
+      },
       { path: '/organizer/events',                       element: <OrgEventManagement /> },
       { path: '/organizer/events/create',                element: <OrgEventCreate /> },
       { path: '/organizer/events/:id',                   element: <OrgEventDetail /> },

@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
 import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
+import { ROLES_KEY } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import type { Profile } from '../supabase/types';
 import { RewardsController } from './rewards.controller';
@@ -102,9 +104,9 @@ describe('RewardsController', () => {
   });
 
   describe('getAllRedemptions', () => {
-    it('delegates to service.getAllRedemptions', async () => {
-      await controller.getAllRedemptions();
-      expect(service.getAllRedemptions).toHaveBeenCalled();
+    it('passes the caller role from the token so the service can redact', async () => {
+      await controller.getAllRedemptions(mockOfficer);
+      expect(service.getAllRedemptions).toHaveBeenCalledWith('chapter_officer');
     });
   });
 
@@ -119,6 +121,23 @@ describe('RewardsController', () => {
     it('passes organizerId from token', async () => {
       await controller.refundClaim(mockAdmin, { id: REDEMPTION_ID });
       expect(service.refundClaim).toHaveBeenCalledWith(REDEMPTION_ID, 'admin-uuid');
+    });
+  });
+
+  // RolesGuard is stubbed above, so these read the @Roles() metadata directly:
+  // officers may list claims (read-only dashboard) but never resolve them.
+  describe('claims authorisation metadata', () => {
+    const reflector = new Reflector();
+    const requiredRoles = (handler: (...args: never[]) => unknown): unknown =>
+      reflector.getAllAndOverride<unknown>(ROLES_KEY, [handler, RewardsController]);
+
+    it('lets chapter_officer read getAllRedemptions', () => {
+      expect(requiredRoles(RewardsController.prototype.getAllRedemptions)).toEqual(['chapter_officer']);
+    });
+
+    it('keeps approve and refund at hq_admin+', () => {
+      expect(requiredRoles(RewardsController.prototype.approveClaim)).toEqual(['hq_admin', 'super_admin']);
+      expect(requiredRoles(RewardsController.prototype.refundClaim)).toEqual(['hq_admin', 'super_admin']);
     });
   });
 });

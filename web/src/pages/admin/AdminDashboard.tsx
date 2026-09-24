@@ -20,10 +20,8 @@ import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import { EventStatusBadge } from '../../components/EventStatusBadge'
 import { formatDate, computeEventStatus } from '../../lib/dates'
-import { useAuthStore } from '../../stores/useAuthStore'
 import { useRewardsStore } from '../../stores/useRewardsStore'
 import ChapterStandingsSection from '../../components/standings/ChapterStandingsSection'
-import OfficerStandings from '../../components/standings/OfficerStandings'
 
 interface KpiData {
   totalMembers: number
@@ -68,12 +66,10 @@ const KPI_SKELETON = { totalMembers: 0, totalEvents: 0, xpDistributed: 0, active
 const CHAPTER_BAR_HEIGHT = 30
 const CHART_MIN_HEIGHT = 200
 
-export default function AdminDashboard() {
+// `readOnly` is the chapter officers' copy at /organizer/dashboard: same data,
+// minus the buttons that lead into admin edit pages.
+export default function AdminDashboard({ readOnly = false }: { readOnly?: boolean }) {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
-  // Chapter officers see only the standings view below — the HQ-only fetches
-  // (analytics and reward redemptions, both 403 for officers) are skipped.
-  const isOfficer = user?.role === 'chapter_officer'
   const [kpis, setKpis] = useState<KpiData>(KPI_SKELETON)
   const [memberGrowth, setMemberGrowth] = useState<GrowthRow[]>([])
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([])
@@ -91,10 +87,6 @@ export default function AdminDashboard() {
   const { allRedemptions, fetchAllRedemptions, isLoadingClaims } = useRewardsStore()
 
   useEffect(() => {
-    if (isOfficer) {
-      setIsLoading(false)
-      return
-    }
     const load = async () => {
       setIsLoading(true)
       try {
@@ -118,13 +110,9 @@ export default function AdminDashboard() {
       }
     }
     void load()
-  }, [isOfficer])
+  }, [])
 
   useEffect(() => {
-    if (isOfficer) {
-      setIsRecentEventsLoading(false)
-      return
-    }
     const loadRecentEvents = async () => {
       setIsRecentEventsLoading(true)
       try {
@@ -139,12 +127,11 @@ export default function AdminDashboard() {
       }
     }
     void loadRecentEvents()
-  }, [isOfficer])
+  }, [])
 
   useEffect(() => {
-    if (isOfficer) return
     void fetchAllRedemptions()
-  }, [fetchAllRedemptions, isOfficer])
+  }, [fetchAllRedemptions])
 
   const pendingClaims = useMemo(
     () =>
@@ -233,26 +220,22 @@ export default function AdminDashboard() {
     },
   ]
 
-  // Officers enter the admin area for the standings only — none of the HQ
-  // sections below render for them, and the HQ-only fetches above are skipped.
-  if (isOfficer) {
-    return <OfficerStandings />
-  }
-
   return (
     <div className="p-4 md:p-8">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">Admin Dashboard</h1>
+          <h1 className="text-md3-headline-sm font-black text-slate-900 mb-1">{readOnly ? 'Dashboard' : 'Admin Dashboard'}</h1>
           <p className="text-md3-body-md text-slate-500">Platform overview for DEVCON+</p>
         </div>
-        <button
-          onClick={() => navigate('/admin/events', { state: { openCreate: true } })}
-          className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark active:scale-95 transition-colors shrink-0"
-        >
-          <AddCircleOutline className="w-5 h-5" />
-          <span className="hidden sm:inline">Create Event</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => navigate('/admin/events', { state: { openCreate: true } })}
+            className="flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-blue text-white text-md3-body-md font-bold rounded-xl hover:bg-blue-dark active:scale-95 transition-colors shrink-0"
+          >
+            <AddCircleOutline className="w-5 h-5" />
+            <span className="hidden sm:inline">Create Event</span>
+          </button>
+        )}
       </div>
 
       {/* Row 1 — KPI Cards */}
@@ -463,13 +446,15 @@ export default function AdminDashboard() {
               </span>
             )}
           </div>
-          <button
-            onClick={() => navigate('/admin/rewards')}
-            className="flex items-center gap-1 text-md3-label-lg font-semibold text-blue hover:text-blue-dark transition-colors"
-          >
-            View All
-            <AltArrowRightOutline width={14} height={14} color="#1152D4" />
-          </button>
+          {!readOnly && (
+            <button
+              onClick={() => navigate('/admin/rewards')}
+              className="flex items-center gap-1 text-md3-label-lg font-semibold text-blue hover:text-blue-dark transition-colors"
+            >
+              View All
+              <AltArrowRightOutline width={14} height={14} color="#1152D4" />
+            </button>
+          )}
         </div>
 
         {isLoadingClaims ? (
@@ -504,7 +489,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Row 7 — Chapter Standings (shared table, also shown to officers) */}
+      {/* Row 7 — Chapter Standings */}
       <ChapterStandingsSection />
     </div>
   )
