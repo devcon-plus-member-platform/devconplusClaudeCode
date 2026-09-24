@@ -101,43 +101,6 @@ export function participationRateDisplay(
   return { kind: 'unavailable', text: '—' }
 }
 
-/** Manila is UTC+8 year-round (no DST) — mirrors getPointsExpiry in dates.ts. */
-const PH_OFFSET_MS = 8 * 3_600_000
-
-/**
- * Season name derived from the 24 June boundaries, never hard-coded: a season
- * runs from one 24 June 00:00 Philippine time to the next and is named by the
- * two years it spans, e.g. "Season 2026–27".
- */
-export function seasonLabel(now: Date = new Date()): string {
-  const phYear = new Date(now.getTime() + PH_OFFSET_MS).getUTCFullYear()
-  const startYear =
-    now.getTime() >= Date.UTC(phYear, 5, 24) - PH_OFFSET_MS ? phYear : phYear - 1
-  return `Season ${startYear}–${String(startYear + 1).slice(2)}`
-}
-
-/**
- * Officer's hero comparison line, in the same unit as the ranking — never
- * "pts", which names the points columns. Null when the chapter is unranked,
- * has no events, or the board has no chapter to compare against.
- */
-export function heroComparison(
-  own: Pick<ChapterStanding, 'status' | 'rank' | 'participationRate'>,
-  standings: Pick<ChapterStanding, 'rank' | 'participationRate'>[],
-): string | null {
-  if (own.status !== 'ranked' || own.rank === null || own.participationRate === null) {
-    return null
-  }
-  if (own.rank === 1) {
-    const second = standings.find((s) => s.rank === 2)
-    if (!second || second.participationRate === null) return null
-    return `Ahead of 2nd: ${formatRate(own.participationRate)} vs ${formatRate(second.participationRate)}`
-  }
-  const first = standings.find((s) => s.rank === 1)
-  if (!first || first.participationRate === null) return null
-  return `Behind 1st: ${formatRate(own.participationRate)} vs ${formatRate(first.participationRate)}`
-}
-
 /**
  * Participation rates shared by two or more ranked chapters. Those rows carry
  * a "tied at … · A–Z" pill, since the server breaks ties alphabetically.

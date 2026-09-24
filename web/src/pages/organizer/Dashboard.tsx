@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline, ShieldCheckOutline, CupStarOutline } from 'solar-icon-set'
+import { CheckCircleOutline, BellOutline, AddCircleOutline, HeartOutline, BookOutline, ClipboardListOutline, SquareAcademicCapOutline, ShieldCheckOutline, WidgetOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ApprovalCard, type Registration } from '../../components/ApprovalCard'
 import { VolunteerApprovalCard } from '../../components/VolunteerApprovalCard'
@@ -195,7 +195,7 @@ export function OrgDashboard() {
                 Create Event
               </motion.button>
 
-              {/* HQ keeps the Admin Panel entry; officers get a Standings shortcut instead */}
+              {/* HQ keeps the Admin Panel entry; officers get their read-only Dashboard instead */}
               {isAdmin ? (
                 <motion.button
                   onClick={() => navigate('/admin')}
@@ -207,12 +207,12 @@ export function OrgDashboard() {
                 </motion.button>
               ) : (
                 <motion.button
-                  onClick={() => navigate('/admin')}
+                  onClick={() => navigate('/organizer/dashboard')}
                   className="font-proxima font-semibold flex-none px-5 bg-blue/10 text-blue text-[16px] h-12 rounded-[80px] flex items-center justify-center gap-2 whitespace-nowrap"
                   whileTap={{ scale: 0.95 }}
                 >
-                  <CupStarOutline className="w-5 h-5" color="#1152D4" />
-                  Standings
+                  <WidgetOutline className="w-5 h-5" color="#1152D4" />
+                  Dashboard
                 </motion.button>
               )}
             </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRate, heroComparison, participationRateDisplay, seasonLabel, sortStandings, tiedRates } from './standings'
+import { formatRate, participationRateDisplay, sortStandings, tiedRates } from './standings'
 import type { ChapterStanding } from '../stores/useChapterStandingStore'
 
 const base: ChapterStanding = {
@@ -111,49 +111,6 @@ describe('formatRate', () => {
     expect(formatRate(40)).toBe('40.0%')
     expect(formatRate(48.4)).toBe('48.4%')
     expect(formatRate(100)).toBe('100.0%')
-  })
-})
-
-describe('seasonLabel', () => {
-  it('names the season by the two years it spans', () => {
-    // A season runs from 24 June 00:00 Philippine time to the next.
-    expect(seasonLabel(new Date('2026-09-23T00:00:00+08:00'))).toBe('Season 2026–27')
-    expect(seasonLabel(new Date('2027-05-01T00:00:00+08:00'))).toBe('Season 2026–27')
-    expect(seasonLabel(new Date('2027-06-24T00:00:00+08:00'))).toBe('Season 2027–28')
-    expect(seasonLabel(new Date('2027-06-23T23:59:00+08:00'))).toBe('Season 2026–27')
-  })
-})
-
-describe('heroComparison', () => {
-  const first = { rank: 1, participationRate: 40 }
-  const second = { rank: 2, participationRate: 37 }
-  const third = { rank: 3, participationRate: 34 }
-
-  it('reads "Ahead of 2nd" for the first-placed chapter', () => {
-    expect(
-      heroComparison({ status: 'ranked', rank: 1, participationRate: 40 }, [first, second, third]),
-    ).toBe('Ahead of 2nd: 40.0% vs 37.0%')
-  })
-
-  it('reads "Behind 1st" for any other ranked chapter', () => {
-    expect(
-      heroComparison({ status: 'ranked', rank: 3, participationRate: 34 }, [first, second, third]),
-    ).toBe('Behind 1st: 34.0% vs 40.0%')
-  })
-
-  it('never writes a rate difference as points', () => {
-    const text = heroComparison({ status: 'ranked', rank: 1, participationRate: 40 }, [first, second])
-    expect(text).not.toContain('pts')
-  })
-
-  it('returns null for unranked and no-events chapters, or with nobody to compare against', () => {
-    expect(
-      heroComparison({ status: 'unranked', rank: null, participationRate: 90 }, [first, second]),
-    ).toBeNull()
-    expect(
-      heroComparison({ status: 'no-events', rank: null, participationRate: null }, [first, second]),
-    ).toBeNull()
-    expect(heroComparison({ status: 'ranked', rank: 1, participationRate: 40 }, [first])).toBeNull()
   })
 })
 

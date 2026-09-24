@@ -27,6 +27,7 @@ function renderAt(path: string) {
           <Route path="/admin/events" element={<div>Events page</div>} />
         </Route>
         <Route path="/home" element={<div>Home page</div>} />
+        <Route path="/organizer/dashboard" element={<div>Organizer dashboard</div>} />
         <Route path="/sign-in" element={<div>Sign in</div>} />
       </Routes>
     </MemoryRouter>,
@@ -38,30 +39,15 @@ afterEach(() => {
 })
 
 describe('AdminLayout officer gate', () => {
-  it('sends an officer opening /admin/users back to /admin', async () => {
-    setUser('chapter_officer')
-    renderAt('/admin/users')
-    expect(await screen.findByText('Admin index')).toBeInTheDocument()
-    expect(screen.queryByText('Users page')).toBeNull()
-  })
-
-  it('sends an officer opening /admin/events back to /admin', async () => {
-    setUser('chapter_officer')
-    renderAt('/admin/events')
-    expect(await screen.findByText('Admin index')).toBeInTheDocument()
-    expect(screen.queryByText('Events page')).toBeNull()
-  })
-
-  it('shows an officer only the standings entry under a Chapter officer tag', async () => {
-    setUser('chapter_officer')
-    renderAt('/admin')
-    expect(await screen.findByText('Chapter officer')).toBeInTheDocument()
-    expect(screen.getByText('Chapter Standings')).toBeInTheDocument()
-    expect(screen.queryByText('Users')).toBeNull()
-    expect(screen.queryByText('Events')).toBeNull()
-    expect(screen.getByText('Back to App')).toBeInTheDocument()
-    expect(screen.getByText('Sign Out')).toBeInTheDocument()
-  })
+  it.each(['/admin', '/admin/users', '/admin/events'])(
+    'sends an officer opening %s to the read-only organizer dashboard',
+    async (path) => {
+      setUser('chapter_officer')
+      renderAt(path)
+      expect(await screen.findByText('Organizer dashboard')).toBeInTheDocument()
+      expect(screen.queryByText('Admin index')).toBeNull()
+    },
+  )
 
   it('sends a member opening /admin away as today', async () => {
     setUser('member')

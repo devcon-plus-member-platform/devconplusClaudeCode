@@ -46,8 +46,12 @@ export class AdminController {
     return this.service.updateUserRole(id, dto.role, user.profile.role);
   }
 
-  /** GET /api/admin/analytics — hq_admin+: all 5 analytics RPCs + member/event counts */
+  /**
+   * GET /api/admin/analytics — chapter_officer+: all 5 analytics RPCs + member/event counts.
+   * Read-only; officers see the same national figures on their /organizer/dashboard.
+   */
   @Get('analytics')
+  @Roles('chapter_officer')
   getAnalytics() {
     return this.service.getAnalytics();
   }

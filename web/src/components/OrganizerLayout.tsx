@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { HomeOutline, CalendarOutline, ScannerOutline, GiftOutline, UserOutline } from 'solar-icon-set'
+import { HomeOutline, WidgetOutline, CalendarOutline, ScannerOutline, GiftOutline, UserOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import type { SolarIcon } from '../lib/icons'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -23,8 +23,12 @@ const RIGHT_TABS: { path: string; label: string; Icon: SolarIcon; end: boolean }
   { path: '/organizer/profile', label: 'Profile', Icon: UserOutline,         end: false },
 ]
 
+// Desktop sidebar only — Dashboard sits 2nd, after Home. On phones the
+// bottom bar stays balanced around Scan; officers reach it from Home.
 const ALL_TABS = [
-  ...LEFT_TABS,
+  LEFT_TABS[0],
+  { path: '/organizer/dashboard', label: 'Dashboard', Icon: WidgetOutline, end: false },
+  ...LEFT_TABS.slice(1),
   { path: '/organizer/scan', label: 'Scan', Icon: ScannerOutline, end: false },
   ...RIGHT_TABS,
 ]

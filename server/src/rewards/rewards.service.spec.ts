@@ -124,9 +124,25 @@ describe('RewardsService', () => {
   });
 
   describe('getAllRedemptions', () => {
-    it('delegates to repo.getAllRedemptions', async () => {
-      await service.getAllRedemptions();
-      expect(repo.getAllRedemptions).toHaveBeenCalled();
+    const claim = {
+      ...mockRedemption,
+      claim_pin: 'PIN1',
+      member_name: 'Juan Dela Cruz',
+      member_email: 'juan@example.com',
+      reward_name: 'Shirt',
+      reward_image_url: null,
+      reward_points_cost: 100,
+    };
+
+    it('gives HQ the full claim, email and PIN included', async () => {
+      repo.getAllRedemptions.mockResolvedValue([claim]);
+      await expect(service.getAllRedemptions('hq_admin')).resolves.toEqual([claim]);
+    });
+
+    it('hides member email and claim PIN from chapter officers', async () => {
+      repo.getAllRedemptions.mockResolvedValue([claim]);
+      const [row] = await service.getAllRedemptions('chapter_officer');
+      expect(row).toEqual({ ...claim, member_email: '', claim_pin: null });
     });
   });
 

@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
 import { AuthenticatedUser, AuthGuard } from '../auth/auth.guard';
+import { ROLES_KEY } from '../common/authz/roles.decorator';
 import { RolesGuard } from '../common/authz/roles.guard';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -67,5 +69,22 @@ describe('AdminController', () => {
   it('getEventCreators — delegates to service', async () => {
     await controller.getEventCreators();
     expect(service.getEventCreators).toHaveBeenCalled();
+  });
+
+  // RolesGuard is stubbed above, so these read the @Roles() metadata directly:
+  // officers may read analytics (their read-only dashboard), nothing else here.
+  describe('authorisation metadata', () => {
+    const reflector = new Reflector();
+    const requiredRoles = (handler: (...args: never[]) => unknown): unknown =>
+      reflector.getAllAndOverride<unknown>(ROLES_KEY, [handler, AdminController]);
+
+    it('lets chapter_officer read getAnalytics', () => {
+      expect(requiredRoles(AdminController.prototype.getAnalytics)).toEqual(['chapter_officer']);
+    });
+
+    it('keeps the rest of the controller at hq_admin', () => {
+      expect(requiredRoles(AdminController.prototype.getUsers)).toEqual(['hq_admin']);
+      expect(requiredRoles(AdminController.prototype.updateUserRole)).toEqual(['hq_admin']);
+    });
   });
 });

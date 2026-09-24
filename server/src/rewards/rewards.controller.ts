@@ -99,14 +99,17 @@ export class RewardsController {
   // ── Admin claims views ────────────────────────────────────────────────
 
   /**
-   * GET /api/rewards/redemptions — all pending + resolved claims (hq_admin+).
-   * Used by the admin rewards page (claims tab).
+   * GET /api/rewards/redemptions — all pending + resolved claims (chapter_officer+).
+   * Used by the admin rewards page (claims tab) and, read-only, by the
+   * officer dashboard's pending-claims panel. Approve/reject stay hq_admin+.
    */
   @Get('redemptions')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles('hq_admin', 'super_admin')
-  getAllRedemptions(): Promise<RewardRedemptionWithDetails[]> {
-    return this.rewardsService.getAllRedemptions();
+  @Roles('chapter_officer')
+  getAllRedemptions(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<RewardRedemptionWithDetails[]> {
+    return this.rewardsService.getAllRedemptions(user.profile.role);
   }
 
   /**

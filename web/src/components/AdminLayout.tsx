@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline, ConfettiOutline, HamburgerMenuOutline, CloseCircleOutline, ClipboardListOutline, GiftOutline, CupStarOutline } from 'solar-icon-set'
+import { UsersGroupRoundedOutline, KeyOutline, CalendarOutline, BuildingsOutline, WidgetOutline, LogoutOutline, ShieldCheckOutline, ScannerOutline, ArrowLeftOutline, UserCheckOutline, NotebookOutline, ConfettiOutline, HamburgerMenuOutline, CloseCircleOutline, ClipboardListOutline, GiftOutline } from 'solar-icon-set'
 import { useAuthStore } from '../stores/useAuthStore'
 import ScrollToTop from './ScrollToTop'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
@@ -45,20 +45,14 @@ export default function AdminLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const lastHiddenRef = useRef(0)
 
-  // Chapter officers are admitted on the /admin index route only — an
-  // allowlist of one path, so any admin page added later stays closed to
-  // officers by default. Hiding sidebar items is presentation, not protection.
-  const isOfficer = user?.role === 'chapter_officer'
-
   useEffect(() => {
     if (!user) {
       navigate('/sign-in', { replace: true })
     } else if (!user.username || !user.chapter_id) {
       navigate('/complete-profile', { replace: true })
     } else if (user.role === 'chapter_officer') {
-      if (location.pathname !== '/admin') {
-        navigate('/admin', { replace: true })
-      }
+      // Officers have a read-only copy of the dashboard in the organizer area.
+      navigate('/organizer/dashboard', { replace: true })
     } else if (!ADMIN_ROLES.includes(user.role as typeof ADMIN_ROLES[number])) {
       navigate('/home', { replace: true })
     }
@@ -95,11 +89,7 @@ export default function AdminLayout() {
   }, [handleRecover])
 
   if (!user) return null
-  if (isOfficer) {
-    if (location.pathname !== '/admin') return null
-  } else if (!ADMIN_ROLES.includes(user.role as typeof ADMIN_ROLES[number])) {
-    return null
-  }
+  if (!ADMIN_ROLES.includes(user.role as typeof ADMIN_ROLES[number])) return null
 
   const visibleNavItems = NAV_ITEMS.filter(
     (item) => !item.superOnly || ADMIN_ROLES.includes(user.role as typeof ADMIN_ROLES[number])
@@ -107,73 +97,7 @@ export default function AdminLayout() {
 
   // Shared sidebar content — rendered both in the desktop sidebar and the mobile drawer.
   // `onNavigate` lets the mobile drawer close itself when a link is tapped.
-  // Officers see only the standings entry, Back to App and Sign Out.
-  const renderOfficerSidebar = (onNavigate?: () => void) => (
-    <>
-      <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between gap-2">
-        <div>
-          <img src={logoHorizontal} alt="DEVCON+" className="h-6 w-auto" />
-          <div className="mt-1 flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-              Admin Panel
-            </span>
-            <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/20 text-white">
-              Chapter officer
-            </span>
-          </div>
-        </div>
-        {onNavigate && (
-          <button
-            onClick={onNavigate}
-            aria-label="Close menu"
-            className="text-white/70 hover:text-white transition-colors md:hidden"
-          >
-            <CloseCircleOutline className="w-6 h-6" color="white" />
-          </button>
-        )}
-      </div>
-
-      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        <NavLink
-          to="/admin"
-          end
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            `flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-md3-body-md font-medium transition-colors ${
-              isActive
-                ? 'bg-white/20 text-white'
-                : 'text-white/70 hover:bg-white/10 hover:text-white'
-            }`
-          }
-        >
-          <CupStarOutline className="w-4 h-4 shrink-0" />
-          Chapter Standings
-        </NavLink>
-      </nav>
-
-      <div className="px-4 py-4 border-t border-white/10">
-        <p className="text-[11px] text-white/90 font-semibold truncate">{user?.full_name}</p>
-        <p className="text-[10px] text-white/50 truncate">{user?.email}</p>
-        <button
-          onClick={() => navigate('/organizer')}
-          className="mt-3 flex items-center gap-2 text-md3-label-md text-white/60 hover:text-white transition-colors"
-        >
-          <ArrowLeftOutline className="w-3.5 h-3.5" />
-          Back to App
-        </button>
-        <button
-          onClick={() => { void signOut(); navigate('/sign-in') }}
-          className="mt-2 flex items-center gap-2 text-md3-label-md text-white/60 hover:text-white transition-colors"
-        >
-          <LogoutOutline className="w-3.5 h-3.5" />
-          Sign Out
-        </button>
-      </div>
-    </>
-  )
-
   const renderSidebar = (onNavigate?: () => void) => {
-    if (isOfficer) return renderOfficerSidebar(onNavigate)
     return (
     <>
       <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between gap-2">
