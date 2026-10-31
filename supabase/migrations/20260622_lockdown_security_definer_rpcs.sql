@@ -65,6 +65,8 @@ DECLARE
   ];
 BEGIN
   FOREACH fn IN ARRAY backend_only_fns LOOP
+    -- Some of these were created outside migrations; skip them on fresh DBs.
+    CONTINUE WHEN to_regprocedure('public.' || fn) IS NULL;
     EXECUTE format('REVOKE EXECUTE ON FUNCTION public.%s FROM PUBLIC, anon, authenticated;', fn);
     EXECUTE format('GRANT  EXECUTE ON FUNCTION public.%s TO service_role;', fn);
   END LOOP;
