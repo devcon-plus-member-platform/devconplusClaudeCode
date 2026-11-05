@@ -11,15 +11,28 @@ export class EventsRepository extends BaseRepository {
     super(supabase);
   }
 
+  /** Max events returned by the shared GET /events list. */
+  static readonly LIST_LIMIT = 100;
+
+  /**
+   * The LIST_LIMIT most recent events, returned oldest-first.
+   *
+   * Takes the newest rows (descending) before applying the limit, so once the
+   * table grows past the limit it is the oldest past events that drop off —
+   * never upcoming ones. Ascending + limit used to keep the 100 OLDEST events
+   * and silently hide every newer one. Undated (TBA) events sort as newest in
+   * DESC (Postgres puts NULLs first), so they stay in the list.
+   */
   async findAll(): Promise<Event[]> {
     const result = await this.db
       .from('events')
       .select('*')
-      .order('event_date', { ascending: true })
-      .limit(100);
-    return this.unwrap(
+      .order('event_date', { ascending: false })
+      .limit(EventsRepository.LIST_LIMIT);
+    const newestFirst = this.unwrap(
       result as { data: Event[] | null; error: { message: string } | null },
     );
+    return [...newestFirst].reverse();
   }
 
   /**
