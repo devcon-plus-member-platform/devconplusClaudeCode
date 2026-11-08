@@ -329,7 +329,7 @@ export default function WheelPage() {
     setIsLoadingEvents(true)
     // Every event (past and upcoming), paged through to the server's total.
     fetchAllPages((offset, limit) =>
-      publicFetch<Paginated<EventListItem>>(`/api/events?scope=all&limit=${limit}&offset=${offset}`),
+      publicFetch<Paginated<EventListItem> | EventListItem[]>(`/api/events?scope=all&limit=${limit}&offset=${offset}`),
     )
       .then((data) => {
         // Externally-registered events have no in-app participant list to raffle.

@@ -10,28 +10,63 @@ import type {
   Paginated,
 } from '@devcon-plus/supabase'
 import { supabase } from '../lib/supabase'
-import { apiFetch, fetchAllPages, publicFetch } from '../lib/api'
+import { apiFetch, fetchAllPages, isMissingRoute, publicFetch } from '../lib/api'
 import { isEventArchived } from '../lib/dates'
 
 /** Page size for past events, which grow forever and so are loaded on demand. */
 export const PAST_EVENTS_PAGE_SIZE = 50
 
 /**
+ * TEMPORARY (remove with the server's legacy GET /api/events branch): every
+ * event as full rows, the way a server deployed before pagination answers.
+ * Only used when the server turns out not to have the new routes yet, so the
+ * app keeps working if it goes live before the server does.
+ */
+function fetchAllEventsLegacy(): Promise<Event[]> {
+  return publicFetch<Event[]>('/api/events')
+}
+
+/**
  * Every event the caller may manage, as full rows (GET /api/events/manage,
  * paged through to `total`). Chapter officers get their own chapter; HQ and
  * super admins get every chapter. Used by the organizer and admin screens.
  */
-export function fetchAllManagedEvents(): Promise<Event[]> {
-  return fetchAllPages((offset, limit) =>
-    apiFetch<Paginated<Event>>(`/api/events/manage?limit=${limit}&offset=${offset}`),
-  )
+export async function fetchAllManagedEvents(): Promise<Event[]> {
+  try {
+    return await fetchAllPages((offset, limit) =>
+      apiFetch<Paginated<Event>>(`/api/events/manage?limit=${limit}&offset=${offset}`),
+    )
+  } catch (err) {
+    // Older server without /manage: same data the organizer screens used before.
+    if (isMissingRoute(err)) return fetchAllEventsLegacy()
+    throw err
+  }
 }
 
 /** Every upcoming (not yet ended, or date TBA) event, as list items. */
-function fetchAllUpcomingEvents(): Promise<EventListItem[]> {
-  return fetchAllPages((offset, limit) =>
-    publicFetch<Paginated<EventListItem>>(`/api/events?scope=upcoming&limit=${limit}&offset=${offset}`),
+async function fetchAllUpcomingEvents(): Promise<EventListItem[]> {
+  const rows = await fetchAllPages<EventListItem>((offset, limit) =>
+    publicFetch<Paginated<EventListItem> | EventListItem[]>(
+      `/api/events?scope=upcoming&limit=${limit}&offset=${offset}`,
+    ),
   )
+  // An older server ignores ?scope= and returns every event — keep the upcoming ones.
+  return rows.filter((e) => !isEventArchived(e))
+}
+
+/**
+ * One page of past events, most recent first. An older server ignores the
+ * query and returns every event as an array; treat that as the whole set.
+ */
+async function fetchPastPage(offset: number): Promise<Paginated<EventListItem>> {
+  const result = await publicFetch<Paginated<EventListItem> | EventListItem[]>(
+    `/api/events?scope=past&limit=${PAST_EVENTS_PAGE_SIZE}&offset=${offset}`,
+  )
+  if (!Array.isArray(result)) return result
+  const past = result
+    .filter((e) => isEventArchived(e))
+    .sort((a, b) => new Date(b.event_date ?? 0).getTime() - new Date(a.event_date ?? 0).getTime())
+  return { rows: past, total: past.length }
 }
 
 /** Keeps a list item in the upcoming list only while the event hasn't ended. */
@@ -194,9 +229,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   fetchPastEvents: async () => {
     set({ isPastLoading: true })
     try {
-      const page = await publicFetch<Paginated<EventListItem>>(
-        `/api/events?scope=past&limit=${PAST_EVENTS_PAGE_SIZE}&offset=0`,
-      )
+      const page = await fetchPastPage(0)
       set({ pastEvents: page.rows, pastEventsTotal: page.total })
     } catch {
       // Past events are supplementary — keep whatever is already shown.
@@ -211,9 +244,7 @@ export const useEventsStore = create<EventsState>((set, get) => ({
     if (isPastLoading || (pastEventsTotal !== null && pastEvents.length >= pastEventsTotal)) return
     set({ isPastLoading: true })
     try {
-      const page = await publicFetch<Paginated<EventListItem>>(
-        `/api/events?scope=past&limit=${PAST_EVENTS_PAGE_SIZE}&offset=${pastEvents.length}`,
-      )
+      const page = await fetchPastPage(pastEvents.length)
       set((s) => {
         const seen = new Set(s.pastEvents.map((e) => e.id))
         return {
@@ -241,12 +272,21 @@ export const useEventsStore = create<EventsState>((set, get) => ({
   },
 
   fetchEventBySlug: async (slug) => {
-    try {
-      const event = await publicFetch<Event>(`/api/events/slug/${encodeURIComponent(slug)}`)
+    const remember = (event: Event) => {
       set((s) => ({ eventsBySlug: { ...s.eventsBySlug, [slug]: event } }))
       return event
-    } catch {
-      return null
+    }
+    try {
+      return remember(await publicFetch<Event>(`/api/events/slug/${encodeURIComponent(slug)}`))
+    } catch (err) {
+      if (!isMissingRoute(err)) return null
+      // Older server without /slug/:slug: find it in the full list, as before.
+      try {
+        const found = (await fetchAllEventsLegacy()).find((e) => e.slug === slug)
+        return found ? remember(found) : null
+      } catch {
+        return null
+      }
     }
   },
 
