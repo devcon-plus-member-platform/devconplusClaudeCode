@@ -142,6 +142,34 @@ describe('EventsService single-event lookups', () => {
   });
 });
 
+// ── create: slug ──────────────────────────────────────────────────────────────
+
+describe('EventsService.create sets the slug', () => {
+  it('generates an id and a slug built from the title + that id', async () => {
+    const { repo, service } = setup();
+    await service.create({ title: 'DEVCON Summit 2027' } as never, officer);
+
+    const row = repo.create.mock.calls[0][0] as { id: string; slug: string };
+    expect(row.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(row.slug).toBe(`devcon-summit-2027-${row.id.slice(0, 8)}`);
+  });
+
+  it('keeps a slug the client explicitly sent', async () => {
+    const { repo, service } = setup();
+    await service.create({ title: 'x', slug: 'custom-slug' } as never, officer);
+
+    expect((repo.create.mock.calls[0][0] as { slug: string }).slug).toBe('custom-slug');
+  });
+
+  it('ignores a blank client slug', async () => {
+    const { repo, service } = setup();
+    await service.create({ title: 'Code Camp', slug: '   ' } as never, officer);
+
+    const row = repo.create.mock.calls[0][0] as { id: string; slug: string };
+    expect(row.slug).toBe(`code-camp-${row.id.slice(0, 8)}`);
+  });
+});
+
 // ── cache invalidation ────────────────────────────────────────────────────────
 
 describe('EventsService writes bump the cache version', () => {

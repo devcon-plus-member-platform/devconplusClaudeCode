@@ -1,9 +1,11 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { buildEventSlug } from './event-slug';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { assertSameChapter } from '../common/authz/chapter-scope';
 import { AppCacheService } from '../cache/app-cache.service';
@@ -156,8 +158,15 @@ export class EventsService {
         ? (dto.chapter_id !== undefined ? dto.chapter_id : chapter_id)
         : chapter_id;
 
+    // The id is generated here (not by the database) so the slug can include it:
+    // events.slug is required, and the database doesn't fill it in by itself.
+    const id = randomUUID();
+    const slug = dto.slug?.trim() || buildEventSlug(dto.title, id);
+
     const event = await this.repo.create({
       ...dto,
+      id,
+      slug,
       status: 'upcoming',
       is_featured: false,
       is_promoted: false,

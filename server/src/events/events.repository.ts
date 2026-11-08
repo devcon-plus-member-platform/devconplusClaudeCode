@@ -273,6 +273,8 @@ export class EventsRepository extends BaseRepository {
 
   async create(
     dto: CreateEventDto & {
+      id: string;
+      slug: string;
       chapter_id: string | null;
       created_by: string;
       status?: string | null;
