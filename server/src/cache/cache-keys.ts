@@ -58,6 +58,8 @@ export const CacheKeys = {
     `events:manage:v${version}:${scope}:${limit}:${offset}`,
   eventBySlug: (version: string, slug: string): string => `events:item:v${version}:slug:${slug}`,
   eventById: (version: string, id: string): string => `events:item:v${version}:id:${id}`,
+  /** @deprecated Pre-pagination GET /events response, for old app versions only. */
+  eventsLegacyAll: (version: string): string => `events:legacy-all:v${version}`,
   JOBS_ACTIVE: 'jobs:list:active',
   JOBS_ALL: 'jobs:list:all',
   NEWS_LIST: 'news:list',

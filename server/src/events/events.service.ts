@@ -47,6 +47,17 @@ export class EventsService {
   }
 
   /**
+   * @deprecated GET /events with no query string — the response shape app
+   * versions from before pagination expect (see EventsRepository.findAllLegacy).
+   */
+  async listAllLegacy(): Promise<Event[]> {
+    const version = await this.cacheVersion();
+    return this.cache.getOrSet(CacheKeys.eventsLegacyAll(version), CACHE_TTL.EVENTS, () =>
+      this.repo.findAllLegacy(),
+    );
+  }
+
+  /**
    * GET /events/manage — full rows for the organizer/admin screens. Chapter
    * officers only ever receive their own chapter's events; HQ and super admins
    * receive every event (the admin console manages all chapters).

@@ -90,7 +90,9 @@ export default function EventTicket() {
 
   // Full event by slug — tickets also exist for past events, which aren't in the
   // (upcoming-only) events list.
-  const { event } = useEventBySlug(slug)
+  // Until the event arrives, `reg` stays undefined too (it's matched by event id),
+  // so the QR token, check-in channel and poll effects below all wait for it.
+  const { event, isLoading: isEventLoading } = useEventBySlug(slug)
   const reg = registrations.find((r) => r.event_id === event?.id)
 
   const effectiveTheme = resolveEventTheme(event?.devcon_category, theme)
@@ -196,6 +198,9 @@ export default function EventTicket() {
   useEffect(() => {
     if (checkedIn) setQrFullscreen(false)
   }, [checkedIn])
+
+  // Don't flash "Ticket not available" while the event is still loading.
+  if (isEventLoading) return null
 
   if (!event || !reg || reg.status !== 'approved') {
     return (

@@ -109,6 +109,27 @@ export class EventsRepository extends BaseRepository {
     return { rows: result.data ?? [], total: result.count ?? 0 };
   }
 
+  /**
+   * @deprecated Legacy GET /events response (a plain array of every event, full
+   * rows) for app versions released before pagination — open tabs and installed
+   * PWAs keep running the old bundle until they reload. Remove once those are gone.
+   */
+  async findAllLegacy(): Promise<Event[]> {
+    return this.fetchAllPages<Event>(
+      (from, to) =>
+        this.db
+          .from('events')
+          .select('*', { count: 'exact' })
+          .order('event_date', { ascending: true, nullsFirst: true })
+          .order('id', { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: Event[] | null;
+          error: { message: string } | null;
+          count: number | null;
+        }>,
+    );
+  }
+
   async findBySlug(slug: string): Promise<Event | null> {
     const result = await this.db
       .from('events')

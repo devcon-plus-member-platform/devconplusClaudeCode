@@ -25,7 +25,7 @@ export default function EventPending() {
   const { registrations, subscribeToRegistration, fetchRegistrations } = useEventsStore()
   const { user } = useAuthStore()
 
-  const { event } = useEventBySlug(slug)
+  const { event, isLoading: isEventLoading } = useEventBySlug(slug)
   const eventId = event?.id
   const reg = registrations.find((r) => r.event_id === eventId && r.user_id === user?.id)
 
@@ -78,6 +78,9 @@ export default function EventPending() {
     })
     return unsubscribe
   }, [reg?.id, slug, navigate, subscribeToRegistration])
+
+  // Don't show the pending card with a blank event name while the event loads.
+  if (isEventLoading) return null
 
   // ── Rejection screen ──────────────────────────────────────────────────────
   if (isRejected) {

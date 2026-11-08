@@ -9,8 +9,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { AuthGuard, type AuthenticatedUser } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { IdParamDto } from '../common/dto/id-param.dto';
@@ -39,7 +41,18 @@ export class EventsController {
    * time: { rows, total }. limit defaults to 20 and is capped at 100.
    */
   @Get()
-  list(@Query() query: ListEventsQueryDto): Promise<Paginated<EventListItem>> {
+  list(
+    @Query() query: ListEventsQueryDto,
+    @Req() req: Request,
+  ): Promise<Paginated<EventListItem> | Event[]> {
+    // TEMPORARY (remove once old app versions are gone): the app before
+    // pagination calls GET /api/events with no query string and expects a plain
+    // array. Open tabs and installed PWAs keep that old app running after a
+    // deploy, so answer them the old way. The current app always sends
+    // scope/limit/offset and never reaches this branch.
+    if (Object.keys(req.query ?? {}).length === 0) {
+      return this.service.listAllLegacy();
+    }
     return this.service.listPage(query);
   }
 
