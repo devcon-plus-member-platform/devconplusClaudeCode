@@ -103,7 +103,7 @@ Does NOT return a session — user must verify email first. Sends a verification
 
 ### `GET /auth/email/verify?token=<jwt>`
 
-Handles the verification link click. Marks `profiles.is_email_verified = true` and awards the 500pt signup bonus.
+Handles the verification link click. Marks `profiles.is_email_verified = true` and awards the 100pt signup bonus.
 
 ---
 

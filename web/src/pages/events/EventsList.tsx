@@ -1,13 +1,15 @@
-import { useState, useEffect, useDeferredValue, useMemo } from 'react'
+import { useState, useEffect, useDeferredValue, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, MapPointOutline, AltArrowRightOutline, TicketOutline, ClockCircleOutline, CalendarMarkOutline, CheckCircleOutline, CloseCircleLineDuotone, FilterLinear, MagniferOutline } from 'solar-icon-set'
+import { MapPointOutline, AltArrowRightOutline, TicketOutline, CalendarMarkOutline, CheckCircleOutline, CloseCircleOutline, CloseCircleLineDuotone, FilterLinear, MagniferOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
 import EventCard from '../../components/EventCard'
+import EventListCard from '../../components/EventListCard'
 import { SkeletonEventCard, SkeletonFeaturedEvent } from '../../components/Skeleton'
 import { staggerContainer, cardItem, fadeUp } from '../../lib/animation'
-import { isEventArchived } from '../../lib/dates'
+import { formatEventDate, isEventArchived } from '../../lib/dates'
+import { DEVCON_EVENTS_URL, DEVCON_SITE_URL } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import { fuzzySearchFilter } from '../../lib/utils'
@@ -30,15 +32,35 @@ const EVENT_FILTERS: { id: EventFilter; label: string }[] = [
   { id: 'featured', label: 'Community Featured' },
 ]
 
-function formatEventDate(iso: string): { month: string; day: string } {
-  const d = new Date(iso)
-  return {
-    month: d.toLocaleDateString('en-PH', { month: 'short' }).toUpperCase(),
-    day: String(d.getDate()),
+type TicketEntry = { reg: EventRegistration; event: EventListItem }
+
+/**
+ * The event-type chip filter (Stage 1), shared by the upcoming list and the
+ * paged past events so both sections filter the same way.
+ */
+function matchesEventFilter(
+  e: EventListItem,
+  filter: EventFilter,
+  regionChapterIds: Set<string>,
+  userChapterId: string | null | undefined,
+): boolean {
+  const isPublicExternal = e.is_external === true && e.visibility === 'public'
+  switch (filter) {
+    case 'near_you':
+      if (regionChapterIds.size > 0) {
+        return e.chapter_id === null || isPublicExternal || (!!e.chapter_id && regionChapterIds.has(e.chapter_id))
+      }
+      return userChapterId
+        ? e.chapter_id === null || isPublicExternal || e.chapter_id === userChapterId
+        : true
+    case 'devcon_only':
+      return !e.is_external && (!e.devcon_category || e.devcon_category === 'devcon')
+    case 'featured':
+      return e.is_featured === true || isPublicExternal
+    default:
+      return true
   }
 }
-
-type TicketEntry = { reg: EventRegistration; event: EventListItem }
 
 function getEventLifecycleState(ev: EventListItem): 'in_progress' | 'done' | 'normal' {
   const now = new Date()
@@ -50,8 +72,13 @@ function getEventLifecycleState(ev: EventListItem): 'in_progress' | 'done' | 'no
 export default function EventsList() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { events, registrations, fetchEvents, fetchRegistrations, isLoading } = useEventsStore()
+  const {
+    events, registrations, fetchEvents, fetchRegistrations, isLoading, error,
+    pastEvents, pastEventsTotal, isPastLoading, fetchPastEvents, loadMorePastEvents,
+  } = useEventsStore()
   const [tab, setTab] = useState<'discover' | 'tickets'>('discover')
+  const [showPastEvents, setShowPastEvents] = useState(false)
+  const pastEventsRef = useRef<HTMLDivElement>(null)
 
   const [isSearchVisible, setIsSearchVisible] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -119,39 +146,32 @@ export default function EventsList() {
   const deferredQuery = useDeferredValue(trimmedQuery)
 
   // Stage 1: event-type chip filter
-  const typeFilteredEvents = useMemo(() => {
-    switch (eventFilter) {
-      case 'near_you':
-        if (regionChapterIds.size > 0) {
-          return events.filter((e) =>
-            e.chapter_id === null ||
-            (e.is_external && e.visibility === 'public') ||
-            (e.chapter_id && regionChapterIds.has(e.chapter_id))
-          )
-        }
-        return user?.chapter_id
-          ? events.filter((e) =>
-              e.chapter_id === null ||
-              (e.is_external && e.visibility === 'public') ||
-              e.chapter_id === user.chapter_id
-            )
-          : events
-      case 'devcon_only':
-        return events.filter((e) => !e.is_external && (!e.devcon_category || e.devcon_category === 'devcon'))
-      case 'featured':
-        return events.filter((e) => e.is_featured || (e.is_external && e.visibility === 'public'))
-      default:
-        return events
-    }
-  }, [events, eventFilter, user?.chapter_id, regionChapterIds])
+  const typeFilteredEvents = useMemo(
+    () => events.filter((e) => matchesEventFilter(e, eventFilter, regionChapterIds, user?.chapter_id)),
+    [events, eventFilter, user?.chapter_id, regionChapterIds],
+  )
+
+  // `events` holds every upcoming event. Past events load separately, a page at
+  // a time (most recent first), when the member opens "Past Chapter Events".
+  const totalActiveEvents = useMemo(() => events.filter((e) => !isEventArchived(e)), [events])
+  const totalPastEvents = pastEvents
 
   // Stage 2: chapter sheet filter stacked on top
-  const { chapterFilteredEvents, activeEvents } = useMemo(() => {
+  const activeEvents = useMemo(() => {
     const chapterFilteredEvents = selectedChapterId
       ? typeFilteredEvents.filter((e) => e.chapter_id === selectedChapterId)
       : typeFilteredEvents
-    return { chapterFilteredEvents, activeEvents: chapterFilteredEvents.filter((e) => !isEventArchived(e)) }
+    return chapterFilteredEvents.filter((e) => !isEventArchived(e))
   }, [typeFilteredEvents, selectedChapterId])
+
+  const chapterPastEvents = useMemo(
+    () => pastEvents.filter((e) =>
+      matchesEventFilter(e, eventFilter, regionChapterIds, user?.chapter_id) &&
+      (!selectedChapterId || e.chapter_id === selectedChapterId)
+    ),
+    [pastEvents, eventFilter, regionChapterIds, user?.chapter_id, selectedChapterId],
+  )
+  const hasMorePastEvents = pastEventsTotal !== null && pastEvents.length < pastEventsTotal
 
   const { matchingEvents, featuredEvent, displayEvents, showHero } = useMemo(() => {
     const matchingEvents = activeEvents.filter(event =>
@@ -167,6 +187,39 @@ export default function EventsList() {
   const selectedChapterName = selectedChapterId
     ? (chapters.find((c) => c.id === selectedChapterId)?.name ?? null)
     : 'All Chapters'
+
+  const isNoUpcomingEvents = !isLoading && !error && !deferredQuery && totalActiveEvents.length === 0
+
+  const isFilterEmpty = !isLoading && !error && !deferredQuery && !isNoUpcomingEvents && activeEvents.length === 0
+
+  // Scroll to the past events once the section has rendered, instead of guessing with a timer.
+  useEffect(() => {
+    if (showPastEvents) pastEventsRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [showPastEvents])
+
+  const handleExplorePastEvents = async () => {
+    // Past events load on first use (one page); after that, use what's loaded.
+    if (pastEventsTotal === null) await fetchPastEvents()
+    const loaded = useEventsStore.getState().pastEvents
+
+    if (loaded.length > 0) {
+      const chapterHasPast = loaded.some((e) =>
+        e.chapter_id === selectedChapterId &&
+        matchesEventFilter(e, eventFilter, regionChapterIds, user?.chapter_id)
+      )
+      if (selectedChapterId && !chapterHasPast) {
+        setSelectedChapterId(null)
+      }
+      if (showPastEvents) {
+        // Already open — the effect won't re-run, so scroll back to it directly.
+        pastEventsRef.current?.scrollIntoView({ behavior: 'smooth' })
+      } else {
+        setShowPastEvents(true)
+      }
+    } else {
+      window.open(DEVCON_EVENTS_URL, '_blank', 'noopener,noreferrer')
+    }
+  }
 
   // Each registration arrives with its event attached (/api/registrations/mine), so
   // tickets show for any chapter and for past events, which aren't in `events`.
@@ -327,20 +380,27 @@ export default function EventsList() {
               </div>
             )}
 
-            {/* Empty state — no events at all */}
-            {!isLoading && events.length === 0 && (
-              <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <CalendarMarkOutline className="w-8 h-8" color="rgb(var(--color-primary))" />
+            {/* Error state — failed to load events */}
+            {!isLoading && error && events.length === 0 && (
+              <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-red/10 flex items-center justify-center mb-4">
+                  <CloseCircleOutline className="w-8 h-8" color="#EF4444" />
                 </div>
-                <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">Events coming soon</h3>
-                <p className="text-md3-body-md text-slate-500 text-center">
-                  Your chapter's next events will appear here. Check back shortly!
+                <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">Unable to load events</h3>
+                <p className="text-md3-body-md text-slate-500 text-center max-w-sm mb-5">
+                  We couldn't retrieve the events list. Please check your connection and try again.
                 </p>
+                <button
+                  onClick={() => void fetchEvents()}
+                  className="bg-primary text-white font-semibold text-md3-body-md px-6 py-2.5 rounded-xl shadow-sm hover:opacity-95 active:scale-95 transition-all"
+                >
+                  Retry
+                </button>
               </div>
             )}
 
-            {!isLoading && deferredQuery && matchingEvents.length === 0 && (
+            {/* Search empty state */}
+            {!isLoading && !error && deferredQuery && matchingEvents.length === 0 && (
               <SearchEmptyState
                 headline="No events found"
                 body="Try adjusting your search query or chapter filter."
@@ -348,9 +408,86 @@ export default function EventsList() {
               />
             )}
 
+            {/* Empty state — genuinely no upcoming events */}
+            {isNoUpcomingEvents && (
+              <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <CalendarMarkOutline className="w-8 h-8" color="rgb(var(--color-primary))" />
+                </div>
+                <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">
+                  No upcoming events yet
+                </h3>
+                <p className="text-md3-body-md text-slate-500 text-center max-w-md mb-6">
+                  There are no active events at the moment. Explore past chapter events or visit DEVCON's main page to discover more activities.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full sm:w-auto">
+                  <button
+                    onClick={() => void handleExplorePastEvents()}
+                    disabled={isPastLoading && pastEventsTotal === null}
+                    className="w-full sm:w-auto bg-primary text-white font-semibold text-md3-body-md px-5 py-2.5 rounded-xl shadow-sm hover:opacity-95 active:scale-95 transition-all text-center disabled:opacity-60"
+                  >
+                    {isPastLoading && pastEventsTotal === null ? 'Loading past events…' : 'Explore Past Chapter Events'}
+                  </button>
+                  <a
+                    href={DEVCON_SITE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-slate-300 bg-white text-slate-700 font-semibold text-md3-body-md px-5 py-2.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all shadow-sm text-center"
+                  >
+                    <span>Visit DEVCON's Main Page</span>
+                    <AltArrowRightOutline className="w-4 h-4" color="#64748B" />
+                  </a>
+                </div>
+
+                {/* Past events section when user clicked Explore Past Events */}
+                {showPastEvents && (chapterPastEvents.length > 0 || totalPastEvents.length > 0) && (
+                  <div ref={pastEventsRef} className="w-full mt-10 pt-6 border-t border-slate-200 text-left">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-md3-title-md font-bold text-slate-900">
+                        Past Chapter Events {selectedChapterId && chapterPastEvents.length > 0 ? `(${selectedChapterName})` : ''}
+                      </h4>
+                      {selectedChapterId && totalPastEvents.length > chapterPastEvents.length && (
+                        <button
+                          onClick={() => setSelectedChapterId(null)}
+                          className="text-primary text-xs font-semibold hover:underline"
+                        >
+                          View all chapters
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {(chapterPastEvents.length > 0 ? chapterPastEvents : totalPastEvents).map((event) => (
+                        <EventListCard
+                          key={event.id}
+                          event={event}
+                          attendeeCount={attendeeCounts[event.id]}
+                          onSelect={() => navigate(`/events/${event.slug}`)}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Past events are paged from the server — "Load more" fetches the next page. */}
+                    {hasMorePastEvents && (
+                      <div className="flex justify-center mt-4">
+                        <button
+                          onClick={() => void loadMorePastEvents()}
+                          disabled={isPastLoading}
+                          className="w-full sm:w-auto border border-slate-300 bg-white text-slate-700 font-semibold text-md3-body-md px-5 py-2.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all shadow-sm disabled:opacity-60"
+                        >
+                          {isPastLoading
+                            ? 'Loading…'
+                            : `Load more past events (${pastEvents.length} of ${pastEventsTotal})`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Empty state — filter combination yields nothing */}
-            {!isLoading && !deferredQuery && events.length > 0 && chapterFilteredEvents.length === 0 && (
-              <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8">
+            {isFilterEmpty && (
+              <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8 text-center">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                   <CalendarMarkOutline className="w-8 h-8" color="rgb(var(--color-primary))" />
                 </div>
@@ -358,9 +495,9 @@ export default function EventsList() {
                   {eventFilter === 'near_you' && 'No upcoming events nearby'}
                   {eventFilter === 'devcon_only' && 'No DEVCON events right now'}
                   {eventFilter === 'featured' && 'No community featured events'}
-                  {eventFilter === 'all' && `No events in ${selectedChapterName}`}
+                  {eventFilter === 'all' && `No upcoming events in ${selectedChapterName}`}
                 </h3>
-                <p className="text-md3-body-md text-slate-500 text-center mb-5">
+                <p className="text-md3-body-md text-slate-500 text-center max-w-sm mb-5">
                   {eventFilter === 'near_you'
                     ? "Your chapter has no upcoming events. Check back soon!"
                     : eventFilter !== 'all'
@@ -369,7 +506,7 @@ export default function EventsList() {
                 </p>
                 <button
                   onClick={() => { setEventFilter('all'); setSelectedChapterId(null) }}
-                  className="bg-primary text-white font-semibold text-md3-body-md px-6 py-2.5 rounded-xl"
+                  className="bg-primary text-white font-semibold text-md3-body-md px-6 py-2.5 rounded-xl shadow-sm hover:opacity-95 active:scale-95 transition-all"
                 >
                   Show All Events
                 </button>
@@ -403,99 +540,14 @@ export default function EventsList() {
                 initial="hidden"
                 animate="visible"
               >
-                {displayEvents.map((event) => {
-                  const dateParts = event.event_date ? formatEventDate(event.event_date) : null
-                  const isArchived = isEventArchived(event)
-                  const isExternal = event.is_external === true
-                  return (
-                    <motion.button
-                      key={event.id}
-                      variants={cardItem}
-                      onClick={() => navigate(`/events/${event.slug}`)}
-                      className={`w-full bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 flex items-center gap-4 text-left ${
-                        isArchived ? 'opacity-60 grayscale' : ''
-                      }`}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {/* Left Side: Image or Date Placeholder */}
-                      <div className="size-[72px] bg-slate-100 rounded-[12px] overflow-hidden shrink-0 relative">
-                        {event.cover_image_url ? (
-                          <>
-                            <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover" />
-                            {/* Date Overlay for Images */}
-                            {dateParts && (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30">
-                                <span className="text-[10px] font-bold leading-none text-white/90 uppercase drop-shadow-sm">
-                                  {dateParts.month}
-                                </span>
-                                <span className="text-md3-title-lg font-black leading-tight text-white drop-shadow-md">
-                                  {dateParts.day}
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-primary/10">
-                            {dateParts ? (
-                              <>
-                                <span className="text-[10px] font-bold leading-none text-primary/60 uppercase">
-                                  {dateParts.month}
-                                </span>
-                                <span className="text-md3-headline-sm font-black leading-tight text-primary">
-                                  {dateParts.day}
-                                </span>
-                              </>
-                            ) : (
-                              <ClockCircleOutline className="size-8 text-primary/40" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right Side: Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate min-w-0 flex-1">
-                            {event.title}
-                          </p>
-                          <AltArrowRightOutline className="w-3.5 h-3.5 shrink-0 text-slate-300 mt-0.5" />
-                        </div>
-
-                        {/* Date Text */}
-                        <p className="text-[11px] text-slate-500 mb-0.5 truncate">
-                          {event.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No date set'}
-                        </p>
-
-                        {/* Location */}
-                        {event.location && (
-                          <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1 min-w-0">
-                            <MapPointOutline className="w-2.5 h-2.5 shrink-0" color="#94A3B8" />
-                            <span className="truncate min-w-0">{event.location}</span>
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-2">
-                          {!isExternal && (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              +{event.points_value} pts
-                            </span>
-                          )}
-                          {attendeeCounts[event.id] && (
-                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                              <UsersGroupRoundedOutline className="w-3 h-3" color="#64748B" />
-                              {attendeeCounts[event.id]}
-                            </span>
-                          )}
-                          {isArchived && (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                              Past
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </motion.button>
-                  )
-                })}
+                {displayEvents.map((event) => (
+                  <EventListCard
+                    key={event.id}
+                    event={event}
+                    attendeeCount={attendeeCounts[event.id]}
+                    onSelect={() => navigate(`/events/${event.slug}`)}
+                  />
+                ))}
               </motion.div>
             )}
           </div>

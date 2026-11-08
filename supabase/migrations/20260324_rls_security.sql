@@ -493,8 +493,12 @@ ALTER FUNCTION award_signup_bonus()
 ALTER FUNCTION increment_member_points(uuid, integer)
   SET search_path = public;
 
-ALTER FUNCTION get_my_role()
-  SET search_path = public;
+-- Guarded: get_my_role() was created outside migrations; skip on fresh DBs.
+DO $$ BEGIN
+  IF to_regprocedure('public.get_my_role()') IS NOT NULL THEN
+    ALTER FUNCTION get_my_role() SET search_path = public;
+  END IF;
+END $$;
 
 ALTER FUNCTION redeem_reward(uuid, uuid)
   SET search_path = public;
@@ -505,20 +509,40 @@ ALTER FUNCTION approve_volunteer_application(uuid, uuid)
 ALTER FUNCTION confirm_referral(text, uuid)
   SET search_path = public;
 
-ALTER FUNCTION get_total_xp_distributed()
-  SET search_path = public;
+-- Guarded: get_total_xp_distributed() was created outside migrations; skip on fresh DBs.
+DO $$ BEGIN
+  IF to_regprocedure('public.get_total_xp_distributed()') IS NOT NULL THEN
+    ALTER FUNCTION get_total_xp_distributed() SET search_path = public;
+  END IF;
+END $$;
 
-ALTER FUNCTION get_active_chapters_count()
-  SET search_path = public;
+-- Guarded: get_active_chapters_count() was created outside migrations; skip on fresh DBs.
+DO $$ BEGIN
+  IF to_regprocedure('public.get_active_chapters_count()') IS NOT NULL THEN
+    ALTER FUNCTION get_active_chapters_count() SET search_path = public;
+  END IF;
+END $$;
 
-ALTER FUNCTION get_member_growth()
-  SET search_path = public;
+-- Guarded: get_member_growth() was created outside migrations; skip on fresh DBs.
+DO $$ BEGIN
+  IF to_regprocedure('public.get_member_growth()') IS NOT NULL THEN
+    ALTER FUNCTION get_member_growth() SET search_path = public;
+  END IF;
+END $$;
 
-ALTER FUNCTION get_xp_by_chapter()
-  SET search_path = public;
+-- Guarded: get_xp_by_chapter() was created outside migrations; skip on fresh DBs.
+DO $$ BEGIN
+  IF to_regprocedure('public.get_xp_by_chapter()') IS NOT NULL THEN
+    ALTER FUNCTION get_xp_by_chapter() SET search_path = public;
+  END IF;
+END $$;
 
-ALTER FUNCTION get_attendance_trend()
-  SET search_path = public;
+-- Guarded: get_attendance_trend() was created outside migrations; skip on fresh DBs.
+DO $$ BEGIN
+  IF to_regprocedure('public.get_attendance_trend()') IS NOT NULL THEN
+    ALTER FUNCTION get_attendance_trend() SET search_path = public;
+  END IF;
+END $$;
 
 
 -- SMOKE TEST (run in Supabase SQL editor after applying):

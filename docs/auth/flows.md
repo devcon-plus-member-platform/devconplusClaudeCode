@@ -29,7 +29,7 @@
    b. firebase.auth.createUser({ email, password, displayName })
    c. createProfileWithBonus({ id: randomUUID(), auth_uid: firebaseUid, ... })
       → profile created with is_email_verified = false
-      → 500pt bonus NOT awarded yet (gated on is_email_verified)
+      → 100pt bonus NOT awarded yet (gated on is_email_verified)
    d. signVerificationToken(firebaseUid, email) → JWT signed with EMAIL_VERIFICATION_SECRET
    e. EmailService.sendVerificationEmail(email, token)
 4. Frontend receives { emailConfirmationPending: true }
@@ -46,7 +46,7 @@
    a. jwt.verify(token, EMAIL_VERIFICATION_SECRET)
    b. firebase.auth.updateUser(uid, { emailVerified: true })
    c. supabase.setEmailVerified(profile.id)          → profiles.is_email_verified = true
-   d. award_signup_bonus_for_verified(profile.id)    → +500 pts, point_transaction inserted
+   d. award_signup_bonus_for_verified(profile.id)    → +100 pts, point_transaction inserted
 3. Redirect to frontend /email-confirm
 4. /email-confirm page calls exchangeFirebaseToken → full session established
 ```

@@ -34,5 +34,9 @@ export const CATEGORY_LABELS: Record<string, string> = {
   tech_community:  'Tech Community',
 }
 
+/** DEVCON Philippines' main website, linked from empty states when DEVCON+ has nothing to show. */
+export const DEVCON_SITE_URL = 'https://devcon.ph'
+export const DEVCON_EVENTS_URL = 'https://devcon.ph/events/'
+
 /** Message shown when an organizer has manually closed registration (events.registration_closed). */
 export const REGISTRATION_CLOSED_MESSAGE = 'Registration Closed — this event is already full'
