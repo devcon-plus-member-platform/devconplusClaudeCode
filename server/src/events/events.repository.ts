@@ -1,9 +1,20 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Event } from '../supabase/types';
 import type { CreateEventDto } from './dto/create-event.dto';
 import type { UpdateEventDto } from './dto/update-event.dto';
+import type { EventListScope } from './dto/list-events-query.dto';
+import { EVENT_LIST_COLUMNS, type EventListItem, type Paginated } from './event-list.fields';
+
+/** PostgREST's "Requested range not satisfiable": the offset is past the last row. */
+const RANGE_NOT_SATISFIABLE = 'PGRST103';
+
+interface PageResult<T> {
+  data: T[] | null;
+  error: { message: string; code?: string } | null;
+  count: number | null;
+}
 
 @Injectable()
 export class EventsRepository extends BaseRepository {
@@ -11,28 +22,102 @@ export class EventsRepository extends BaseRepository {
     super(supabase);
   }
 
-  /** Max events returned by the shared GET /events list. */
-  static readonly LIST_LIMIT = 100;
+  /**
+   * One page of the public event list plus the total match count.
+   *
+   * Ordering is stable across pages: event_date, then id as a tiebreak, so
+   * events sharing a date (or TBA, with no date) never jump between pages.
+   * Only EVENT_LIST_COLUMNS are selected — never select('*').
+   */
+  async findPage(
+    params: { scope: EventListScope; limit: number; offset: number },
+    now: Date = new Date(),
+  ): Promise<Paginated<EventListItem>> {
+    const { scope, limit, offset } = params;
+    const build = (columns: string, head: boolean) => {
+      let query = this.db.from('events').select(columns, { count: 'exact', head });
+      // Same rule as isEventArchived() on the web: an event has ended once its
+      // end_date (or event_date when there is no end_date) is in the past.
+      // Undated (TBA) events have not ended. The timestamp is quoted because
+      // it contains PostgREST's reserved "." and ":" characters.
+      const at = `"${now.toISOString()}"`;
+      if (scope === 'upcoming') {
+        query = query.or(
+          `end_date.gte.${at},and(end_date.is.null,event_date.gte.${at}),and(end_date.is.null,event_date.is.null)`,
+        );
+      } else if (scope === 'past') {
+        query = query.or(`end_date.lt.${at},and(end_date.is.null,event_date.lt.${at})`);
+      }
+      return query;
+    };
+
+    // upcoming: soonest first. past + all: newest first. TBA (null date) first either way.
+    const ascending = scope === 'upcoming';
+    const result = (await build(EVENT_LIST_COLUMNS, false)
+      .order('event_date', { ascending, nullsFirst: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + limit - 1)) as unknown as PageResult<EventListItem>;
+
+    return this.toPage(result, async () => {
+      const head = (await build('id', true)) as unknown as PageResult<never>;
+      return head.count;
+    });
+  }
 
   /**
-   * The LIST_LIMIT most recent events, returned oldest-first.
-   *
-   * Takes the newest rows (descending) before applying the limit, so once the
-   * table grows past the limit it is the oldest past events that drop off —
-   * never upcoming ones. Ascending + limit used to keep the 100 OLDEST events
-   * and silently hide every newer one. Undated (TBA) events sort as newest in
-   * DESC (Postgres puts NULLs first), so they stay in the list.
+   * One page of full event rows for the organizer/admin screens, which need
+   * every column (edit forms, tables, CSV export). `chapterId` scopes the page
+   * to one chapter; `null` means every event (admins).
    */
-  async findAll(): Promise<Event[]> {
+  async findManagePage(
+    params: { limit: number; offset: number },
+    chapterId: string | null,
+  ): Promise<Paginated<Event>> {
+    const { limit, offset } = params;
+    const build = (columns: string, head: boolean) => {
+      const query = this.db.from('events').select(columns, { count: 'exact', head });
+      return chapterId ? query.eq('chapter_id', chapterId) : query;
+    };
+
+    const result = (await build('*', false)
+      .order('event_date', { ascending: true, nullsFirst: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + limit - 1)) as unknown as PageResult<Event>;
+
+    return this.toPage(result, async () => {
+      const head = (await build('id', true)) as unknown as PageResult<never>;
+      return head.count;
+    });
+  }
+
+  /**
+   * Turns a ranged query result into { rows, total }. An offset past the last
+   * row makes PostgREST answer PGRST103 instead of an empty page; treat that as
+   * an empty page and re-count, so a client paging after rows were deleted
+   * still learns the real total.
+   */
+  private async toPage<T>(
+    result: PageResult<T>,
+    recount: () => Promise<number | null>,
+  ): Promise<Paginated<T>> {
+    if (result.error) {
+      if (result.error.code === RANGE_NOT_SATISFIABLE) {
+        return { rows: [], total: (await recount()) ?? 0 };
+      }
+      throw new InternalServerErrorException(result.error.message);
+    }
+    return { rows: result.data ?? [], total: result.count ?? 0 };
+  }
+
+  async findBySlug(slug: string): Promise<Event | null> {
     const result = await this.db
       .from('events')
       .select('*')
-      .order('event_date', { ascending: false })
-      .limit(EventsRepository.LIST_LIMIT);
-    const newestFirst = this.unwrap(
-      result as { data: Event[] | null; error: { message: string } | null },
+      .eq('slug', slug)
+      .maybeSingle();
+    return this.unwrapMaybe(
+      result as { data: Event | null; error: { message: string } | null },
     );
-    return [...newestFirst].reverse();
   }
 
   /**

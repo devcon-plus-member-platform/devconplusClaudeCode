@@ -9,7 +9,8 @@
  *
  *   key                  read site                 invalidated by (service)
  *   ──────────────────── ───────────────────────── ──────────────────────────────
- *   EVENTS_LIST          GET /events               EventsService create/update/delete
+ *   events* (versioned)  GET /events, /events/manage, EventsService create/update/delete
+ *                        /events/slug/:slug, /:id  bump EVENTS_VERSION (see below)
  *   JOBS_ACTIVE/ALL      GET /jobs, /jobs/all      JobsService create/update/delete
  *   NEWS_LIST/newsItem   GET /news, /news/:id      NewsService create/update/delete
  *   FEATURED_STORIES_*   GET /featured-stories(/admin) FeaturedStoriesService create/update/delete
@@ -23,11 +24,18 @@
  *
  * Explicit invalidation is the primary mechanism; the TTLs below are only a
  * backstop for out-of-band DB edits (Supabase dashboard / seed scripts).
+ *
+ * VERSIONED KEYS (events): the event list is paginated, so there is one cache
+ * entry per page/scope/item instead of one key to delete. Every events key
+ * embeds the current EVENTS_VERSION; a write bumps the version, so all older
+ * pages become unreachable at once and expire on their own TTL.
  */
 
 /** TTLs in seconds. Generous because every write invalidates explicitly. */
 export const CACHE_TTL = {
   EVENTS: 60,
+  /** Must outlive every versioned events key (EVENTS above). */
+  EVENTS_VERSION: 7 * 24 * 60 * 60,
   JOBS: 120,
   NEWS: 120,
   FEATURED_STORIES: 120,
@@ -41,7 +49,15 @@ export const CACHE_TTL = {
 } as const;
 
 export const CacheKeys = {
-  EVENTS_LIST: 'events:list',
+  /** Bumped by every event write; embedded in all events keys below. */
+  EVENTS_VERSION: 'events:version',
+  eventsPage: (version: string, scope: string, limit: number, offset: number): string =>
+    `events:list:v${version}:${scope}:${limit}:${offset}`,
+  /** `scope` is the caller's chapter id, or 'all' for admins. */
+  eventsManagePage: (version: string, scope: string, limit: number, offset: number): string =>
+    `events:manage:v${version}:${scope}:${limit}:${offset}`,
+  eventBySlug: (version: string, slug: string): string => `events:item:v${version}:slug:${slug}`,
+  eventById: (version: string, id: string): string => `events:item:v${version}:id:${id}`,
   JOBS_ACTIVE: 'jobs:list:active',
   JOBS_ALL: 'jobs:list:all',
   NEWS_LIST: 'news:list',
