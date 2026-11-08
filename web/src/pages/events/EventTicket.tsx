@@ -7,6 +7,7 @@ import type { Variants } from 'framer-motion'
 import AddToCalendarSheet from '../../components/AddToCalendarSheet'
 import type { SolarIcon } from '../../lib/icons'
 import { useEventsStore } from '../../stores/useEventsStore'
+import { useEventBySlug } from '../../hooks/useEventBySlug'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { resolveEventTheme } from '../../lib/eventTheme'
@@ -82,12 +83,14 @@ export default function EventTicket() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
 
-  const { events, registrations, cancelRegistration, fetchRegistrations } = useEventsStore()
+  const { registrations, cancelRegistration, fetchRegistrations } = useEventsStore()
   const { user } = useAuthStore()
   const { activeTheme } = useThemeStore()
   const theme = activeTheme()
 
-  const event = events.find((e) => e.slug === slug)
+  // Full event by slug — tickets also exist for past events, which aren't in the
+  // (upcoming-only) events list.
+  const { event } = useEventBySlug(slug)
   const reg = registrations.find((r) => r.event_id === event?.id)
 
   const effectiveTheme = resolveEventTheme(event?.devcon_category, theme)

@@ -78,6 +78,33 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return readResponseBody<T>(res)
 }
 
+/** Largest page the paginated endpoints accept (server caps ?limit= at 100). */
+export const MAX_PAGE_SIZE = 100
+
+/** Safety stop for fetchAllPages: 100 pages × 100 rows. */
+const MAX_PAGES = 100
+
+/**
+ * Loads every row of a paginated `{ rows, total }` endpoint by following `total`,
+ * for screens that genuinely need the complete set (organizer/admin lists, CSV
+ * export, client-side search and filters). Rows are de-duplicated by id, since
+ * an insert between two page requests can shift a row onto the next page.
+ */
+export async function fetchAllPages<T extends { id: string }>(
+  fetchPage: (offset: number, limit: number) => Promise<{ rows: T[]; total: number }>,
+  pageSize: number = MAX_PAGE_SIZE,
+): Promise<T[]> {
+  const byId = new Map<string, T>()
+  let offset = 0
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { rows, total } = await fetchPage(offset, pageSize)
+    for (const row of rows) byId.set(row.id, row)
+    offset += rows.length
+    if (rows.length === 0 || offset >= total) break
+  }
+  return [...byId.values()]
+}
+
 export async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> =
     init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }

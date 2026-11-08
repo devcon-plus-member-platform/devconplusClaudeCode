@@ -6,6 +6,7 @@ import {
 } from 'solar-icon-set'
 import { motion } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
+import { useEventBySlug } from '../../hooks/useEventBySlug'
 import { useAuthStore } from '../../stores/useAuthStore'
 import AddToCalendarSheet from '../../components/AddToCalendarSheet'
 import type { SolarIcon } from '../../lib/icons'
@@ -21,10 +22,10 @@ const WHILE_YOU_WAIT: { path: string; label: string; Icon: SolarIcon }[] = [
 export default function EventPending() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const { events, registrations, subscribeToRegistration, fetchRegistrations } = useEventsStore()
+  const { registrations, subscribeToRegistration, fetchRegistrations } = useEventsStore()
   const { user } = useAuthStore()
 
-  const event = events.find((e) => e.slug === slug)
+  const { event } = useEventBySlug(slug)
   const eventId = event?.id
   const reg = registrations.find((r) => r.event_id === eventId && r.user_id === user?.id)
 

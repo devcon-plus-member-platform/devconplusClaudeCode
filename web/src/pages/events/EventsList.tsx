@@ -13,7 +13,7 @@ import { useChaptersStore } from '../../stores/useChaptersStore'
 import { fuzzySearchFilter } from '../../lib/utils'
 import SearchBar from '../../components/SearchBar'
 import SearchEmptyState from '../../components/SearchEmptyState'
-import type { Event, EventRegistration } from '@devcon-plus/supabase'
+import type { EventListItem, EventRegistration } from '@devcon-plus/supabase'
 
 // Flower-of-life pattern matching Rewards/Dashboard
 const TILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><circle cx="0" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="0" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="0" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="60" cy="60" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/><circle cx="30" cy="30" r="30" stroke="white" stroke-width="0.8" stroke-opacity="0.10" fill="none"/></svg>`
@@ -38,9 +38,9 @@ function formatEventDate(iso: string): { month: string; day: string } {
   }
 }
 
-type TicketEntry = { reg: EventRegistration; event: Event }
+type TicketEntry = { reg: EventRegistration; event: EventListItem }
 
-function getEventLifecycleState(ev: Event): 'in_progress' | 'done' | 'normal' {
+function getEventLifecycleState(ev: EventListItem): 'in_progress' | 'done' | 'normal' {
   const now = new Date()
   if (isEventArchived(ev, now)) return 'done'
   if (ev.event_date && new Date(ev.event_date) <= now) return 'in_progress'
@@ -155,7 +155,7 @@ export default function EventsList() {
 
   const { matchingEvents, featuredEvent, displayEvents, showHero } = useMemo(() => {
     const matchingEvents = activeEvents.filter(event =>
-      fuzzySearchFilter(deferredQuery, event, ['title', 'description', 'location'])
+      fuzzySearchFilter(deferredQuery, event, ['title', 'location'])
     )
     const featuredEvent = activeEvents.find((e) => e.is_featured) ?? activeEvents[0]
     const displayEvents = deferredQuery
@@ -168,11 +168,12 @@ export default function EventsList() {
     ? (chapters.find((c) => c.id === selectedChapterId)?.name ?? null)
     : 'All Chapters'
 
-  // We use events.find on the FULL list to ensure tickets show even if they are for a different chapter.
+  // Each registration arrives with its event attached (/api/registrations/mine), so
+  // tickets show for any chapter and for past events, which aren't in `events`.
   // Ordering: active tickets first (soonest event first), then expired tickets (most recent first).
   const allTickets: TicketEntry[] = useMemo(() => registrations
     .filter((r) => r.status === 'approved' || r.status === 'pending')
-    .map((r) => ({ reg: r, event: events.find((e) => e.id === r.event_id) }))
+    .map((r) => ({ reg: r, event: r.event ?? events.find((e) => e.id === r.event_id) }))
     .filter((item): item is TicketEntry => item.event !== undefined)
     .sort((a, b) => {
       const aExpired = a.reg.checked_in || getEventLifecycleState(a.event) === 'done'
@@ -187,7 +188,7 @@ export default function EventsList() {
   [registrations, events])
 
   const filteredTickets = useMemo(() => allTickets.filter(item =>
-    fuzzySearchFilter(deferredQuery, item.event, ['title', 'description', 'location'])
+    fuzzySearchFilter(deferredQuery, item.event, ['title', 'location'])
   ), [allTickets, deferredQuery])
 
   const ticketCount = allTickets.length

@@ -33,12 +33,16 @@ export default function WheelPosterPage() {
 
   useEffect(() => {
     let active = true
-    publicFetch<Event[]>('/api/events')
-      .then((data) => {
+    if (!eventId) {
+      setStatus('notfound')
+      return
+    }
+    // One full event by id — the events list is paginated, so don't search it.
+    publicFetch<Event>(`/api/events/${encodeURIComponent(eventId)}`)
+      .then((match) => {
         if (!active) return
-        const match = data.find((e) => e.id === eventId)
-        setEvent(match ?? null)
-        setStatus(match ? 'ready' : 'notfound')
+        setEvent(match)
+        setStatus('ready')
       })
       .catch(() => {
         if (!active) return
