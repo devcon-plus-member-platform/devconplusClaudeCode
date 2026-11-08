@@ -1,13 +1,15 @@
 import { useState, useEffect, useDeferredValue, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UsersGroupRoundedOutline, MapPointOutline, AltArrowRightOutline, TicketOutline, ClockCircleOutline, CalendarMarkOutline, CheckCircleOutline, CloseCircleLineDuotone, FilterLinear, MagniferOutline } from 'solar-icon-set'
+import { MapPointOutline, AltArrowRightOutline, TicketOutline, CalendarMarkOutline, CheckCircleOutline, CloseCircleOutline, CloseCircleLineDuotone, FilterLinear, MagniferOutline } from 'solar-icon-set'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useEventsStore } from '../../stores/useEventsStore'
 import EventCard from '../../components/EventCard'
+import EventListCard from '../../components/EventListCard'
 import { SkeletonEventCard, SkeletonFeaturedEvent } from '../../components/Skeleton'
 import { staggerContainer, cardItem, fadeUp } from '../../lib/animation'
-import { isEventArchived } from '../../lib/dates'
+import { formatEventDate, isEventArchived } from '../../lib/dates'
+import { DEVCON_EVENTS_URL, DEVCON_SITE_URL } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import { fuzzySearchFilter } from '../../lib/utils'
@@ -29,14 +31,6 @@ const EVENT_FILTERS: { id: EventFilter; label: string }[] = [
   { id: 'devcon_only', label: 'DEVCON' },
   { id: 'featured', label: 'Community Featured' },
 ]
-
-function formatEventDate(iso: string): { month: string; day: string } {
-  const d = new Date(iso)
-  return {
-    month: d.toLocaleDateString('en-PH', { month: 'short' }).toUpperCase(),
-    day: String(d.getDate()),
-  }
-}
 
 type TicketEntry = { reg: EventRegistration; event: Event }
 
@@ -177,25 +171,28 @@ export default function EventsList() {
     ? (chapters.find((c) => c.id === selectedChapterId)?.name ?? null)
     : 'All Chapters'
 
-  const isNoUpcomingEvents = !isLoading && !error && !deferredQuery && (
-    events.length === 0 ||
-    totalActiveEvents.length === 0 ||
-    (eventFilter === 'all' && selectedChapterId === null && activeEvents.length === 0)
-  )
+  const isNoUpcomingEvents = !isLoading && !error && !deferredQuery && totalActiveEvents.length === 0
 
   const isFilterEmpty = !isLoading && !error && !deferredQuery && !isNoUpcomingEvents && activeEvents.length === 0
 
+  // Scroll to the past events once the section has rendered, instead of guessing with a timer.
+  useEffect(() => {
+    if (showPastEvents) pastEventsRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [showPastEvents])
+
   const handleExplorePastEvents = () => {
     if (totalPastEvents.length > 0) {
-      setShowPastEvents(true)
       if (selectedChapterId && chapterPastEvents.length === 0) {
         setSelectedChapterId(null)
       }
-      setTimeout(() => {
+      if (showPastEvents) {
+        // Already open — the effect won't re-run, so scroll back to it directly.
         pastEventsRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 50)
+      } else {
+        setShowPastEvents(true)
+      }
     } else {
-      window.open('https://devcon.ph/events/', '_blank', 'noopener,noreferrer')
+      window.open(DEVCON_EVENTS_URL, '_blank', 'noopener,noreferrer')
     }
   }
 
@@ -360,8 +357,8 @@ export default function EventsList() {
             {/* Error state — failed to load events */}
             {!isLoading && error && events.length === 0 && (
               <div className="flex flex-col items-center justify-center px-4 pt-20 pb-8 text-center">
-                <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
-                  <CloseCircleLineDuotone className="w-8 h-8 text-red-500" />
+                <div className="w-16 h-16 rounded-full bg-red/10 flex items-center justify-center mb-4">
+                  <CloseCircleOutline className="w-8 h-8" color="#EF4444" />
                 </div>
                 <h3 className="text-md3-body-lg font-bold text-slate-900 mb-1">Unable to load events</h3>
                 <p className="text-md3-body-md text-slate-500 text-center max-w-sm mb-5">
@@ -405,7 +402,7 @@ export default function EventsList() {
                     Explore Past Chapter Events
                   </button>
                   <a
-                    href="https://devcon.ph"
+                    href={DEVCON_SITE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 border border-slate-300 bg-white text-slate-700 font-semibold text-md3-body-md px-5 py-2.5 rounded-xl hover:bg-slate-50 active:scale-95 transition-all shadow-sm text-center"
@@ -432,65 +429,14 @@ export default function EventsList() {
                       )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {(chapterPastEvents.length > 0 ? chapterPastEvents : totalPastEvents).map((event) => {
-                        const dateParts = event.event_date ? formatEventDate(event.event_date) : null
-                        return (
-                          <motion.button
-                            key={event.id}
-                            variants={cardItem}
-                            onClick={() => navigate(`/events/${event.slug}`)}
-                            className="w-full bg-white border border-slate-200 shadow-sm rounded-2xl p-3 flex items-center gap-4 text-left opacity-75 hover:opacity-100 transition-opacity"
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            <div className="size-[72px] bg-slate-100 rounded-[12px] overflow-hidden shrink-0 relative">
-                              {event.cover_image_url ? (
-                                <>
-                                  <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover grayscale" />
-                                  {dateParts && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40">
-                                      <span className="text-[10px] font-bold leading-none text-white/90 uppercase drop-shadow-sm">
-                                        {dateParts.month}
-                                      </span>
-                                      <span className="text-md3-title-lg font-black leading-tight text-white drop-shadow-md">
-                                        {dateParts.day}
-                                      </span>
-                                    </div>
-                                  )}
-                                </>
-                              ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-200">
-                                  {dateParts ? (
-                                    <>
-                                      <span className="text-[10px] font-bold leading-none text-slate-500 uppercase">
-                                        {dateParts.month}
-                                      </span>
-                                      <span className="text-md3-headline-sm font-black leading-tight text-slate-600">
-                                        {dateParts.day}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <ClockCircleOutline className="size-8 text-slate-400" />
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h5 className="font-proxima font-bold text-slate-800 text-[15px] truncate mb-0.5">
-                                {event.title}
-                              </h5>
-                              {event.location && (
-                                <p className="text-xs text-slate-500 truncate flex items-center gap-1 mb-1.5">
-                                  <MapPointOutline className="w-3.5 h-3.5 shrink-0" color="#64748B" />
-                                  <span>{event.location}</span>
-                                </p>
-                              )}
-                              <span className="font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                                Past Event
-                              </span>
-                            </div>
-                          </motion.button>
-                        )
-                      })}
+                      {(chapterPastEvents.length > 0 ? chapterPastEvents : totalPastEvents).map((event) => (
+                        <EventListCard
+                          key={event.id}
+                          event={event}
+                          attendeeCount={attendeeCounts[event.id]}
+                          onSelect={() => navigate(`/events/${event.slug}`)}
+                        />
+                      ))}
                     </div>
                   </div>
                 )}
@@ -552,99 +498,14 @@ export default function EventsList() {
                 initial="hidden"
                 animate="visible"
               >
-                {displayEvents.map((event) => {
-                  const dateParts = event.event_date ? formatEventDate(event.event_date) : null
-                  const isArchived = isEventArchived(event)
-                  const isExternal = event.is_external === true
-                  return (
-                    <motion.button
-                      key={event.id}
-                      variants={cardItem}
-                      onClick={() => navigate(`/events/${event.slug}`)}
-                      className={`w-full bg-white border border-slate-200 shadow-[0px_0px_8px_0px_rgba(0,0,0,0.1)] rounded-2xl p-3 flex items-center gap-4 text-left ${
-                        isArchived ? 'opacity-60 grayscale' : ''
-                      }`}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {/* Left Side: Image or Date Placeholder */}
-                      <div className="size-[72px] bg-slate-100 rounded-[12px] overflow-hidden shrink-0 relative">
-                        {event.cover_image_url ? (
-                          <>
-                            <img src={event.cover_image_url} alt={event.title} className="w-full h-full object-cover" />
-                            {/* Date Overlay for Images */}
-                            {dateParts && (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30">
-                                <span className="text-[10px] font-bold leading-none text-white/90 uppercase drop-shadow-sm">
-                                  {dateParts.month}
-                                </span>
-                                <span className="text-md3-title-lg font-black leading-tight text-white drop-shadow-md">
-                                  {dateParts.day}
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-primary/10">
-                            {dateParts ? (
-                              <>
-                                <span className="text-[10px] font-bold leading-none text-primary/60 uppercase">
-                                  {dateParts.month}
-                                </span>
-                                <span className="text-md3-headline-sm font-black leading-tight text-primary">
-                                  {dateParts.day}
-                                </span>
-                              </>
-                            ) : (
-                              <ClockCircleOutline className="size-8 text-primary/40" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right Side: Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2 mb-0.5">
-                          <p className="font-proxima font-bold text-[14px] text-slate-900 leading-tight truncate min-w-0 flex-1">
-                            {event.title}
-                          </p>
-                          <AltArrowRightOutline className="w-3.5 h-3.5 shrink-0 text-slate-300 mt-0.5" />
-                        </div>
-
-                        {/* Date Text */}
-                        <p className="text-[11px] text-slate-500 mb-0.5 truncate">
-                          {event.event_date ? new Date(event.event_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'No date set'}
-                        </p>
-
-                        {/* Location */}
-                        {event.location && (
-                          <p className="text-[11px] text-slate-400 mb-1.5 flex items-center gap-1 min-w-0">
-                            <MapPointOutline className="w-2.5 h-2.5 shrink-0" color="#94A3B8" />
-                            <span className="truncate min-w-0">{event.location}</span>
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-2">
-                          {!isExternal && (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              +{event.points_value} pts
-                            </span>
-                          )}
-                          {attendeeCounts[event.id] && (
-                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
-                              <UsersGroupRoundedOutline className="w-3 h-3" color="#64748B" />
-                              {attendeeCounts[event.id]}
-                            </span>
-                          )}
-                          {isArchived && (
-                            <span className="backdrop-blur-[16px] font-proxima font-semibold text-[9px] tracking-[0.9px] uppercase leading-[13.5px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                              Past
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </motion.button>
-                  )
-                })}
+                {displayEvents.map((event) => (
+                  <EventListCard
+                    key={event.id}
+                    event={event}
+                    attendeeCount={attendeeCounts[event.id]}
+                    onSelect={() => navigate(`/events/${event.slug}`)}
+                  />
+                ))}
               </motion.div>
             )}
           </div>
