@@ -15,7 +15,8 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 
 export function OrgEventsList() {
   const navigate = useNavigate()
-  const { events, fetchEvents, isLoading } = useEventsStore()
+  // Full rows of the events this organizer may manage (GET /api/events/manage).
+  const { managedEvents: events, fetchManagedEvents: fetchEvents, isManagedLoading: isLoading } = useEventsStore()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
 

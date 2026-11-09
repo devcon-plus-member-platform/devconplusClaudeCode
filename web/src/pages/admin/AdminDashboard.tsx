@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
+import { fetchAllManagedEvents } from '../../stores/useEventsStore'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/Pagination'
 import { EventStatusBadge } from '../../components/EventStatusBadge'
@@ -114,7 +115,7 @@ export default function AdminDashboard() {
       setIsRecentEventsLoading(true)
       try {
         const [eventRows, chapterRows] = await Promise.all([
-          publicFetch<Event[]>('/api/events'),
+          fetchAllManagedEvents(), // full rows of every event, paged through to the total
           publicFetch<{ id: string; name: string }[]>('/api/chapters'),
         ])
         setRecentEvents(eventRows)

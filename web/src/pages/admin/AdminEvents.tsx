@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '../../lib/supabase'
 import { apiFetch, publicFetch } from '../../lib/api'
 import type { Event } from '@devcon-plus/supabase'
+import { fetchAllManagedEvents } from '../../stores/useEventsStore'
 import type { Chapter } from '../../types/types'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import { formatDate, toDatetimeLocalValue, fromDatetimeLocalValue, computeEventStatus } from '../../lib/dates'
@@ -1338,7 +1339,7 @@ export default function AdminEvents() {
         await fetchChapters()
 
         const [eventRows, chapterRows, creatorRows] = await Promise.all([
-          publicFetch<Event[]>('/api/events'),
+          fetchAllManagedEvents(), // full rows of every event, paged through to the total
           publicFetch<{ id: string; name: string }[]>('/api/chapters'),
           apiFetch<{ id: string; full_name: string }[]>('/api/admin/events/creators'),
         ])
