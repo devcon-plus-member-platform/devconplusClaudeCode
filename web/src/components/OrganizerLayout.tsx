@@ -35,7 +35,8 @@ export default function OrganizerLayout() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const scrollRef = useRef<HTMLDivElement>(null)
-  const fetchEvents = useEventsStore((s) => s.fetchEvents)
+  // Organizer screens read the managed (chapter-scoped, full-row) list, so that's what recover() refreshes.
+  const fetchEvents = useEventsStore((s) => s.fetchManagedEvents)
   // Rewards management moved to /admin/rewards — organizers get the member-style
   // rewards page, so recover the public catalog + the officer's own points instead.
   const fetchRewards = useRewardsStore((s) => s.fetchRewards)

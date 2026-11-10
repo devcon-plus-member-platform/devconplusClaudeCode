@@ -65,7 +65,7 @@ const LAST_FEATURED_STORY_KEY = 'devcon-last-featured-story'
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { events, fetchEvents, isLoading: eventsLoading } = useEventsStore()
+  const { events, pastEvents, fetchEvents, fetchPastEvents, isLoading: eventsLoading } = useEventsStore()
   const { jobs, isLoading: jobsLoading, fetchJobs } = useJobsStore()
   const { transactions, loadTotalPoints, loadTransactions, isLoading: pointsLoading } = usePointsStore()
   const { missions, participants, submissions, fetchAll: fetchMissions, startMission, isLoading: missionsLoading } = useMissionsStore()
@@ -254,7 +254,9 @@ useEffect(() => {
   // Sparser chapters/regions (mostly outside Manila) can go stretches with zero
   // upcoming events — shuffle in recent past events instead of leaving the
   // section blank, so those members still see something happening nearby.
-  const recentNearby = upcomingNearby.length > 0 ? [] : events
+  // `events` holds upcoming events only; past ones load on demand (effect below).
+  const needsRecentFallback = !eventsLoading && upcomingNearby.length === 0
+  const recentNearby = !needsRecentFallback ? [] : pastEvents
     .filter((e) => isEventArchived(e) && nearbyEventFilter(e))
     .sort((a, b) => new Date(b.event_date ?? 0).getTime() - new Date(a.event_date ?? 0).getTime())
     .slice(0, 10)
@@ -262,6 +264,11 @@ useEffect(() => {
     .slice(0, 3)
 
   const nearbyEvents = upcomingNearby.length > 0 ? upcomingNearby : recentNearby
+  // Load the most recent past events only when the fallback above is needed.
+  useEffect(() => {
+    if (needsRecentFallback) void fetchPastEvents()
+  }, [needsRecentFallback, fetchPastEvents])
+
   const isShowingRecentFallback = upcomingNearby.length === 0 && recentNearby.length > 0
   const recentTxns = transactions.slice(0, 4)
 

@@ -3,7 +3,7 @@ import { motion, type Variants } from 'framer-motion'
 import { toPng } from 'html-to-image'
 import { CloseCircleOutline, DownloadOutline, LinkOutline } from 'solar-icon-set'
 import { toast } from 'sonner'
-import type { Event } from '@devcon-plus/supabase'
+import type { EventListItem } from '@devcon-plus/supabase'
 import { backdrop } from '../lib/animation'
 import RafflePosterArt, { POSTER_DIMS, type PosterOrientation } from './RafflePosterArt'
 
@@ -20,7 +20,7 @@ const popIn: Variants = {
 }
 
 interface WheelPosterProps {
-  event: Event
+  event: EventListItem
   onClose: () => void
 }
 

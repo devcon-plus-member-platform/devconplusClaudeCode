@@ -112,4 +112,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION approve_organizer_upgrade TO authenticated;
+GRANT EXECUTE ON FUNCTION approve_organizer_upgrade(uuid, text, uuid, uuid, uuid) TO authenticated;

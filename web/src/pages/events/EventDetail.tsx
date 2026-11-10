@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useEventsStore } from '../../stores/useEventsStore'
 // import { useVolunteerStore } from '../../stores/useVolunteerStore' // disabled: volunteer-for-event feature
 import { useAuthStore } from '../../stores/useAuthStore'
-import { publicFetch } from '../../lib/api'
+import { useEventBySlug } from '../../hooks/useEventBySlug'
 import { useChaptersStore } from '../../stores/useChaptersStore'
 import type { EventCapacitySummary } from '@devcon-plus/supabase'
 import NotFound from '../NotFound'
@@ -25,32 +25,15 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export default function EventDetail() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const { events, registrations, fetchEventCapacity } = useEventsStore()
+  const { registrations, fetchEventCapacity } = useEventsStore()
   const { user } = useAuthStore()
   const { getChapterById, fetchChapters } = useChaptersStore()
   // const { loadApplications, getApplicationByEventId } = useVolunteerStore() // disabled: volunteer-for-event feature
 
-  const storeEvent = events.find((e) => e.slug === slug)
-  const [localEvent, setLocalEvent] = useState<NonNullable<typeof storeEvent> | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [notFound, setNotFound] = useState(false)
+  // The full event comes from GET /api/events/slug/:slug — the events list only
+  // holds upcoming events with list columns, so it can't serve this page.
+  const { event, isLoading: loading, notFound } = useEventBySlug(slug)
   const [showVolunteerForm, setShowVolunteerForm] = useState(false)
-
-  const event = storeEvent ?? localEvent ?? undefined
-
-  // Fetch event directly when not available from the store (e.g. direct URL access).
-  useEffect(() => {
-    if (event || !slug) return
-    setLoading(true)
-    publicFetch<NonNullable<typeof storeEvent>[]>('/api/events')
-      .then((data) => {
-        const found = data.find((e) => e.slug === slug) ?? null
-        if (!found) setNotFound(true)
-        else setLocalEvent(found)
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false))
-  }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Disabled: volunteer-for-event feature — load volunteer applications for authenticated users
   // useEffect(() => {

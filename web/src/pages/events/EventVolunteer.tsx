@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useState, useEffect } from 'react'
 import { useFormDraft } from '../../hooks/useFormDraft'
-import { useEventsStore } from '../../stores/useEventsStore'
+import { useEventBySlug } from '../../hooks/useEventBySlug'
 import { useVolunteerStore } from '../../stores/useVolunteerStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { getEventThemeStyle } from '../../lib/eventTheme'
@@ -65,11 +65,10 @@ export default function EventVolunteer() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
 
-  const { events } = useEventsStore()
   const { loadApplications, applyToVolunteer, getApplicationByEventId } = useVolunteerStore()
   const { user } = useAuthStore()
 
-  const event = slug ? events.find((e) => e.slug === slug) : undefined
+  const { event, isLoading: isEventLoading } = useEventBySlug(slug)
   const eventId = event?.id
   const existingApp = eventId ? getApplicationByEventId(eventId) : undefined
 
@@ -114,7 +113,7 @@ export default function EventVolunteer() {
     return unsubscribe
   }, [watch, saveDraft])
 
-  if (!event || !eventId) return <NotFound />
+  if (!event || !eventId) return isEventLoading ? null : <NotFound />
   if (isChapterBlocked) return null
 
   const dateStr = event.event_date

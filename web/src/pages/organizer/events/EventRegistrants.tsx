@@ -339,7 +339,8 @@ export function OrgEventRegistrants() {
   // Organizer edit is its own route; admin edit is a slide-over on the events
   // list, so we hand it the target id via router state instead.
   const isAdminContext = location.pathname.startsWith('/admin')
-  const { events, fetchEvents, fetchEventCapacity } = useEventsStore()
+  // Full rows of the events this organizer may manage (GET /api/events/manage).
+  const { managedEvents: events, fetchManagedEvents: fetchEvents, fetchEventCapacity } = useEventsStore()
 
   const event = events.find((e) => e.id === id)
   const organizerUser = useOrganizerUser()

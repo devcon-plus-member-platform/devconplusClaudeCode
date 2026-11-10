@@ -7,7 +7,11 @@ import {
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { assertEventScope } from '../common/authz/chapter-scope';
 import type { Registration, RegistrantWithProfile } from '../supabase/types';
-import { RegistrationsRepository, type CustomFormField } from './registrations.repository';
+import {
+  RegistrationsRepository,
+  type CustomFormField,
+  type RegistrationWithEvent,
+} from './registrations.repository';
 
 /**
  * An "Other" free-text answer is encoded as `__other__:<text>` in the same
@@ -48,7 +52,7 @@ export class RegistrationsService {
 
   // ── Member ────────────────────────────────────────────────────────────────
 
-  getMyRegistrations(user: AuthenticatedUser): Promise<Registration[]> {
+  getMyRegistrations(user: AuthenticatedUser): Promise<RegistrationWithEvent[]> {
     return this.repo.findByUser(user.profileId);
   }
 

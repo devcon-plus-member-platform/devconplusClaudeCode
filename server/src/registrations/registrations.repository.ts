@@ -2,6 +2,16 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { BaseRepository } from '../common/repository/base.repository';
 import { SupabaseService } from '../supabase/supabase.service';
 import type { Registration, RegistrantWithProfile } from '../supabase/types';
+import { EVENT_LIST_COLUMNS, type EventListItem } from '../events/event-list.fields';
+
+/**
+ * A member's registration with its event attached, so My Tickets can render
+ * every ticket without the event being in the (paginated) events list.
+ * `event` is null only if the event row no longer exists.
+ */
+export interface RegistrationWithEvent extends Registration {
+  event: EventListItem | null;
+}
 
 interface ManualCheckinRpcResult {
   success: boolean;
@@ -30,13 +40,13 @@ export class RegistrationsRepository extends BaseRepository {
 
   // ── Member ────────────────────────────────────────────────────────────────
 
-  async findByUser(userId: string): Promise<Registration[]> {
+  async findByUser(userId: string): Promise<RegistrationWithEvent[]> {
     const result = await this.db
       .from('event_registrations')
-      .select('*')
+      .select(`*, event:events(${EVENT_LIST_COLUMNS})`)
       .eq('user_id', userId);
     return this.unwrap(
-      result as { data: Registration[] | null; error: { message: string } | null },
+      result as { data: RegistrationWithEvent[] | null; error: { message: string } | null },
     );
   }
 

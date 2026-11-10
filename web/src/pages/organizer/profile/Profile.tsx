@@ -26,7 +26,8 @@ export function OrgProfile() {
   const user = useOrganizerUser()
   const { logout: orgLogout } = useOrgAuthStore()
   const { user: profile, setOrganizerSession } = useAuthStore()
-  const { events, fetchEvents, isLoading } = useEventsStore()
+  // Full rows of the events this organizer may manage (GET /api/events/manage).
+  const { managedEvents: events, fetchManagedEvents: fetchEvents, isManagedLoading: isLoading } = useEventsStore()
   const navigate = useNavigate()
   const [activeModal, setActiveModal] = useState<string | null>(null)
 
