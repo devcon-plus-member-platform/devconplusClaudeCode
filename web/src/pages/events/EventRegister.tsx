@@ -4,9 +4,9 @@ import { ArrowLeftOutline } from 'solar-icon-set'
 import { useEventsStore } from '../../stores/useEventsStore'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { supabase, getBridgeToken } from '../../lib/supabase'
-import { publicFetch } from '../../lib/api'
 import { buildRegistrationConfirmationEmail } from '../../lib/emailTemplates'
 import { useFormDraft } from '../../hooks/useFormDraft'
+import { useEventBySlug } from '../../hooks/useEventBySlug'
 import NotFound from '../NotFound'
 
 // ── Custom form field types ───────────────────────────────────────────────────
@@ -214,7 +214,7 @@ export default function EventRegister() {
   }>(`event-register:${slug ?? ''}`, 'local')
   const navigate = useNavigate()
   const location = useLocation()
-  const { events, registrations, register } = useEventsStore()
+  const { registrations, register } = useEventsStore()
   const { user } = useAuthStore()
   const [agreed, setAgreed] = useState<boolean>((draft.agreed as boolean) ?? false)
   const [submitting, setSubmitting] = useState(false)
@@ -236,33 +236,12 @@ export default function EventRegister() {
   )
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  const storeEvent = events.find((e) => e.slug === slug)
-  const [localEvent, setLocalEvent] = useState<NonNullable<typeof storeEvent> | null>(null)
-  const [checkingEvent, setCheckingEvent] = useState(false)
-  const [eventNotFound, setEventNotFound] = useState(false)
-  const event = storeEvent ?? localEvent ?? undefined
+  // The full event (including custom_form_schema) comes from
+  // GET /api/events/slug/:slug — the events list only carries list columns.
+  const { event, isLoading: checkingEvent, notFound: eventNotFound } = useEventBySlug(slug)
   const eventId = event?.id ?? ''
 
-  // Fallback for a freshly-created or not-yet-cached event: the global store's
-  // events[] (populated once on app mount) may not include it yet. Mirrors
-  // EventDetail's direct-fetch fallback so this page doesn't blank out forever
-  // just because the member arrived here (e.g. via a link) before the store
-  // caught up — without this, `!event` below has no way to ever become true.
-  useEffect(() => {
-    if (event || !slug) return
-    setCheckingEvent(true)
-    publicFetch<NonNullable<typeof storeEvent>[]>('/api/events')
-      .then((data) => {
-        const found = data.find((e) => e.slug === slug) ?? null
-        if (!found) setEventNotFound(true)
-        else setLocalEvent(found)
-      })
-      .catch(() => setEventNotFound(true))
-      .finally(() => setCheckingEvent(false))
-  }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // custom_form_schema is returned by the store's select('*') since the column now exists.
-  // Derive it directly — no extra fetch needed.
+  // Custom registration questions are part of the full event.
   const customSchema: CustomFormField[] = Array.isArray(event?.custom_form_schema)
     ? (event.custom_form_schema as CustomFormField[])
     : []

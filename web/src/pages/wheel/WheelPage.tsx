@@ -4,8 +4,8 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { CloseCircleOutline, ConfettiOutline, CupStarOutline, DownloadOutline, GalleryAddOutline, MagniferOutline, MutedOutline, RestartOutline, ShareOutline, SoundwaveOutline, UsersGroupRoundedOutline } from 'solar-icon-set'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
-import type { Event } from '@devcon-plus/supabase'
-import { publicFetch } from '../../lib/api'
+import type { EventListItem, Paginated } from '@devcon-plus/supabase'
+import { fetchAllPages, publicFetch } from '../../lib/api'
 import { backdrop } from '../../lib/animation'
 import { playWin, setMuted, startSpinTicks, stopSpinTicks } from '../../lib/wheelSounds'
 import NameWheel from '../../components/NameWheel'
@@ -258,7 +258,7 @@ export default function WheelPage() {
   const isLocked = Boolean(routeEventId)
 
   // ── Source selection ──────────────────────────────────────────────────────
-  const [events, setEvents] = useState<Event[]>([])
+  const [events, setEvents] = useState<EventListItem[]>([])
   const [selectedEventId, setSelectedEventId] = useState(routeEventId ?? '')
   const [source, setSource] = useState<PoolSource>('event')
   const [filter, setFilter] = useState<PoolFilter>('all')
@@ -327,7 +327,10 @@ export default function WheelPage() {
   // Load the public event catalog (for the picker + to resolve the locked title).
   useEffect(() => {
     setIsLoadingEvents(true)
-    publicFetch<Event[]>('/api/events')
+    // Every event (past and upcoming), paged through to the server's total.
+    fetchAllPages((offset, limit) =>
+      publicFetch<Paginated<EventListItem> | EventListItem[]>(`/api/events?scope=all&limit=${limit}&offset=${offset}`),
+    )
       .then((data) => {
         // Externally-registered events have no in-app participant list to raffle.
         const sorted = data

@@ -78,6 +78,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return readResponseBody<T>(res)
 }
 
+export { MAX_PAGE_SIZE, fetchAllPages, isMissingRoute } from './pagination'
+
 export async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> =
     init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }

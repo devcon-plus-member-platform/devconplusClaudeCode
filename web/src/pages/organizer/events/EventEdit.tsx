@@ -50,7 +50,8 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventEdit() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, fetchEvents, isLoading, updateEvent, deleteEvent } = useEventsStore()
+  // Full rows of the events this organizer may manage (GET /api/events/manage).
+  const { managedEvents: events, fetchManagedEvents: fetchEvents, isManagedLoading: isLoading, updateEvent, deleteEvent } = useEventsStore()
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'hq_admin' || user?.role === 'super_admin'
   // Chapter officers cap attendance XP at 350; admins keep the original ceiling.

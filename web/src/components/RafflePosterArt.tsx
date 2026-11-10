@@ -1,6 +1,6 @@
 import { QRCodeSVG } from 'qrcode.react'
 import { CalendarOutline, MapPointOutline, QRCodeOutline, StarOutline } from 'solar-icon-set'
-import type { Event } from '@devcon-plus/supabase'
+import type { EventListItem } from '@devcon-plus/supabase'
 import { formatDate } from '../lib/dates'
 import logoHorizontal from '../assets/logos/logo-horizontal.svg'
 
@@ -230,7 +230,7 @@ function titleSizeClass(length: number) {
   return 'text-[21px] leading-tight'
 }
 
-function EventBlock({ event, dateLabel }: { event: Event; dateLabel: string }) {
+function EventBlock({ event, dateLabel }: { event: EventListItem; dateLabel: string }) {
   return (
     <div className="w-full rounded-2xl bg-white/10 px-6 py-4 text-left">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-white/60">Event</p>
@@ -276,7 +276,7 @@ export default function RafflePosterArt({
   event,
   orientation,
 }: {
-  event: Event
+  event: EventListItem
   orientation: PosterOrientation
 }) {
   const dims = POSTER_DIMS[orientation]
