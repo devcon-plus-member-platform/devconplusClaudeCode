@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarOutline, StarOutline } from 'solar-icon-set'
 import { motion } from 'framer-motion'
-import type { Event } from '@devcon-plus/supabase'
+import type { EventListItem } from '@devcon-plus/supabase'
 import PromotedBadge from './PromotedBadge'
 import FeaturedBadge from './FeaturedBadge'
 import StatusPill from './StatusPill'
@@ -24,7 +24,7 @@ function EventCard({
   className = '',
   compact = false
 }: {
-  event: Event;
+  event: EventListItem;
   attendeeCount?: number;
   attendees?: { avatar_url: string | null; full_name: string }[];
   className?: string;

@@ -20,7 +20,8 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgEventSummary() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { events, fetchEvents, isLoading: eventsLoading } = useEventsStore()
+  // Full rows of the events this organizer may manage (GET /api/events/manage).
+  const { managedEvents: events, fetchManagedEvents: fetchEvents, isManagedLoading: eventsLoading } = useEventsStore()
 
   const [registrants, setRegistrants] = useState<Registration[]>([])
   const [isLoading, setIsLoading]     = useState(true)

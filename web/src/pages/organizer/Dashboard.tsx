@@ -21,7 +21,8 @@ const PATTERN_BG = `url("data:image/svg+xml,${encodeURIComponent(TILE_SVG)}")`
 export function OrgDashboard() {
   const user = useOrganizerUser()
   const { user: profile } = useAuthStore()
-  const { events, fetchEvents } = useEventsStore()
+  // Full rows of the events this organizer may manage (GET /api/events/manage).
+  const { managedEvents: events, fetchManagedEvents: fetchEvents } = useEventsStore()
   const {
     applications: volunteerApps,
     loading: volunteerLoading,

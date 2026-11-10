@@ -54,6 +54,15 @@ export function getPointsExpiry(now = new Date()) {
   return { resetDate: new Date(resetUtcMs), label: `Jun 24, ${resetYear}`, daysLeft }
 }
 
+/** Short month + day-of-month for date badges on event cards, e.g. { month: 'NOV', day: '8' }. */
+export function formatEventDate(iso: string): { month: string; day: string } {
+  const d = new Date(iso)
+  return {
+    month: d.toLocaleDateString('en-PH', { month: 'short' }).toUpperCase(),
+    day: String(d.getDate()),
+  }
+}
+
 type EventDates = Pick<Event, 'event_date' | 'end_date'>
 
 /** Returns true when the event's end time (or start time if no end) has passed. */

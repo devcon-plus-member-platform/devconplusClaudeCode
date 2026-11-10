@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { Event } from '@devcon-plus/supabase'
-import { publicFetch } from '../../lib/api'
+import { isMissingRoute, publicFetch } from '../../lib/api'
 import RafflePosterArt, { POSTER_BG, POSTER_DIMS, type PosterOrientation } from '../../components/RafflePosterArt'
 
 /** Track the viewport so the poster can pick an orientation and scale to fit. */
@@ -33,12 +33,23 @@ export default function WheelPosterPage() {
 
   useEffect(() => {
     let active = true
-    publicFetch<Event[]>('/api/events')
-      .then((data) => {
+    if (!eventId) {
+      setStatus('notfound')
+      return
+    }
+    // One full event by id — the events list is paginated, so don't search it.
+    // An older server without GET /api/events/:id: find it in the full list, as before.
+    publicFetch<Event>(`/api/events/${encodeURIComponent(eventId)}`)
+      .catch(async (err: unknown) => {
+        if (!isMissingRoute(err)) throw err
+        const match = (await publicFetch<Event[]>('/api/events')).find((e) => e.id === eventId)
+        if (!match) throw err
+        return match
+      })
+      .then((match) => {
         if (!active) return
-        const match = data.find((e) => e.id === eventId)
-        setEvent(match ?? null)
-        setStatus(match ? 'ready' : 'notfound')
+        setEvent(match)
+        setStatus('ready')
       })
       .catch(() => {
         if (!active) return

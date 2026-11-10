@@ -149,7 +149,8 @@ export default function MemberLayout() {
         const regs = useEventsStore.getState().registrations
         const evs = useEventsStore.getState().events
         const approvedIds = regs.filter(r => r.status === 'approved').map(r => r.event_id)
-        const eventTitles = Object.fromEntries(evs.map(e => [e.id, e.title]))
+        const eventTitles: Record<string, string> = Object.fromEntries(evs.map(e => [e.id, e.title]))
+        for (const r of regs) if (r.event) eventTitles[r.event_id] = r.event.title
         if (approvedIds.length > 0) {
           void fetchRecent(approvedIds, eventTitles)
         }
@@ -214,7 +215,10 @@ export default function MemberLayout() {
     unsubNotifsRef.current = null
     if (approvedIds.length === 0) return
 
-    const eventTitles = Object.fromEntries(events.map(e => [e.id, e.title]))
+    // Titles also come with each registration (/api/registrations/mine), so
+    // announcements for events outside the upcoming list still show their name.
+    const eventTitles: Record<string, string> = Object.fromEntries(events.map(e => [e.id, e.title]))
+    for (const r of registrations) if (r.event) eventTitles[r.event_id] = r.event.title
     void fetchRecent(approvedIds, eventTitles)
     unsubNotifsRef.current = subscribeNotifications(approvedIds, eventTitles)
   }, [registrations, events, user]) // eslint-disable-line react-hooks/exhaustive-deps

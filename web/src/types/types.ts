@@ -143,6 +143,45 @@ export interface Event {
   custom_form_schema: unknown
 }
 
+/**
+ * The event columns the list endpoints return (GET /api/events and the event
+ * attached to each GET /api/registrations/mine row). Screens that need anything
+ * else (description, custom questions, pricing, capacity…) load the full event
+ * from GET /api/events/slug/:slug, /api/events/:id or /api/events/manage.
+ *
+ * Hand-mirrored from EVENT_LIST_FIELDS in server/src/events/event-list.fields.ts.
+ */
+export const EVENT_LIST_FIELDS = [
+  'id',
+  'slug',
+  'title',
+  'event_date',
+  'end_date',
+  'location',
+  'category',
+  'devcon_category',
+  'status',
+  'visibility',
+  'chapter_id',
+  'is_chapter_locked',
+  'is_featured',
+  'is_promoted',
+  'is_external',
+  'external_registration_url',
+  'registration_closed',
+  'requires_approval',
+  'points_value',
+  'cover_image_url',
+] as const satisfies readonly (keyof Event)[]
+
+export type EventListItem = Pick<Event, (typeof EVENT_LIST_FIELDS)[number]>
+
+/** One page of a list plus the full match count. */
+export interface Paginated<T> {
+  rows: T[]
+  total: number
+}
+
 export interface EventCapacitySummary {
   capacity: number | null
   no_show_buffer: number
@@ -184,6 +223,15 @@ export interface EventRegistration {
   approved_at: string | null
   /** JSONB: answers keyed by CustomFormField.id */
   form_responses: unknown
+}
+
+/**
+ * A member's own registration as returned by GET /api/registrations/mine, with
+ * its event attached so tickets render without the event being in the events
+ * list. `event` is missing on rows created locally before the next refetch.
+ */
+export interface MyRegistration extends EventRegistration {
+  event?: EventListItem | null
 }
 
 export interface PointTransaction {

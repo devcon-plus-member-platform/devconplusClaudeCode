@@ -1,9 +1,11 @@
+import { randomUUID } from 'crypto';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { buildEventSlug } from './event-slug';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { assertSameChapter } from '../common/authz/chapter-scope';
 import { AppCacheService } from '../cache/app-cache.service';
@@ -12,6 +14,8 @@ import { EventsRepository } from './events.repository';
 import type { Event } from '../supabase/types';
 import type { CreateEventDto } from './dto/create-event.dto';
 import type { UpdateEventDto } from './dto/update-event.dto';
+import type { EventsPageQueryDto, ListEventsQueryDto } from './dto/list-events-query.dto';
+import type { EventListItem, Paginated } from './event-list.fields';
 
 export interface EventCapacitySummary {
   capacity: number | null;
@@ -33,11 +37,84 @@ export class EventsService {
     private readonly cache: AppCacheService,
   ) {}
 
-  // GET /events is identical for every user → one shared cache key.
-  getAll(): Promise<Event[]> {
-    return this.cache.getOrSet(CacheKeys.EVENTS_LIST, CACHE_TTL.EVENTS, () =>
-      this.repo.findAll(),
+  /** GET /events — one page of the public list. Same for every user → cached per page. */
+  async listPage(query: ListEventsQueryDto): Promise<Paginated<EventListItem>> {
+    const { scope, limit, offset } = query;
+    const version = await this.cacheVersion();
+    return this.cache.getOrSet(
+      CacheKeys.eventsPage(version, scope, limit, offset),
+      CACHE_TTL.EVENTS,
+      () => this.repo.findPage({ scope, limit, offset }),
     );
+  }
+
+  /**
+   * @deprecated GET /events with no query string — the response shape app
+   * versions from before pagination expect (see EventsRepository.findAllLegacy).
+   */
+  async listAllLegacy(): Promise<Event[]> {
+    const version = await this.cacheVersion();
+    return this.cache.getOrSet(CacheKeys.eventsLegacyAll(version), CACHE_TTL.EVENTS, () =>
+      this.repo.findAllLegacy(),
+    );
+  }
+
+  /**
+   * GET /events/manage — full rows for the organizer/admin screens. Chapter
+   * officers only ever receive their own chapter's events; HQ and super admins
+   * receive every event (the admin console manages all chapters).
+   */
+  async managePage(
+    query: EventsPageQueryDto,
+    user: AuthenticatedUser,
+  ): Promise<Paginated<Event>> {
+    const { role, chapter_id } = user.profile;
+    const isAdmin = role === 'hq_admin' || role === 'super_admin';
+    if (!isAdmin && !chapter_id) return { rows: [], total: 0 };
+
+    const chapterScope = isAdmin ? null : chapter_id;
+    const { limit, offset } = query;
+    const version = await this.cacheVersion();
+    return this.cache.getOrSet(
+      CacheKeys.eventsManagePage(version, chapterScope ?? 'all', limit, offset),
+      CACHE_TTL.EVENTS,
+      () => this.repo.findManagePage({ limit, offset }, chapterScope),
+    );
+  }
+
+  /** GET /events/slug/:slug — one full event for the event pages. */
+  async getBySlug(slug: string): Promise<Event> {
+    const version = await this.cacheVersion();
+    const event = await this.cache.getOrSet(
+      CacheKeys.eventBySlug(version, slug),
+      CACHE_TTL.EVENTS,
+      () => this.repo.findBySlug(slug),
+    );
+    if (!event) throw new NotFoundException('Event not found');
+    return event;
+  }
+
+  /** GET /events/:id — one full event by id. */
+  async getById(id: string): Promise<Event> {
+    const version = await this.cacheVersion();
+    const event = await this.cache.getOrSet(
+      CacheKeys.eventById(version, id),
+      CACHE_TTL.EVENTS,
+      () => this.repo.findById(id),
+    );
+    if (!event) throw new NotFoundException('Event not found');
+    return event;
+  }
+
+  /** Current events cache version ('0' until the first write, or with no cache configured). */
+  private async cacheVersion(): Promise<string> {
+    const version = await this.cache.get<number | string>(CacheKeys.EVENTS_VERSION);
+    return String(version ?? 0);
+  }
+
+  /** Makes every cached events page and item stale at once (see cache-keys.ts). */
+  private async bumpCacheVersion(): Promise<void> {
+    await this.cache.set(CacheKeys.EVENTS_VERSION, Date.now(), CACHE_TTL.EVENTS_VERSION);
   }
 
   /**
@@ -81,8 +158,15 @@ export class EventsService {
         ? (dto.chapter_id !== undefined ? dto.chapter_id : chapter_id)
         : chapter_id;
 
+    // The id is generated here (not by the database) so the slug can include it:
+    // events.slug is required, and the database doesn't fill it in by itself.
+    const id = randomUUID();
+    const slug = dto.slug?.trim() || buildEventSlug(dto.title, id);
+
     const event = await this.repo.create({
       ...dto,
+      id,
+      slug,
       status: 'upcoming',
       is_featured: false,
       is_promoted: false,
@@ -90,7 +174,7 @@ export class EventsService {
       chapter_id: resolvedChapterId,
       created_by: profileId,
     });
-    await this.cache.del(CacheKeys.EVENTS_LIST);
+    await this.bumpCacheVersion();
     return event;
   }
 
@@ -119,7 +203,7 @@ export class EventsService {
       delete payload.chapter_id;
     }
     const updated = await this.repo.update(id, payload);
-    await this.cache.del(CacheKeys.EVENTS_LIST);
+    await this.bumpCacheVersion();
     return updated;
   }
 
@@ -138,6 +222,6 @@ export class EventsService {
     if (!event) throw new NotFoundException(`Event ${id} not found`);
     if (event.chapter_id) assertSameChapter(user, event.chapter_id);
     await this.repo.deleteWithCascade(id);
-    await this.cache.del(CacheKeys.EVENTS_LIST);
+    await this.bumpCacheVersion();
   }
 }
