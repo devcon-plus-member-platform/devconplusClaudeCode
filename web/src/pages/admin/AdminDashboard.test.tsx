@@ -9,7 +9,10 @@ import { useRewardsStore } from '../../stores/useRewardsStore'
 const apiFetch = vi.fn()
 const publicFetch = vi.fn()
 
-vi.mock('../../lib/api', () => ({
+// lib/api re-exports the pagination helpers (fetchAllPages, isMissingRoute, ...)
+// that the events store uses — keep their real behaviour, fake only the network.
+vi.mock('../../lib/api', async () => ({
+  ...(await vi.importActual<typeof import('../../lib/pagination')>('../../lib/pagination')),
   apiFetch: (...args: unknown[]) => apiFetch(...args),
   publicFetch: (...args: unknown[]) => publicFetch(...args),
 }))
@@ -69,6 +72,8 @@ beforeEach(() => {
       return { standings: board, computedAt: '2026-09-23T00:00:00.000Z' }
     }
     if (url === '/api/rewards/redemptions') return []
+    // Recent Events list (HQ only) — paginated endpoint, empty page
+    if (typeof url === 'string' && url.startsWith('/api/events/manage')) return { rows: [], total: 0 }
     throw new Error(`unexpected apiFetch ${String(url)}`)
   })
   publicFetch.mockResolvedValue([])
